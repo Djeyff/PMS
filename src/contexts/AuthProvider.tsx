@@ -52,33 +52,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const email = u.email?.toLowerCase() ?? "";
     if (email !== MASTER_ADMIN_EMAIL) return;
 
-    // Promote to admin if needed
+    // 1) Ensure the profile exists with admin role
     if (!current || current.role !== "agency_admin") {
-      const { error: upErr } = await supabase
+      const { error: upsertErr } = await supabase
         .from("profiles")
-        .update({ role: "agency_admin" })
-        .eq("id", u.id);
-      if (upErr) {
-        // If this fails, leave as is; user will stay pending
+        .upsert({ id: u.id, role: "agency_admin" }, { onConflict: "id" });
+      if (upsertErr) {
         return;
       }
     }
 
-    // Ensure agency exists and is assigned
-    if (!current || !current.agency_id) {
-      // Create a default agency and assign it
+    // 2) Ensure an agency exists and is assigned
+    let agencyId = current?.agency_id ?? null;
+    if (!agencyId) {
       const { data: agency, error: aErr } = await supabase
         .from("agencies")
         .insert({ name: "Master Agency", default_currency: "USD" })
         .select("id")
         .single();
-
       if (!aErr && agency?.id) {
-        await supabase.from("profiles").update({ agency_id: agency.id }).eq("id", u.id);
+        agencyId = agency.id;
+        await supabase.from("profiles").upsert({ id: u.id, agency_id: agencyId }, { onConflict: "id" });
       }
     }
 
-    // Refresh profile in context
+    // 3) Refresh profile in context so UI updates immediately
     const updated = await fetchProfile(u.id).catch(() => null);
     if (updated) setProfile(updated);
   };
