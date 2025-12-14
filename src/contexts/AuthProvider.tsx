@@ -46,8 +46,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const MASTER_ADMIN_EMAIL = "djeyff06@gmail.com";
 
-  // Compute role with a client-side fallback for the master email
-  const computedRole: Role | null = useMemo(() => {
+  // Immediate role fallback for master email so UI doesn't bounce to Pending
+  const role: Role | null = useMemo(() => {
     if (profile?.role) return profile.role;
     if ((user?.email?.toLowerCase() ?? "") === MASTER_ADMIN_EMAIL) return "agency_admin";
     return null;
@@ -57,7 +57,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const email = u.email?.toLowerCase() ?? "";
     if (email !== MASTER_ADMIN_EMAIL) return;
 
-    // Ensure profile exists with admin role
+    // Ensure profile exists with admin role (upsert so it works even if missing)
     const { error: upsertErr } = await supabase
       .from("profiles")
       .upsert({ id: u.id, role: "agency_admin" }, { onConflict: "id" });
@@ -66,32 +66,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       return;
     }
 
+    // Always refetch after role upsert
     const latest = await fetchProfile(u.id).catch(() => null);
     let agencyId = latest?.agency_id ?? null;
 
+    // Create and assign an agency if missing (non-blocking for UI)
     if (!agencyId) {
-      // Use edge function (direct fetch) to avoid RLS issues
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess.session?.access_token;
-      if (token) {
-        const res = await fetch("https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/create-agency", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ name: "Master Agency", default_currency: "USD" }),
-        }).catch((e) => {
-          console.warn("ensureMasterAdmin: edge fetch failed", e);
-          return null;
-        });
-        if (res && !res.ok) {
-          const err = await res.json().catch(() => ({} as any));
-          console.warn("ensureMasterAdmin: create-agency response error", err);
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess.session?.access_token;
+        if (token) {
+          await fetch("https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/create-agency", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ name: "Master Agency", default_currency: "USD" }),
+          });
         }
+      } catch (e) {
+        console.warn("ensureMasterAdmin: create-agency edge call failed", e);
       }
     }
 
+    // Refresh profile in context so UI updates when DB catches up
     const updated = await fetchProfile(u.id).catch(() => null);
     if (updated) setProfile(updated);
   };
@@ -104,7 +103,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (sess?.user?.id) {
       const p = await fetchProfile(sess.user.id).catch(() => null);
       setProfile(p);
-      await ensureMasterAdmin(sess.user, p ?? null);
+      // Run admin bootstrap in background so loading doesn't block
+      ensureMasterAdmin(sess.user, p ?? null).then(() => {
+        // after background bootstrap, try to refresh profile once
+        refreshProfile().catch(() => {});
+      });
     } else {
       setProfile(null);
     }
@@ -124,7 +127,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (sess?.user?.id) {
         const p = await fetchProfile(sess.user.id).catch(() => null);
         setProfile(p);
-        await ensureMasterAdmin(sess.user, p ?? null);
+        // Run bootstrap without awaiting to avoid UI stalls
+        ensureMasterAdmin(sess.user, p ?? null).then(() => {
+          refreshProfile().catch(() => {});
+        });
       } else {
         setProfile(null);
       }
@@ -133,7 +139,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Fallback: ensure loading doesn't remain true due to unexpected delays
     const loadingFallback = setTimeout(() => {
       if (mounted) setLoading(false);
-    }, 5000);
+    }, 4000);
 
     return () => {
       mounted = false;
@@ -157,7 +163,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     session,
     user,
     profile,
-    role: computedRole,
+    role,
     loading,
     signOut,
     refreshProfile,
