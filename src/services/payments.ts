@@ -14,8 +14,7 @@ export type PaymentRow = {
 };
 
 export type PaymentWithMeta = PaymentRow & {
-  lease?: { id: string; property?: { id: string; name: string } | null } | null;
-  tenant?: { id: string; first_name: string | null; last_name: string | null } | null;
+  lease?: { id: string; property_id: string } | null;
 };
 
 export async function fetchPayments(params: { role: Role | null; userId: string | null; agencyId: string | null }) {
@@ -25,11 +24,7 @@ export async function fetchPayments(params: { role: Role | null; userId: string 
     .from("payments")
     .select(`
       id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at,
-      lease:leases (
-        id,
-        property:properties ( id, name )
-      ),
-      tenant:profiles ( id, first_name, last_name )
+      lease:leases ( id, property_id )
     `)
     .order("received_date", { ascending: false });
   if (error) throw error;

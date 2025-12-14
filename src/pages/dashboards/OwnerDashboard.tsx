@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchProperties } from "@/services/properties";
 import { fetchLeases } from "@/services/leases";
 import { fetchPayments } from "@/services/payments";
+import { fetchMyOwnerships } from "@/services/property-owners";
 
 const Stat = ({ title, value, children }: { title: string; value?: string; children?: React.ReactNode }) => (
   <Card>
@@ -36,6 +37,12 @@ const OwnerDashboard = () => {
     enabled: role === "owner" && !!user,
   });
 
+  const { data: myShares } = useQuery({
+    queryKey: ["owner-shares", user?.id],
+    queryFn: () => fetchMyOwnerships(user!.id),
+    enabled: role === "owner" && !!user,
+  });
+
   const occupancy = (() => {
     const totalProps = props?.length ?? 0;
     const activeLeases = leases?.length ?? 0;
@@ -44,11 +51,19 @@ const OwnerDashboard = () => {
   })();
 
   const monthly = (() => {
-    const d = new Date().toISOString().slice(0, 7);
-    const list = (payments ?? []).filter((p: any) => (p.received_date ?? "").startsWith(d));
-    const usd = list.filter((p: any) => p.currency === "USD").reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-    const dop = list.filter((p: any) => p.currency === "DOP").reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-    return { usd, dop };
+    const ym = new Date().toISOString().slice(0, 7);
+    const shareMap = myShares ?? new Map<string, number>();
+    const list = (payments ?? []).filter((p: any) => (p.received_date ?? "").startsWith(ym));
+    const totalBy = (cur: "USD" | "DOP") =>
+      list
+        .filter((p: any) => p.currency === cur)
+        .reduce((sum: number, p: any) => {
+          const propId = p.lease?.property_id;
+          const percent = propId ? (shareMap.get(propId) ?? 100) : 100;
+          const factor = Math.max(0, Math.min(100, percent)) / 100;
+          return sum + Number(p.amount || 0) * factor;
+        }, 0);
+    return { usd: totalBy("USD"), dop: totalBy("DOP") };
   })();
 
   return (
