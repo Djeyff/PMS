@@ -34,9 +34,6 @@ serve(async (req) => {
     const email: string | undefined = body?.email;
     const first_name: string | undefined = body?.first_name;
     const last_name: string | undefined = body?.last_name;
-    if (!email) {
-      return new Response(JSON.stringify({ error: "Email is required" }), { status: 400, headers: corsHeaders });
-    }
 
     // Service client (bypass RLS)
     const admin = createClient(supabaseUrl, serviceKey);
@@ -71,7 +68,6 @@ serve(async (req) => {
       }
       newUserId = inviteRes.user.id;
     } else {
-      // No email provided: create a placeholder auth user with a synthetic email, immediately confirmed
       const placeholderEmail = `tenant+${Date.now()}_${Math.random().toString(36).slice(2,8)}@placeholder.local`;
       const { data: createRes, error: createErr } = await admin.auth.admin.createUser({
         email: placeholderEmail,
