@@ -1,0 +1,126 @@
+import React, { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { LeaseWithMeta } from "@/services/leases";
+import { updateLease } from "@/services/leases";
+import { toast } from "sonner";
+
+type Props = {
+  lease: LeaseWithMeta;
+  onUpdated?: () => void;
+};
+
+const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [startDate, setStartDate] = useState(lease.start_date);
+  const [endDate, setEndDate] = useState(lease.end_date);
+  const [rentAmount, setRentAmount] = useState(String(lease.rent_amount));
+  const [rentCurrency, setRentCurrency] = useState<"USD" | "DOP">(lease.rent_currency);
+  const [depositAmount, setDepositAmount] = useState<string>(lease.deposit_amount == null ? "" : String(lease.deposit_amount));
+  const [status, setStatus] = useState<"draft" | "active" | "pending_renewal" | "expired" | "terminated">(lease.status);
+
+  const reset = () => {
+    setStartDate(lease.start_date);
+    setEndDate(lease.end_date);
+    setRentAmount(String(lease.rent_amount));
+    setRentCurrency(lease.rent_currency);
+    setDepositAmount(lease.deposit_amount == null ? "" : String(lease.deposit_amount));
+    setStatus(lease.status);
+  };
+
+  const onSave = async () => {
+    setSaving(true);
+    try {
+      await updateLease(lease.id, {
+        start_date: startDate,
+        end_date: endDate,
+        rent_amount: Number(rentAmount),
+        rent_currency: rentCurrency,
+        deposit_amount: depositAmount === "" ? null : Number(depositAmount),
+        status,
+      });
+      toast.success("Lease updated");
+      setOpen(false);
+      onUpdated?.();
+    } catch (e: any) {
+      console.error("Update lease failed:", e);
+      toast.error(e?.message ?? "Failed to update lease");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+      <DialogTrigger asChild>
+        <Button variant="secondary" size="sm">Edit</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Lease</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Start Date</Label>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>End Date</Label>
+              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Rent Amount</Label>
+              <Input type="number" min={0} value={rentAmount} onChange={(e) => setRentAmount(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Rent Currency</Label>
+              <Select value={rentCurrency} onValueChange={(v) => setRentCurrency(v as "USD" | "DOP")}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Currency" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USD">USD</SelectItem>
+                  <SelectItem value="DOP">DOP</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Deposit Amount (optional)</Label>
+            <Input type="number" min={0} value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Status</Label>
+            <Select value={status} onValueChange={(v) => setStatus(v as any)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="pending_renewal">Pending renewal</SelectItem>
+                <SelectItem value="expired">Expired</SelectItem>
+                <SelectItem value="terminated">Terminated</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="pt-2">
+            <Button onClick={onSave} disabled={saving}>
+              {saving ? "Saving..." : "Save changes"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export default EditLeaseDialog;

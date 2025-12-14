@@ -1,12 +1,13 @@
 import React from "react";
 import AppShell from "@/components/layout/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
 import { fetchLeases } from "@/services/leases";
 import LeaseForm from "@/components/leases/LeaseForm";
+import EditLeaseDialog from "@/components/leases/EditLeaseDialog";
+import DeleteLeaseDialog from "@/components/leases/DeleteLeaseDialog";
 
 const Leases = () => {
   const { role, user, profile } = useAuth();
@@ -17,6 +18,12 @@ const Leases = () => {
   });
 
   const canCreate = role === "agency_admin";
+
+  const fullName = (t?: { first_name: string | null; last_name: string | null } | null) => {
+    if (!t) return "—";
+    const name = [t.first_name, t.last_name].filter(Boolean).join(" ");
+    return name || "—";
+  };
 
   return (
     <AppShell>
@@ -44,19 +51,30 @@ const Leases = () => {
                     <TableHead>End</TableHead>
                     <TableHead>Rent</TableHead>
                     <TableHead>Status</TableHead>
+                    {canCreate && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(data ?? []).map((l) => (
+                  {(data ?? []).map((l: any) => (
                     <TableRow key={l.id}>
-                      <TableCell className="font-mono text-xs">{l.property_id.slice(0, 8)}</TableCell>
-                      <TableCell className="font-mono text-xs">{l.tenant_id.slice(0, 8)}</TableCell>
+                      <TableCell className="font-medium">
+                        {l.property?.name || (l.property_id ? l.property_id.slice(0, 8) : "—")}
+                      </TableCell>
+                      <TableCell>{fullName(l.tenant) || (l.tenant_id ? l.tenant_id.slice(0, 6) : "—")}</TableCell>
                       <TableCell>{l.start_date}</TableCell>
                       <TableCell>{l.end_date}</TableCell>
                       <TableCell>
                         {new Intl.NumberFormat(undefined, { style: "currency", currency: l.rent_currency }).format(l.rent_amount)}
                       </TableCell>
-                      <TableCell className="capitalize">{l.status.replace("_", " ")}</TableCell>
+                      <TableCell className="capitalize">{String(l.status).replace("_", " ")}</TableCell>
+                      {canCreate && (
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <EditLeaseDialog lease={l} onUpdated={() => refetch()} />
+                            <DeleteLeaseDialog id={l.id} onDeleted={() => refetch()} />
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
