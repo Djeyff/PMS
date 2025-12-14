@@ -21,6 +21,8 @@ import Maintenance from "./pages/Maintenance";
 import Expenses from "./pages/Expenses";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import Pending from "./pages/Pending";
+import Users from "./pages/Users";
 
 const queryClient = new QueryClient();
 
@@ -138,6 +140,24 @@ const App = () => (
                     <RoleGate allow={["agency_admin"]}>
                       <Settings />
                     </RoleGate>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/users"
+                element={
+                  <ProtectedRoute>
+                    <RoleGate allow={["agency_admin"]}>
+                      <Users />
+                    </RoleGate>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/pending"
+                element={
+                  <ProtectedRoute>
+                    <Pending />
                   </ProtectedRoute>
                 }
               />

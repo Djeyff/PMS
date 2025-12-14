@@ -19,7 +19,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!loading && session && (!profile || !role)) {
-      navigate("/onboarding", { replace: true });
+      navigate("/pending", { replace: true });
     }
   }, [loading, session, profile, role, navigate]);
 
