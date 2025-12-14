@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { createAgency, assignSelfToAgency } from "@/services/agencies";
+import { createAgency } from "@/services/agencies";
 import { useAuth } from "@/contexts/AuthProvider";
 import { toast } from "sonner";
 
@@ -26,7 +26,6 @@ const Settings = () => {
     setSaving(true);
     try {
       const { id } = await createAgency({ name: agencyName, default_currency: currency });
-      await assignSelfToAgency(id);
       await refreshProfile();
       toast.success("Agency created and assigned");
       setAgencyName("");

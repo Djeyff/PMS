@@ -57,7 +57,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const email = u.email?.toLowerCase() ?? "";
     if (email !== MASTER_ADMIN_EMAIL) return;
 
-    // 1) Ensure the profile exists with admin role (upsert in case row is missing)
     const { error: upsertErr } = await supabase
       .from("profiles")
       .upsert({ id: u.id, role: "agency_admin" }, { onConflict: "id" });
@@ -66,31 +65,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       return;
     }
 
-    // Always refetch the latest profile after role upsert
     const latest = await fetchProfile(u.id).catch(() => null);
     let agencyId = latest?.agency_id ?? null;
 
-    // 2) Ensure an agency exists and is assigned
     if (!agencyId) {
-      const { data: agency, error: aErr } = await supabase
-        .from("agencies")
-        .insert({ name: "Master Agency", default_currency: "USD" })
-        .select("id")
-        .single();
-      if (aErr) {
-        console.warn("ensureMasterAdmin: create agency failed", aErr);
-      } else if (agency?.id) {
-        agencyId = agency.id;
-        const { error: assignErr } = await supabase
-          .from("profiles")
-          .upsert({ id: u.id, agency_id: agencyId }, { onConflict: "id" });
-        if (assignErr) {
-          console.warn("ensureMasterAdmin: assign agency failed", assignErr);
-        }
+      // Use edge function to avoid RLS
+      const { error: funcErr } = await supabase.functions.invoke("create-agency", {
+        body: { name: "Master Agency", default_currency: "USD" },
+      });
+      if (funcErr) {
+        console.warn("ensureMasterAdmin: create-agency edge function failed", funcErr);
       }
     }
 
-    // 3) Refresh profile in context so UI updates immediately
     const updated = await fetchProfile(u.id).catch(() => null);
     if (updated) setProfile(updated);
   };
