@@ -25,7 +25,9 @@ export async function fetchProperties(params: { role: Role | null; userId: strin
       .eq("agency_id", agencyId)
       .order("created_at", { ascending: false });
     if (error) throw error;
-    return data as Property[];
+    // Type the embedded relation and strip it out for return
+    const rows = (data ?? []) as Array<Property & { property_owners?: { owner_id: string }[] }>;
+    return rows.map(({ property_owners: _rel, ...rest }) => rest as Property);
   }
 
   if (role === "owner") {
@@ -37,11 +39,9 @@ export async function fetchProperties(params: { role: Role | null; userId: strin
       .eq("property_owners.owner_id", userId)
       .order("created_at", { ascending: false });
     if (error) throw error;
-    // @ts-expect-error embedded relation not part of Property type; map out
-    return (data ?? []).map((p) => {
-      const { property_owners, ...rest } = p;
-      return rest as Property;
-    });
+    // Type the embedded relation and strip it out for return
+    const rows = (data ?? []) as Array<Property & { property_owners?: { owner_id: string }[] }>;
+    return rows.map(({ property_owners: _rel, ...rest }) => rest as Property);
   }
 
   // Tenants: no property list for now
