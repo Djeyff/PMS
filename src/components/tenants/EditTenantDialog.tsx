@@ -1,0 +1,68 @@
+import React, { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { updateTenantProfile } from "@/services/tenants";
+import { toast } from "sonner";
+
+type Props = {
+  tenant: { id: string; first_name: string | null; last_name: string | null };
+  onUpdated?: () => void;
+};
+
+const EditTenantDialog = ({ tenant, onUpdated }: Props) => {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [first, setFirst] = useState(tenant.first_name ?? "");
+  const [last, setLast] = useState(tenant.last_name ?? "");
+
+  const reset = () => {
+    setFirst(tenant.first_name ?? "");
+    setLast(tenant.last_name ?? "");
+  };
+
+  const onSave = async () => {
+    setSaving(true);
+    try {
+      await updateTenantProfile(tenant.id, { first_name: first || null, last_name: last || null });
+      toast.success("Tenant updated");
+      setOpen(false);
+      onUpdated?.();
+    } catch (e: any) {
+      console.error("Update tenant failed:", e);
+      toast.error(e?.message ?? "Failed to update tenant");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="secondary">Edit</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Tenant</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>First name</Label>
+            <Input value={first} onChange={(e) => setFirst(e.target.value)} placeholder="First name" />
+          </div>
+          <div className="space-y-2">
+            <Label>Last name</Label>
+            <Input value={last} onChange={(e) => setLast(e.target.value)} placeholder="Last name" />
+          </div>
+          <div className="pt-2">
+            <Button onClick={onSave} disabled={saving}>{saving ? "Saving..." : "Save changes"}</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export default EditTenantDialog;

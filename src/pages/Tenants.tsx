@@ -6,6 +6,8 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
 import { fetchTenantProfilesInAgency } from "@/services/users";
 import AddTenantDialog from "@/components/tenants/AddTenantDialog";
+import EditTenantDialog from "@/components/tenants/EditTenantDialog";
+import DeleteTenantDialog from "@/components/tenants/DeleteTenantDialog";
 
 const data = [
   { name: "Maria Gomez", email: "maria@example.com", phone: "+1 809-555-1100", property: "Ocean View Villa" },
@@ -45,15 +47,27 @@ const Tenants = () => {
                   <TableRow>
                     <TableHead>Tenant</TableHead>
                     <TableHead>Agency</TableHead>
+                    {isAdmin && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(data ?? []).map((t) => (
-                    <TableRow key={t.id}>
-                      <TableCell>{[t.first_name, t.last_name].filter(Boolean).join(" ") || "—"}</TableCell>
-                      <TableCell>{t.agency_id ? "Assigned" : "Unassigned"}</TableCell>
-                    </TableRow>
-                  ))}
+                  {(data ?? []).map((t) => {
+                    const displayName = [t.first_name, t.last_name].filter(Boolean).join(" ") || "—";
+                    return (
+                      <TableRow key={t.id}>
+                        <TableCell>{displayName}</TableCell>
+                        <TableCell>{t.agency_id ? "Assigned" : "Unassigned"}</TableCell>
+                        {isAdmin && (
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <EditTenantDialog tenant={{ id: t.id, first_name: t.first_name, last_name: t.last_name }} onUpdated={() => refetch()} />
+                              <DeleteTenantDialog id={t.id} displayName={displayName} onDeleted={() => refetch()} />
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
