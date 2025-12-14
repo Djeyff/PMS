@@ -6,8 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import Money from "@/components/Money";
 
 const data = [
-  { number: "INV-1001", tenant: "Maria Gomez", due: "2024-08-05", total: 1200, currency: "USD", status: "paid" as const },
-  { number: "INV-1002", tenant: "John Smith", due: "2024-08-10", total: 950, currency: "USD", status: "overdue" as const },
+  { number: "INV-1001", tenant: "Maria Gomez", due: "2024-08-05", total: 1200, currency: "USD" as const, status: "paid" as const },
+  { number: "INV-1002", tenant: "John Smith", due: "2024-08-10", total: 950, currency: "USD" as const, status: "overdue" as const },
 ];
 
 const Invoices = () => {
