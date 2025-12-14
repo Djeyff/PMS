@@ -6,6 +6,8 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchLeases } from "@/services/leases";
 import { fetchPayments } from "@/services/payments";
 import { fetchInvoices } from "@/services/invoices";
+import { fetchProperties } from "@/services/properties";
+import { fetchMaintenanceRequests } from "@/services/maintenance";
 import { parseISO, differenceInCalendarDays, format } from "date-fns";
 
 const Stat = ({ title, value, children }: { title: string; value?: string; children?: React.ReactNode }) => (
@@ -19,6 +21,12 @@ const Stat = ({ title, value, children }: { title: string; value?: string; child
 
 const AgencyDashboard = () => {
   const { role, user, profile } = useAuth();
+
+  const { data: properties } = useQuery({
+    queryKey: ["dashboard-properties", role, user?.id, profile?.agency_id],
+    queryFn: () => fetchProperties({ role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
+    enabled: !!role && !!user && !!profile?.agency_id,
+  });
 
   const { data: leases } = useQuery({
     queryKey: ["dashboard-leases", role, user?.id, profile?.agency_id],
@@ -38,6 +46,27 @@ const AgencyDashboard = () => {
     enabled: !!role && !!user && !!profile?.agency_id,
   });
 
+  const { data: maintenance } = useQuery({
+    queryKey: ["dashboard-maintenance", role, user?.id, profile?.agency_id],
+    queryFn: () => fetchMaintenanceRequests({ agencyId: profile!.agency_id!, status: ["open", "in_progress"] }),
+    enabled: !!role && !!user && !!profile?.agency_id,
+  });
+
+  // Occupancy based on properties with active leases
+  const occupancyPercent = (() => {
+    const totalProps = properties?.length ?? 0;
+    if (totalProps === 0) return 0;
+    const activeProps = new Set<string>();
+    (leases ?? []).forEach((l: any) => {
+      // consider active if today is within lease period
+      const today = new Date().toISOString().slice(0, 10);
+      if (l.start_date <= today && l.end_date >= today) {
+        activeProps.add(l.property_id);
+      }
+    });
+    return Math.round((activeProps.size / totalProps) * 100);
+  })();
+
   // Monthly revenue by currency (current month)
   const monthly = (() => {
     const d = new Date();
@@ -48,13 +77,30 @@ const AgencyDashboard = () => {
     return { usd, dop };
   })();
 
-  // Overdue invoices (due date past; status not paid/void; currency-agnostic)
+  // Overdue invoices count
   const overdueCount = (() => {
     const today = new Date().toISOString().slice(0, 10);
     return (invoices ?? []).filter((inv: any) => inv.due_date < today && inv.status !== "paid" && inv.status !== "void").length;
   })();
 
-  // Upcoming expirations (already present but based on real leases)
+  // Pending/partial invoices list with remaining amount
+  const pendingInvoices = (() => {
+    const list = (invoices ?? [])
+      .filter((inv: any) => inv.status === "sent" || inv.status === "partial" || inv.status === "overdue")
+      .map((inv: any) => {
+        const paid = (inv.payments ?? [])
+          .filter((p: any) => p.currency === inv.currency)
+          .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+        const remaining = Math.max(0, Number(inv.total_amount || 0) - paid);
+        return { ...inv, paid, remaining };
+      })
+      .filter((inv: any) => inv.remaining > 0)
+      .sort((a: any, b: any) => (a.due_date < b.due_date ? -1 : 1))
+      .slice(0, 6);
+    return list;
+  })();
+
+  // Upcoming expirations (existing)
   const upcomingExpirations = (() => {
     const now = new Date();
     const list = (leases ?? []).filter((l: any) => {
@@ -69,7 +115,7 @@ const AgencyDashboard = () => {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat title="Occupancy">{`${Math.round(((leases?.length ?? 0) / Math.max(1, (profile?.agency_id ? (leases?.length ?? 0) : 1))) * 92)}%`}</Stat>
+        <Stat title="Occupancy" value={`${occupancyPercent}%`} />
         <Stat title="Monthly Revenue">
           <div className="flex flex-col text-base font-normal">
             <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(monthly.usd)} USD</span>
@@ -77,14 +123,42 @@ const AgencyDashboard = () => {
           </div>
         </Stat>
         <Stat title="Overdue Invoices" value={String(overdueCount)} />
-        <Stat title="Open Maintenance" value="5" />
+        <Stat title="Open Maintenance" value={String(maintenance?.length ?? 0)} />
       </div>
       <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Upcoming Payments</CardTitle>
+            <CardTitle>Pending Invoices</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">No upcoming payments in the next 7 days.</CardContent>
+          <CardContent className="space-y-2">
+            {pendingInvoices.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No pending invoices.</div>
+            ) : (
+              <ul className="space-y-2">
+                {pendingInvoices.map((inv: any) => (
+                  <li key={inv.id} className="flex items-center justify-between">
+                    <div className="truncate">
+                      <span className="font-medium">
+                        {inv.lease?.property?.name ?? (inv.lease_id ? inv.lease_id.slice(0, 8) : "Property")}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {" — "}
+                        {[(inv.tenant?.first_name ?? ""), (inv.tenant?.last_name ?? "")]
+                          .filter(Boolean)
+                          .join(" ") || (inv.tenant_id ? inv.tenant_id.slice(0, 6) : "Tenant")}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-muted-foreground">{inv.due_date}</div>
+                      <div className="text-sm">
+                        Remaining: {new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(inv.remaining)}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
         </Card>
         <Card>
           <CardHeader>

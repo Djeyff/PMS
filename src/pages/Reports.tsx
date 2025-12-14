@@ -13,6 +13,8 @@ import { fetchInvoices } from "@/services/invoices";
 import { fetchProperties } from "@/services/properties";
 import { fetchTenantProfilesInAgency, fetchOwnerProfilesInAgency } from "@/services/users";
 import { fetchAgencyOwnerships } from "@/services/property-owners";
+import { sendOwnerReport } from "@/services/reports";
+import { useToast } from "@/components/ui/use-toast";
 
 function fmtMoney(amount: number, currency: "USD" | "DOP") {
   return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
@@ -40,6 +42,7 @@ const Reports = () => {
   const { role, user, profile } = useAuth();
   const agencyId = profile?.agency_id ?? null;
   const isAdmin = role === "agency_admin";
+  const { toast } = useToast();
 
   // Filters
   const today = new Date().toISOString().slice(0, 10);
@@ -179,6 +182,40 @@ const Reports = () => {
     });
     return rows;
   }, [revenue.rows]);
+
+  // Build CSV for a single owner (aggregated totals only for simplicity)
+  const ownerCsvFor = (ownerId: string) => {
+    const rows = ownerPayoutRows.filter((r) => r.ownerId === ownerId);
+    const headers = ["Owner", "USD", "DOP", "Start", "End"];
+    const csvRows = rows.map((r) => [r.name, r.usd.toFixed(2), r.dop.toFixed(2), startDate, endDate]);
+    return [headers.join(","), ...csvRows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
+  };
+
+  const handleSendEmail = async () => {
+    if (ownerFilter === "all") {
+      toast({ title: "Select an owner", description: "Please choose an owner to send the report.", variant: "default" });
+      return;
+    }
+    const row = ownerPayoutRows.find((r) => r.ownerId === ownerFilter);
+    if (!row) {
+      toast({ title: "No data", description: "No payouts found for the selected owner.", variant: "default" });
+      return;
+    }
+    const csv = ownerCsvFor(ownerFilter);
+    try {
+      await sendOwnerReport({
+        ownerId: ownerFilter,
+        ownerName: row.name,
+        startDate,
+        endDate,
+        totals: { usd: row.usd, dop: row.dop },
+        csv,
+      });
+      toast({ title: "Report sent", description: `Email sent to ${row.name}.` });
+    } catch (e: any) {
+      toast({ title: "Failed to send", description: e.message, variant: "destructive" });
+    }
+  };
 
   return (
     <AppShell>
@@ -354,21 +391,26 @@ const Reports = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Owner Payouts</CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  exportCSV(
-                    "owner_payouts.csv",
-                    ["Owner", "USD", "DOP"],
-                    ownerPayoutRows
-                      .filter((r) => (ownerFilter === "all" ? true : r.ownerId === ownerFilter))
-                      .map((r) => [r.name, r.usd.toFixed(2), r.dop.toFixed(2)])
-                  )
-                }
-              >
-                Export CSV
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    exportCSV(
+                      "owner_payouts.csv",
+                      ["Owner", "USD", "DOP"],
+                      ownerPayoutRows
+                        .filter((r) => (ownerFilter === "all" ? true : r.ownerId === ownerFilter))
+                        .map((r) => [r.name, r.usd.toFixed(2), r.dop.toFixed(2)])
+                    )
+                  }
+                >
+                  Export CSV
+                </Button>
+                <Button variant="default" size="sm" onClick={handleSendEmail} disabled={ownerFilter === "all"}>
+                  Send Email
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <Table>
