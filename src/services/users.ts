@@ -29,6 +29,17 @@ export async function fetchTenantProfilesInAgency(agencyId: string) {
   return (data ?? []) as UserRow[];
 }
 
+export async function fetchOwnerProfilesInAgency(agencyId: string) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, role, agency_id, first_name, last_name, avatar_url, updated_at")
+    .eq("role", "owner")
+    .or(`agency_id.eq.${agencyId},agency_id.is.null`)
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as UserRow[];
+}
+
 export async function updateUserRoleAndAgency(params: {
   userId: string;
   role: "agency_admin" | "owner" | "tenant";

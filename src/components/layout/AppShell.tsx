@@ -15,13 +15,14 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
   const navItems: { to: string; label: string; icon: any; roles: Role[] }[] = [
     { to: "/dashboard", label: "Dashboard", icon: Home, roles: ["agency_admin", "owner", "tenant"] as Role[] },
     { to: "/properties", label: "Properties", icon: Building2, roles: ["agency_admin", "owner"] as Role[] },
+    { to: "/owners", label: "Owners", icon: Users, roles: ["agency_admin"] as Role[] },
     { to: "/tenants", label: "Tenants", icon: Users, roles: ["agency_admin"] as Role[] },
     { to: "/leases", label: "Leases", icon: FileText, roles: ["agency_admin"] as Role[] },
     { to: "/invoices", label: "Invoices", icon: Receipt, roles: ["agency_admin", "owner", "tenant"] as Role[] },
     { to: "/payments", label: "Payments", icon: CreditCard, roles: ["agency_admin", "owner", "tenant"] as Role[] },
     { to: "/maintenance", label: "Maintenance", icon: Wrench, roles: ["agency_admin", "owner", "tenant"] as Role[] },
     { to: "/reports", label: "Reports", icon: BarChart3, roles: ["agency_admin", "owner"] as Role[] },
-    { to: "/users", label: "Users", icon: UserCog, roles: ["agency_admin"] as Role[] },
+    { to: "/users", label: "Users", icon: Users, roles: ["agency_admin"] as Role[] },
     { to: "/settings", label: "Settings", icon: Settings, roles: ["agency_admin"] as Role[] },
   ];
 
