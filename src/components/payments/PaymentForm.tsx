@@ -136,11 +136,15 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
                   <SelectValue placeholder="Select invoice (optional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(pendingInvoices ?? []).map((inv: any) => (
-                    <SelectItem key={inv.id} value={inv.id}>
-                      {(inv.number ?? inv.id.slice(0, 8))} — due {inv.due_date} — {new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(inv.total_amount)}
-                    </SelectItem>
-                  ))}
+                  {(pendingInvoices ?? []).map((inv: any) => {
+                    const tenantName =
+                      [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Tenant";
+                    return (
+                      <SelectItem key={inv.id} value={inv.id}>
+                        {inv.number} — {tenantName} — due {inv.due_date} — {new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(inv.total_amount)}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>

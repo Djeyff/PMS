@@ -45,7 +45,6 @@ const Tenants = () => {
                   <TableRow>
                     <TableHead>Tenant</TableHead>
                     <TableHead>Agency</TableHead>
-                    <TableHead>User ID</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -53,7 +52,6 @@ const Tenants = () => {
                     <TableRow key={t.id}>
                       <TableCell>{[t.first_name, t.last_name].filter(Boolean).join(" ") || "—"}</TableCell>
                       <TableCell>{t.agency_id ? "Assigned" : "Unassigned"}</TableCell>
-                      <TableCell className="font-mono text-xs">{t.id}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

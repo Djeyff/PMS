@@ -21,6 +21,7 @@ const AddTenantDialog = ({ onCreated, triggerLabel = "Add Tenant" }: Props) => {
 
   const onSave = async () => {
     if (!email && !first && !last) {
+      // Require at least a name or an email so we don't create totally anonymous tenants
       toast.error("Please enter at least a name or an email");
       return;
     }
@@ -39,7 +40,7 @@ const AddTenantDialog = ({ onCreated, triggerLabel = "Add Tenant" }: Props) => {
       onCreated?.(id);
     } catch (e: any) {
       console.error("Invite tenant failed:", e);
-      toast.error(e?.message ?? "Failed to invite tenant");
+      toast.error(e?.message ?? "Failed to add tenant");
     } finally {
       setSaving(false);
     }
@@ -71,7 +72,7 @@ const AddTenantDialog = ({ onCreated, triggerLabel = "Add Tenant" }: Props) => {
           </div>
           <div className="pt-2">
             <Button onClick={onSave} disabled={saving}>
-              {saving ? "Inviting..." : "Invite Tenant"}
+              {saving ? "Adding..." : "Add Tenant"}
             </Button>
           </div>
         </div>

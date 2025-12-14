@@ -133,7 +133,10 @@ export async function fetchPendingInvoicesByLease(leaseId: string) {
   const today = new Date().toISOString().slice(0, 10);
   const { data, error } = await supabase
     .from("invoices")
-    .select("id, number, lease_id, tenant_id, due_date, currency, total_amount, status")
+    .select(`
+      id, number, lease_id, tenant_id, due_date, currency, total_amount, status,
+      tenant:profiles ( first_name, last_name )
+    `)
     .eq("lease_id", leaseId)
     .in("status", ["sent", "partial", "overdue"])
     .order("due_date", { ascending: true });
