@@ -22,25 +22,25 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
 
-    // Verify user token using anon client
-    const anon = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    // Validate caller using anon client + Authorization header
+    const anon = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
     const { data: userRes, error: userErr } = await anon.auth.getUser();
     if (userErr || !userRes?.user) {
       return new Response(JSON.stringify({ error: "Invalid auth token" }), { status: 401, headers: corsHeaders });
     }
     const userId = userRes.user.id;
 
-    const { name, default_currency } = await req.json().catch(() => ({}));
-    if (!name || !default_currency || !["USD", "DOP"].includes(default_currency)) {
+    const body = await req.json().catch(() => ({}));
+    const name = body?.name;
+    const default_currency = body?.default_currency;
+    if (!name || !["USD", "DOP"].includes(default_currency)) {
       return new Response(JSON.stringify({ error: "Invalid body. Expect { name, default_currency: 'USD' | 'DOP' }" }), {
         status: 400,
         headers: corsHeaders,
       });
     }
 
-    // Use service role to bypass RLS safely
+    // Service client bypasses RLS securely
     const admin = createClient(supabaseUrl, serviceKey);
 
     const { data: agency, error: insertErr } = await admin
@@ -61,14 +61,20 @@ serve(async (req) => {
       .upsert({ id: userId, agency_id: agency.id }, { onConflict: "id" });
 
     if (assignErr) {
-      return new Response(JSON.stringify({ error: assignErr.message || "Failed to assign profile to agency" }), {
+      return new Response(JSON.stringify({ error: assignErr.message || "Failed to assign profile" }), {
         status: 400,
         headers: corsHeaders,
       });
     }
 
-    return new Response(JSON.stringify({ id: agency.id }), { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    return new Response(JSON.stringify({ id: agency.id }), {
+      status: 200,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e?.message || "Unexpected error" }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: e?.message || "Unexpected error" }), {
+      status: 500,
+      headers: corsHeaders,
+    });
   }
 });

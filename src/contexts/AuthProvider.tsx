@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { createAgency as createAgencyService } from "@/services/agencies";
 
 export type Role = "agency_admin" | "owner" | "tenant";
 export type Profile = {
@@ -57,7 +58,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const email = u.email?.toLowerCase() ?? "";
     if (email !== MASTER_ADMIN_EMAIL) return;
 
-    // Ensure profile exists with admin role (upsert so it works even if missing)
+    // Upsert profile with admin role
     const { error: upsertErr } = await supabase
       .from("profiles")
       .upsert({ id: u.id, role: "agency_admin" }, { onConflict: "id" });
@@ -66,31 +67,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       return;
     }
 
-    // Always refetch after role upsert
     const latest = await fetchProfile(u.id).catch(() => null);
-    let agencyId = latest?.agency_id ?? null;
-
-    // Create and assign an agency if missing (non-blocking for UI)
-    if (!agencyId) {
+    if (!latest?.agency_id) {
+      // Use service that tries edge function, then DB fallback
       try {
-        const { data: sess } = await supabase.auth.getSession();
-        const token = sess.session?.access_token;
-        if (token) {
-          await fetch("https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/create-agency", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ name: "Master Agency", default_currency: "USD" }),
-          });
-        }
+        await createAgencyService({ name: "Master Agency", default_currency: "USD" });
       } catch (e) {
-        console.warn("ensureMasterAdmin: create-agency edge call failed", e);
+        console.warn("ensureMasterAdmin: createAgency fallback path failed", e);
       }
     }
 
-    // Refresh profile in context so UI updates when DB catches up
     const updated = await fetchProfile(u.id).catch(() => null);
     if (updated) setProfile(updated);
   };
