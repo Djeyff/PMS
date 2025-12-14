@@ -7,8 +7,10 @@ import AgencyDashboard from "./dashboards/AgencyDashboard";
 import OwnerDashboard from "./dashboards/OwnerDashboard";
 import TenantDashboard from "./dashboards/TenantDashboard";
 
+const MASTER_ADMIN_EMAIL = "djeyff06@gmail.com";
+
 const Dashboard = () => {
-  const { loading, session, role, profile } = useAuth();
+  const { loading, session, role, user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -18,16 +20,19 @@ const Dashboard = () => {
   }, [loading, session, navigate]);
 
   useEffect(() => {
-    if (!loading && session && !role) {
-      navigate("/pending", { replace: true });
+    if (!loading && session) {
+      const email = (user?.email ?? "").toLowerCase();
+      if (!role && email !== MASTER_ADMIN_EMAIL) {
+        navigate("/pending", { replace: true });
+      }
     }
-  }, [loading, session, role, navigate]);
+  }, [loading, session, role, user, navigate]);
 
   if (loading || !session) {
     return <Loader />;
   }
 
-  if (!role) {
+  if (!role && (user?.email ?? "").toLowerCase() !== MASTER_ADMIN_EMAIL) {
     return null;
   }
 
@@ -36,6 +41,8 @@ const Dashboard = () => {
       {role === "agency_admin" && <AgencyDashboard />}
       {role === "owner" && <OwnerDashboard />}
       {role === "tenant" && <TenantDashboard />}
+      {/* For the master admin fallback, show admin dashboard even if role hasn't persisted yet */}
+      {!role && (user?.email ?? "").toLowerCase() === MASTER_ADMIN_EMAIL && <AgencyDashboard />}
     </AppShell>
   );
 };
