@@ -6,6 +6,10 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
 import { fetchInvoices } from "@/services/invoices";
 import InvoiceForm from "@/components/invoices/InvoiceForm";
+import EditInvoiceDialog from "@/components/invoices/EditInvoiceDialog";
+import DeleteInvoiceDialog from "@/components/invoices/DeleteInvoiceDialog";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import Money from "@/components/Money";
 
 const data = [
@@ -67,6 +71,7 @@ const Invoices = () => {
                     <TableHead>Paid</TableHead>
                     <TableHead>Balance</TableHead>
                     <TableHead>Status</TableHead>
+                    {isAdmin && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -86,6 +91,15 @@ const Invoices = () => {
                         <TableCell>{fmt(inv.paid, inv.currency)}</TableCell>
                         <TableCell>{fmt(inv.balance, inv.currency)}</TableCell>
                         <TableCell className="capitalize">{String(inv.displayStatus).replace("_", " ")}</TableCell>
+                        {isAdmin && (
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button asChild size="sm" variant="outline"><Link to={`/invoices/${inv.id}`}>View</Link></Button>
+                              <EditInvoiceDialog invoice={inv} onUpdated={() => refetch()} />
+                              <DeleteInvoiceDialog id={inv.id} onDeleted={() => refetch()} />
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })}

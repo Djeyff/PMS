@@ -23,6 +23,7 @@ import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import Pending from "./pages/Pending";
 import Users from "./pages/Users";
+import InvoiceDetail from "./pages/invoices/InvoiceDetail";
 
 const queryClient = new QueryClient();
 
@@ -89,6 +90,16 @@ const App = () => (
                   <ProtectedRoute>
                     <RoleGate allow={["agency_admin", "owner", "tenant"]}>
                       <Invoices />
+                    </RoleGate>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/invoices/:id"
+                element={
+                  <ProtectedRoute>
+                    <RoleGate allow={["agency_admin", "owner", "tenant"]}>
+                      <InvoiceDetail />
                     </RoleGate>
                   </ProtectedRoute>
                 }

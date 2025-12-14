@@ -44,6 +44,7 @@ export async function createPayment(input: {
   method: string;
   received_date: string;
   reference?: string;
+  invoice_id?: string;
 }) {
   const payload = {
     lease_id: input.lease_id,
@@ -53,12 +54,13 @@ export async function createPayment(input: {
     method: input.method,
     received_date: input.received_date,
     reference: input.reference ?? null,
+    invoice_id: input.invoice_id ?? null,
   };
 
   const { data, error } = await supabase
     .from("payments")
     .insert(payload)
-    .select("id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at")
+    .select("id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at, invoice_id")
     .single();
 
   if (error) throw error;

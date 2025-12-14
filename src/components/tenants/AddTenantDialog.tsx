@@ -21,7 +21,6 @@ const AddTenantDialog = ({ onCreated, triggerLabel = "Add Tenant" }: Props) => {
 
   const onSave = async () => {
     if (!email && !first && !last) {
-      // Require at least a name or an email so we don't create totally anonymous tenants
       toast.error("Please enter at least a name or an email");
       return;
     }

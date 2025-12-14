@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchLeases } from "@/services/leases";
 import { createPayment } from "@/services/payments";
 import { toast } from "sonner";
+import { fetchPendingInvoicesByLease } from "@/services/invoices";
 
 const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
   const { role, user, profile } = useAuth();
@@ -30,6 +31,13 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
   const [method, setMethod] = useState("bank_transfer");
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [reference, setReference] = useState("");
+  const [invoiceId, setInvoiceId] = useState("");
+
+  const { data: pendingInvoices } = useQuery({
+    queryKey: ["payment-pending-invoices", leaseId],
+    enabled: !!leaseId && canCreate,
+    queryFn: () => fetchPendingInvoicesByLease(leaseId),
+  });
 
   const canSubmit = useMemo(() => {
     return leaseId && tenantId && amount !== "" && Number(amount) >= 0 && date;
@@ -50,6 +58,7 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
         method,
         received_date: date,
         reference: reference || undefined,
+        invoice_id: invoiceId || undefined,
       });
       toast.success("Payment recorded");
       setOpen(false);
@@ -60,6 +69,7 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
       setMethod("bank_transfer");
       setDate(new Date().toISOString().slice(0, 10));
       setReference("");
+      setInvoiceId("");
       onCreated?.();
     } catch (e: any) {
       console.error("Create payment failed:", e);
@@ -118,6 +128,23 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
               </div>
             );
           })()}
+          {leaseId && (
+            <div className="space-y-2">
+              <Label>Pending Invoice (optional)</Label>
+              <Select value={invoiceId} onValueChange={setInvoiceId}>
+                <SelectTrigger className="min-w-[260px]">
+                  <SelectValue placeholder="Select invoice (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(pendingInvoices ?? []).map((inv: any) => (
+                    <SelectItem key={inv.id} value={inv.id}>
+                      {(inv.number ?? inv.id.slice(0, 8))} — due {inv.due_date} — {new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(inv.total_amount)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Amount</Label>
