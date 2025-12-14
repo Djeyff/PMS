@@ -1,8 +1,11 @@
-import React from "react";
+import React, { useMemo } from "react";
 import AppShell from "@/components/layout/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useAuth } from "@/contexts/AuthProvider";
+import { useQuery } from "@tanstack/react-query";
+import { fetchInvoices } from "@/services/invoices";
+import InvoiceForm from "@/components/invoices/InvoiceForm";
 import Money from "@/components/Money";
 
 const data = [
@@ -11,40 +14,84 @@ const data = [
 ];
 
 const Invoices = () => {
+  const { role } = useAuth();
+  const isAdmin = role === "agency_admin";
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["invoices"],
+    queryFn: fetchInvoices,
+  });
+
+  const rows = useMemo(() => {
+    return (data ?? []).map((inv: any) => {
+      const paid = (inv.payments ?? [])
+        .filter((p: any) => p.currency === inv.currency)
+        .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+      const balance = Math.max(0, Number(inv.total_amount) - paid);
+      // naive status compute for display
+      let displayStatus = inv.status;
+      const today = new Date().toISOString().slice(0, 10);
+      if (balance <= 0) displayStatus = "paid";
+      else if (inv.due_date < today && inv.status !== "void") displayStatus = "overdue";
+      else if (paid > 0) displayStatus = "partial";
+      return { ...inv, paid, balance, displayStatus };
+    });
+  }, [data]);
+
   return (
     <AppShell>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Invoices</h1>
-          <Button>Create Invoice</Button>
+          {isAdmin ? <InvoiceForm onCreated={() => refetch()} /> : null}
         </div>
         <Card>
           <CardHeader>
             <CardTitle>All Invoices</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>No.</TableHead>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>Due</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.map((inv) => (
-                  <TableRow key={inv.number}>
-                    <TableCell className="font-medium">{inv.number}</TableCell>
-                    <TableCell>{inv.tenant}</TableCell>
-                    <TableCell>{inv.due}</TableCell>
-                    <TableCell><Money amount={inv.total} currency={inv.currency} showConverted /></TableCell>
-                    <TableCell className="capitalize">{inv.status}</TableCell>
+            {isLoading ? (
+              <div className="text-sm text-muted-foreground">Loading...</div>
+            ) : (rows?.length ?? 0) === 0 ? (
+              <div className="text-sm text-muted-foreground">No invoices yet.</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>No.</TableHead>
+                    <TableHead>Property</TableHead>
+                    <TableHead>Tenant</TableHead>
+                    <TableHead>Issue</TableHead>
+                    <TableHead>Due</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Paid</TableHead>
+                    <TableHead>Balance</TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((inv: any) => {
+                    const propName = inv.lease?.property?.name ?? inv.lease_id?.slice(0, 8);
+                    const tenantName = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || inv.tenant_id?.slice(0, 6);
+                    const fmt = (amt: number, cur: string) =>
+                      new Intl.NumberFormat(undefined, { style: "currency", currency: cur }).format(amt);
+                    return (
+                      <TableRow key={inv.id}>
+                        <TableCell className="font-mono text-xs">{inv.number ?? "—"}</TableCell>
+                        <TableCell className="font-medium">{propName}</TableCell>
+                        <TableCell>{tenantName}</TableCell>
+                        <TableCell>{inv.issue_date}</TableCell>
+                        <TableCell>{inv.due_date}</TableCell>
+                        <TableCell>{fmt(Number(inv.total_amount), inv.currency)}</TableCell>
+                        <TableCell>{fmt(inv.paid, inv.currency)}</TableCell>
+                        <TableCell>{fmt(inv.balance, inv.currency)}</TableCell>
+                        <TableCell className="capitalize">{String(inv.displayStatus).replace("_", " ")}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>
