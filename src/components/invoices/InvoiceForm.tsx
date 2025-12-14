@@ -74,15 +74,15 @@ const InvoiceForm = ({ onCreated }: { onCreated?: () => void }) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>Create Invoice</Button>
+        <Button>Crear Factura</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create Invoice</DialogTitle>
+          <DialogTitle>Crear Factura</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Lease</Label>
+            <Label>Contrato</Label>
             <Select
               value={leaseId}
               onValueChange={(v) => {
@@ -90,17 +90,17 @@ const InvoiceForm = ({ onCreated }: { onCreated?: () => void }) => {
                 const found = (leases ?? []).find((l: any) => l.id === v);
                 if (found) {
                   setTenantId(found.tenant?.id || found.tenant_id);
-                  setCurrency(found.rent_currency); // default to lease currency
+                  setCurrency(found.rent_currency);
                 }
               }}
             >
               <SelectTrigger className="min-w-[260px]">
-                <SelectValue placeholder="Select lease" />
+                <SelectValue placeholder="Seleccione contrato" />
               </SelectTrigger>
               <SelectContent>
                 {(leases ?? []).map((l: any) => {
-                  const propName = l.property?.name ?? (l.property_id ? l.property_id.slice(0, 8) : "Property");
-                  const tenantName = [l.tenant?.first_name, l.tenant?.last_name].filter(Boolean).join(" ") || (l.tenant_id ? l.tenant_id.slice(0, 6) : "Tenant");
+                  const propName = l.property?.name ?? (l.property_id ? l.property_id.slice(0, 8) : "Propiedad");
+                  const tenantName = [l.tenant?.first_name, l.tenant?.last_name].filter(Boolean).join(" ") || (l.tenant_id ? l.tenant_id.slice(0, 6) : "Inquilino");
                   return (
                     <SelectItem key={l.id} value={l.id}>
                       {propName} — {tenantName}
@@ -110,37 +110,36 @@ const InvoiceForm = ({ onCreated }: { onCreated?: () => void }) => {
               </SelectContent>
             </Select>
           </div>
-          {/* Lease rent reminder */}
           {leaseId && (() => {
             const sel = (leases ?? []).find((l: any) => l.id === leaseId);
             if (!sel) return null;
             const rentText = new Intl.NumberFormat(undefined, { style: "currency", currency: sel.rent_currency }).format(sel.rent_amount);
             return (
               <div className="text-xs text-muted-foreground">
-                Lease rent: {rentText}
+                Renta del contrato: {rentText}
               </div>
             );
           })()}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Invoice Number (optional)</Label>
-              <Input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="e.g., INV-2025-0001" />
+              <Label>Número de factura (opcional)</Label>
+              <Input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="p.ej., FAC-2025-0001" />
             </div>
             <div className="space-y-2">
-              <Label>Issue Date</Label>
+              <Label>Fecha de emisión</Label>
               <Input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Due Date</Label>
+              <Label>Fecha de vencimiento</Label>
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>Currency</Label>
+              <Label>Moneda</Label>
               <Select value={currency} onValueChange={(v) => setCurrency(v as "USD" | "DOP")}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Currency" />
+                  <SelectValue placeholder="Moneda" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="USD">USD</SelectItem>
@@ -150,12 +149,12 @@ const InvoiceForm = ({ onCreated }: { onCreated?: () => void }) => {
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Total Amount</Label>
+            <Label>Importe total</Label>
             <Input type="number" min={0} value={total} onChange={(e) => setTotal(e.target.value)} placeholder="0.00" />
           </div>
           <div className="pt-2">
             <Button onClick={onSave} disabled={saving || !canSubmit}>
-              {saving ? "Saving..." : "Create Invoice"}
+              {saving ? "Guardando..." : "Crear Factura"}
             </Button>
           </div>
         </div>

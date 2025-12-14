@@ -5,7 +5,7 @@ export type Property = {
   id: string;
   agency_id: string;
   name: string;
-  type: "villa" | "apartment" | "house" | "studio" | "office" | "other";
+  type: "villa" | "apartment" | "house" | "studio" | "office" | "other" | "restaurant" | "banca" | "business" | "land" | "colmado" | "rentacar";
   city: string | null;
   bedrooms: number | null;
   status: "active" | "rented" | "vacant" | "maintenance" | "sold";

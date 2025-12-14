@@ -17,7 +17,7 @@ const PropertyForm = ({ agencyId, onCreated }: Props) => {
   const [saving, setSaving] = useState(false);
 
   const [name, setName] = useState("");
-  const [type, setType] = useState<"villa" | "apartment" | "house" | "studio" | "office" | "other">("apartment");
+  const [type, setType] = useState<"villa" | "apartment" | "house" | "studio" | "office" | "other" | "restaurant" | "banca" | "business" | "land" | "colmado" | "rentacar">("apartment");
   const [city, setCity] = useState("");
   const [bedrooms, setBedrooms] = useState<number | "">("");
 
@@ -76,6 +76,12 @@ const PropertyForm = ({ agencyId, onCreated }: Props) => {
                 <SelectItem value="house">House</SelectItem>
                 <SelectItem value="studio">Studio</SelectItem>
                 <SelectItem value="office">Office</SelectItem>
+                <SelectItem value="restaurant">Restaurant</SelectItem>
+                <SelectItem value="banca">Banca</SelectItem>
+                <SelectItem value="business">Business</SelectItem>
+                <SelectItem value="land">Land</SelectItem>
+                <SelectItem value="colmado">Colmado</SelectItem>
+                <SelectItem value="rentacar">Rent a car</SelectItem>
                 <SelectItem value="other">Other</SelectItem>
               </SelectContent>
             </Select>
