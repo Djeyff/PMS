@@ -56,18 +56,36 @@ serve(async (req) => {
     }
     const agencyId = adminProfile.agency_id;
 
-    // Invite user by email (sends invite if SMTP configured)
-    const { data: inviteRes, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
-      data: { first_name, last_name },
-    });
+    // Invite user by email (sends invite if SMTP configured) OR create placeholder user if email is omitted
+    let newUserId: string | null = null;
 
-    if (inviteErr || !inviteRes?.user?.id) {
-      return new Response(JSON.stringify({ error: inviteErr?.message || "Failed to invite user" }), {
-        status: 400,
-        headers: corsHeaders,
+    if (email && email.trim().length > 0) {
+      const { data: inviteRes, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
+        data: { first_name, last_name },
       });
+      if (inviteErr || !inviteRes?.user?.id) {
+        return new Response(JSON.stringify({ error: inviteErr?.message || "Failed to invite user" }), {
+          status: 400,
+          headers: corsHeaders,
+        });
+      }
+      newUserId = inviteRes.user.id;
+    } else {
+      // No email provided: create a placeholder auth user with a synthetic email, immediately confirmed
+      const placeholderEmail = `tenant+${Date.now()}_${Math.random().toString(36).slice(2,8)}@placeholder.local`;
+      const { data: createRes, error: createErr } = await admin.auth.admin.createUser({
+        email: placeholderEmail,
+        email_confirm: true,
+        user_metadata: { first_name, last_name, placeholder: true },
+      });
+      if (createErr || !createRes?.user?.id) {
+        return new Response(JSON.stringify({ error: createErr?.message || "Failed to create placeholder tenant" }), {
+          status: 400,
+          headers: corsHeaders,
+        });
+      }
+      newUserId = createRes.user.id;
     }
-    const newUserId = inviteRes.user.id;
 
     // Ensure profile row exists and assign role/agency
     const { error: upsertErr } = await admin

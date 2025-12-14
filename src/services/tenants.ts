@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 const FUNCTIONS_URL = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/invite-tenant";
 
-export async function inviteTenant(input: { email: string; first_name?: string; last_name?: string }) {
+export async function inviteTenant(input: { email?: string; first_name?: string; last_name?: string }) {
   const { data: sess } = await supabase.auth.getSession();
   const token = sess.session?.access_token;
   if (!token) throw new Error("Not authenticated");

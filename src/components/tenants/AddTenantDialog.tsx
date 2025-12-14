@@ -20,14 +20,19 @@ const AddTenantDialog = ({ onCreated, triggerLabel = "Add Tenant" }: Props) => {
   const [last, setLast] = useState("");
 
   const onSave = async () => {
-    if (!email) {
-      toast.error("Please enter the tenant's email");
+    if (!email && !first && !last) {
+      // Require at least a name or an email so we don't create totally anonymous tenants
+      toast.error("Please enter at least a name or an email");
       return;
     }
     setSaving(true);
     try {
-      const { id } = await inviteTenant({ email, first_name: first || undefined, last_name: last || undefined });
-      toast.success("Tenant invited");
+      const { id } = await inviteTenant({
+        email: email || undefined,
+        first_name: first || undefined,
+        last_name: last || undefined,
+      });
+      toast.success("Tenant added");
       setOpen(false);
       setEmail("");
       setFirst("");
@@ -52,8 +57,8 @@ const AddTenantDialog = ({ onCreated, triggerLabel = "Add Tenant" }: Props) => {
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Email</Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tenant@example.com" />
+            <Label>Email (optional)</Label>
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tenant@example.com (optional)" />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
