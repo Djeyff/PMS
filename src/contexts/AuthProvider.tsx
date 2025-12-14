@@ -44,22 +44,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const role = useMemo(() => profile?.role ?? null, [profile]);
-
   const MASTER_ADMIN_EMAIL = "djeyff06@gmail.com";
+
+  // Compute role with a client-side fallback for the master email
+  const computedRole: Role | null = useMemo(() => {
+    if (profile?.role) return profile.role;
+    if ((user?.email?.toLowerCase() ?? "") === MASTER_ADMIN_EMAIL) return "agency_admin";
+    return null;
+  }, [profile?.role, user?.email]);
 
   const ensureMasterAdmin = async (u: User, current: Profile | null) => {
     const email = u.email?.toLowerCase() ?? "";
     if (email !== MASTER_ADMIN_EMAIL) return;
 
-    // 1) Ensure the profile exists with admin role
-    if (!current || current.role !== "agency_admin") {
-      const { error: upsertErr } = await supabase
-        .from("profiles")
-        .upsert({ id: u.id, role: "agency_admin" }, { onConflict: "id" });
-      if (upsertErr) {
-        return;
-      }
+    // 1) Ensure the profile exists with admin role (upsert so it works even if missing)
+    const { error: upsertErr } = await supabase
+      .from("profiles")
+      .upsert({ id: u.id, role: "agency_admin" }, { onConflict: "id" });
+    if (upsertErr) {
+      return;
     }
 
     // 2) Ensure an agency exists and is assigned
@@ -76,7 +79,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     }
 
-    // 3) Refresh profile in context so UI updates immediately
+    // 3) Refresh profile so DB changes reflect in UI
     const updated = await fetchProfile(u.id).catch(() => null);
     if (updated) setProfile(updated);
   };
@@ -142,7 +145,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     session,
     user,
     profile,
-    role,
+    role: computedRole,
     loading,
     signOut,
     refreshProfile,
