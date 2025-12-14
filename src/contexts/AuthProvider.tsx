@@ -78,9 +78,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     });
 
+    // Fallback: ensure loading doesn't remain true due to unexpected delays
+    const loadingFallback = setTimeout(() => {
+      if (mounted) setLoading(false);
+    }, 5000);
+
     return () => {
       mounted = false;
-      sub.subscription.unsubscribe();
+      clearTimeout(loadingFallback);
+      sub?.subscription?.unsubscribe();
     };
   }, []);
 

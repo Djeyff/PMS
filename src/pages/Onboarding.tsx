@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
@@ -13,9 +13,11 @@ const Onboarding = () => {
   const [role, setRole] = useState<"agency_admin" | "owner" | "tenant">("tenant");
   const [loading, setLoading] = useState(false);
 
-  if (!user) {
-    navigate("/login", { replace: true });
-  }
+  useEffect(() => {
+    if (!user) {
+      navigate("/login", { replace: true });
+    }
+  }, [user, navigate]);
 
   const onSave = async () => {
     if (!user) return;
