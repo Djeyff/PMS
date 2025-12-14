@@ -10,6 +10,7 @@ import { fetchTenantProfilesInAgency } from "@/services/users";
 import { useAuth } from "@/contexts/AuthProvider";
 import { createLease } from "@/services/leases";
 import { toast } from "sonner";
+import AddTenantDialog from "@/components/tenants/AddTenantDialog";
 
 type Props = { onCreated?: () => void };
 
@@ -24,7 +25,7 @@ const LeaseForm = ({ onCreated }: Props) => {
     queryFn: () => fetchProperties({ role: role, userId: user?.id ?? null, agencyId }),
   });
 
-  const { data: tenants } = useQuery({
+  const { data: tenants, refetch: refetchTenants } = useQuery({
     queryKey: ["lease-tenants", agencyId],
     enabled: canCreate,
     queryFn: () => fetchTenantProfilesInAgency(agencyId!),
@@ -111,18 +112,27 @@ const LeaseForm = ({ onCreated }: Props) => {
           </div>
           <div className="space-y-2">
             <Label>Tenant</Label>
-            <Select value={tenantId} onValueChange={setTenantId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select tenant" />
-              </SelectTrigger>
-              <SelectContent>
-                {(tenants ?? []).map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {[t.first_name, t.last_name].filter(Boolean).join(" ") || t.id.slice(0, 6)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <Select value={tenantId} onValueChange={setTenantId}>
+                <SelectTrigger className="min-w-[220px]">
+                  <SelectValue placeholder="Select tenant" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(tenants ?? []).map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {[t.first_name, t.last_name].filter(Boolean).join(" ") || t.id.slice(0, 6)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <AddTenantDialog
+                triggerLabel="Add"
+                onCreated={async (id) => {
+                  await refetchTenants();
+                  setTenantId(id);
+                }}
+              />
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
