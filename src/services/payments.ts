@@ -28,7 +28,22 @@ export async function fetchPayments(params: { role: Role | null; userId: string 
     `)
     .order("received_date", { ascending: false });
   if (error) throw error;
-  return (data ?? []) as PaymentWithMeta[];
+
+  return (data ?? []).map((row: any) => {
+    const leaseRel = Array.isArray(row.lease) ? row.lease[0] : row.lease ?? null;
+    return {
+      id: row.id,
+      lease_id: row.lease_id,
+      tenant_id: row.tenant_id,
+      amount: row.amount,
+      currency: row.currency,
+      method: row.method,
+      received_date: row.received_date,
+      reference: row.reference,
+      created_at: row.created_at,
+      lease: leaseRel ? { id: leaseRel.id, property_id: leaseRel.property_id } : null,
+    } as PaymentWithMeta;
+  });
 }
 
 export async function createPayment(input: {

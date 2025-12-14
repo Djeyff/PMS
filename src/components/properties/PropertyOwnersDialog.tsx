@@ -109,9 +109,9 @@ const PropertyOwnersDialog = ({ propertyId }: { propertyId: string }) => {
                   }
                   addMutation.mutate();
                 }}
-                disabled={addMutation.isLoading}
+                disabled={addMutation.isPending}
               >
-                {addMutation.isLoading ? "Adding..." : "Add"}
+                {addMutation.isPending ? "Adding..." : "Add"}
               </Button>
             </div>
             <div className="text-xs text-muted-foreground">Leave percent empty for unspecified share.</div>

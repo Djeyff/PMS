@@ -19,8 +19,27 @@ export type LeaseWithMeta = LeaseRow & {
   tenant?: { id: string; first_name: string | null; last_name: string | null } | null;
 };
 
+function normalizeLeaseRow(row: any): LeaseWithMeta {
+  const property = Array.isArray(row?.property) ? row.property[0] : row?.property ?? null;
+  const tenant = Array.isArray(row?.tenant) ? row.tenant[0] : row?.tenant ?? null;
+  return {
+    id: row.id,
+    property_id: row.property_id,
+    tenant_id: row.tenant_id,
+    start_date: row.start_date,
+    end_date: row.end_date,
+    rent_amount: row.rent_amount,
+    rent_currency: row.rent_currency,
+    deposit_amount: row.deposit_amount,
+    status: row.status,
+    created_at: row.created_at,
+    property: property ? { id: property.id, name: property.name } : null,
+    tenant: tenant ? { id: tenant.id, first_name: tenant.first_name ?? null, last_name: tenant.last_name ?? null } : null,
+  };
+}
+
 export async function fetchLeases(params: { role: Role | null; userId: string | null; agencyId: string | null; }) {
-  const { role, userId, agencyId } = params;
+  const { role } = params;
   if (!role) return [];
 
   const { data, error } = await supabase
@@ -33,7 +52,7 @@ export async function fetchLeases(params: { role: Role | null; userId: string | 
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as LeaseWithMeta[];
+  return (data ?? []).map(normalizeLeaseRow);
 }
 
 export async function createLease(input: {
@@ -68,7 +87,7 @@ export async function createLease(input: {
     .single();
 
   if (error) throw error;
-  return data as LeaseWithMeta;
+  return normalizeLeaseRow(data);
 }
 
 export async function updateLease(
@@ -102,7 +121,7 @@ export async function updateLease(
     .single();
 
   if (error) throw error;
-  return data as LeaseWithMeta;
+  return normalizeLeaseRow(data);
 }
 
 export async function deleteLease(id: string) {

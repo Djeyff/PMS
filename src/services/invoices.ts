@@ -19,6 +19,35 @@ export type InvoiceWithMeta = InvoiceRow & {
   payments?: { amount: number; currency: "USD" | "DOP" }[] | null;
 };
 
+function normalizeInvoiceRow(row: any): InvoiceWithMeta {
+  let leaseRel: any = Array.isArray(row.lease) ? row.lease[0] : row.lease ?? null;
+  if (leaseRel && Array.isArray(leaseRel.property)) {
+    leaseRel = { ...leaseRel, property: leaseRel.property[0] ?? null };
+  }
+  const tenantRel = Array.isArray(row.tenant) ? row.tenant[0] : row.tenant ?? null;
+
+  return {
+    id: row.id,
+    lease_id: row.lease_id,
+    tenant_id: row.tenant_id,
+    number: row.number ?? null,
+    issue_date: row.issue_date,
+    due_date: row.due_date,
+    currency: row.currency,
+    total_amount: row.total_amount,
+    status: row.status,
+    created_at: row.created_at,
+    lease: leaseRel
+      ? {
+          id: leaseRel.id,
+          property: leaseRel.property ? { id: leaseRel.property.id, name: leaseRel.property.name } : null,
+        }
+      : null,
+    tenant: tenantRel ? { id: tenantRel.id, first_name: tenantRel.first_name ?? null, last_name: tenantRel.last_name ?? null } : null,
+    payments: row.payments ?? [],
+  };
+}
+
 export async function fetchInvoices() {
   const { data, error } = await supabase
     .from("invoices")
@@ -34,7 +63,7 @@ export async function fetchInvoices() {
     .order("due_date", { ascending: true });
 
   if (error) throw error;
-  return (data ?? []) as InvoiceWithMeta[];
+  return (data ?? []).map(normalizeInvoiceRow);
 }
 
 function autoNumber(): string {
@@ -82,7 +111,7 @@ export async function createInvoice(input: {
     .single();
 
   if (error) throw error;
-  return data as InvoiceWithMeta;
+  return normalizeInvoiceRow(data);
 }
 
 export async function updateInvoice(
@@ -120,7 +149,7 @@ export async function updateInvoice(
     .single();
 
   if (error) throw error;
-  return data as InvoiceWithMeta;
+  return normalizeInvoiceRow(data);
 }
 
 export async function deleteInvoice(id: string) {
@@ -130,7 +159,6 @@ export async function deleteInvoice(id: string) {
 }
 
 export async function fetchPendingInvoicesByLease(leaseId: string) {
-  const today = new Date().toISOString().slice(0, 10);
   const { data, error } = await supabase
     .from("invoices")
     .select(`
@@ -141,5 +169,8 @@ export async function fetchPendingInvoicesByLease(leaseId: string) {
     .in("status", ["sent", "partial", "overdue"])
     .order("due_date", { ascending: true });
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((row: any) => {
+    const tenantRel = Array.isArray(row.tenant) ? row.tenant[0] : row.tenant ?? null;
+    return { ...row, tenant: tenantRel };
+  });
 }
