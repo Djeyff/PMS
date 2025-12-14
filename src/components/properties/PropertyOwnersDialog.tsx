@@ -128,8 +128,6 @@ const PropertyOwnersDialog = ({ propertyId }: { propertyId: string }) => {
                 {(propOwners ?? []).map((po) => {
                   const owner = (allOwners ?? []).find(o => o.id === po.owner_id);
                   const name = [owner?.first_name, owner?.last_name].filter(Boolean).join(" ") || "—";
-                  const [localPercent, setLocalPercent] = useState<string>(po.ownership_percent == null ? "" : String(po.ownership_percent));
-                  // Since we cannot use hooks inside loop in React, rewrite as subcomponent inline function:
                   return (
                     <OwnerRow
                       key={po.owner_id}
