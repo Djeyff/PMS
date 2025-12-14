@@ -18,10 +18,10 @@ const Dashboard = () => {
   }, [loading, session, navigate]);
 
   useEffect(() => {
-    if (!loading && session && (!profile || !role)) {
+    if (!loading && session && !role) {
       navigate("/pending", { replace: true });
     }
-  }, [loading, session, profile, role, navigate]);
+  }, [loading, session, role, navigate]);
 
   if (loading || !session) {
     return <Loader />;
