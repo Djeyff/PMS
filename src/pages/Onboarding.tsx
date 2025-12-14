@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const Onboarding = () => {
   const { user, refreshProfile } = useAuth();
@@ -22,16 +23,23 @@ const Onboarding = () => {
   const onSave = async () => {
     if (!user) return;
     setLoading(true);
-    const { error } = await supabase
-      .from("profiles")
-      .upsert({ id: user.id, role, agency_id: null }, { onConflict: "id" });
-    if (error) {
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .upsert({ id: user.id, role, agency_id: null }, { onConflict: "id" })
+        .select("id")
+        .single();
+      if (error) throw error;
+
+      await refreshProfile();
+      toast.success("Profile saved");
+      navigate("/dashboard", { replace: true });
+    } catch (e: any) {
+      console.error("Onboarding save failed:", e);
+      toast.error(e?.message || "Failed to save your profile. Please try again.");
+    } finally {
       setLoading(false);
-      throw error;
     }
-    await refreshProfile();
-    setLoading(false);
-    navigate("/dashboard", { replace: true });
   };
 
   return (
