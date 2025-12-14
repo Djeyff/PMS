@@ -42,6 +42,9 @@ const PropertyForm = ({ agencyId, onCreated }: Props) => {
       setCity("");
       setBedrooms("");
       onCreated?.();
+    } catch (e: any) {
+      console.error("Create property failed:", e);
+      toast.error(e?.message ?? "Failed to create property");
     } finally {
       setSaving(false);
     }
