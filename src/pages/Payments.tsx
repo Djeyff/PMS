@@ -63,7 +63,7 @@ const Payments = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Lease</TableHead>
+                    <TableHead>Property</TableHead>
                     <TableHead>Tenant</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Method</TableHead>
@@ -71,17 +71,23 @@ const Payments = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(data ?? []).map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-mono text-xs">{p.lease_id.slice(0, 8)}</TableCell>
-                      <TableCell className="font-mono text-xs">{p.tenant_id.slice(0, 8)}</TableCell>
-                      <TableCell>{p.received_date}</TableCell>
-                      <TableCell className="capitalize">{p.method.replace("_", " ")}</TableCell>
-                      <TableCell>
-                        {new Intl.NumberFormat(undefined, { style: "currency", currency: p.currency }).format(p.amount)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {(data ?? []).map((p: any) => {
+                    const propName = p.lease?.property?.name ?? (p.lease_id ? p.lease_id.slice(0, 8) : "—");
+                    const tenantName =
+                      [p.tenant?.first_name, p.tenant?.last_name].filter(Boolean).join(" ") ||
+                      (p.tenant_id ? p.tenant_id.slice(0, 6) : "—");
+                    return (
+                      <TableRow key={p.id}>
+                        <TableCell className="font-medium">{propName}</TableCell>
+                        <TableCell>{tenantName}</TableCell>
+                        <TableCell>{p.received_date}</TableCell>
+                        <TableCell className="capitalize">{String(p.method).replace("_", " ")}</TableCell>
+                        <TableCell>
+                          {new Intl.NumberFormat(undefined, { style: "currency", currency: p.currency }).format(p.amount)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}

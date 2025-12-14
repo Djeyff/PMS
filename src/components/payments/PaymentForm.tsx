@@ -88,18 +88,22 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
               onValueChange={(v) => {
                 setLeaseId(v);
                 const found = (leases ?? []).find((l: any) => l.id === v);
-                if (found) setTenantId(found.tenant_id);
+                if (found) setTenantId(found.tenant?.id || found.tenant_id);
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger className="min-w-[260px]">
                 <SelectValue placeholder="Select lease" />
               </SelectTrigger>
               <SelectContent>
-                {(leases ?? []).map((l: any) => (
-                  <SelectItem key={l.id} value={l.id}>
-                    {`${l.id.slice(0, 6)} • tenant ${l.tenant_id.slice(0, 6)}`}
-                  </SelectItem>
-                ))}
+                {(leases ?? []).map((l: any) => {
+                  const propName = l.property?.name ?? (l.property_id ? l.property_id.slice(0, 8) : "Property");
+                  const tenantName = [l.tenant?.first_name, l.tenant?.last_name].filter(Boolean).join(" ") || (l.tenant_id ? l.tenant_id.slice(0, 6) : "Tenant");
+                  return (
+                    <SelectItem key={l.id} value={l.id}>
+                      {propName} — {tenantName}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
