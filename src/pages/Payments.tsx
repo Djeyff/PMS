@@ -23,6 +23,8 @@ const Payments = () => {
     return { usd, dop };
   }, [data]);
 
+  const fmt = (amt: number, cur: string) => new Intl.NumberFormat(undefined, { style: "currency", currency: cur }).format(amt);
+
   return (
     <AppShell>
       <div className="space-y-4">
@@ -37,7 +39,7 @@ const Payments = () => {
               <CardTitle className="text-sm text-muted-foreground">Total USD</CardTitle>
             </CardHeader>
             <CardContent className="text-2xl font-bold">
-              {new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(totals.usd)}
+              {fmt(totals.usd, "USD")}
             </CardContent>
           </Card>
           <Card>
@@ -45,7 +47,7 @@ const Payments = () => {
               <CardTitle className="text-sm text-muted-foreground">Total DOP</CardTitle>
             </CardHeader>
             <CardContent className="text-2xl font-bold">
-              {new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(totals.dop)}
+              {fmt(totals.dop, "DOP")}
             </CardContent>
           </Card>
         </div>
@@ -72,19 +74,15 @@ const Payments = () => {
                 </TableHeader>
                 <TableBody>
                   {(data ?? []).map((p: any) => {
-                    const propName = p.lease?.property?.name ?? (p.lease_id ? p.lease_id.slice(0, 8) : "—");
-                    const tenantName =
-                      [p.tenant?.first_name, p.tenant?.last_name].filter(Boolean).join(" ") ||
-                      (p.tenant_id ? p.tenant_id.slice(0, 6) : "—");
+                    const propName = p.lease?.property?.name ?? "—";
+                    const tenantName = [p.tenant?.first_name, p.tenant?.last_name].filter(Boolean).join(" ") || "—";
                     return (
                       <TableRow key={p.id}>
                         <TableCell className="font-medium">{propName}</TableCell>
                         <TableCell>{tenantName}</TableCell>
                         <TableCell>{p.received_date}</TableCell>
                         <TableCell className="capitalize">{String(p.method).replace("_", " ")}</TableCell>
-                        <TableCell>
-                          {new Intl.NumberFormat(undefined, { style: "currency", currency: p.currency }).format(p.amount)}
-                        </TableCell>
+                        <TableCell>{fmt(Number(p.amount), p.currency)}</TableCell>
                       </TableRow>
                     );
                   })}
