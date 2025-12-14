@@ -46,8 +46,8 @@ const Reports = () => {
   const startDefault = new Date(); startDefault.setMonth(startDefault.getMonth() - 1);
   const [startDate, setStartDate] = useState<string>(startDefault.toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState<string>(today);
-  const [tenantFilter, setTenantFilter] = useState<string>("");
-  const [ownerFilter, setOwnerFilter] = useState<string>("");
+  const [tenantFilter, setTenantFilter] = useState<string>("all");
+  const [ownerFilter, setOwnerFilter] = useState<string>("all");
 
   // Data
   const { data: properties } = useQuery({
@@ -110,7 +110,7 @@ const Reports = () => {
   // Revenue (by currency)
   const revenue = useMemo(() => {
     const inRange = (payments ?? []).filter((p: any) => p.received_date >= startDate && p.received_date <= endDate);
-    const byTenant = tenantFilter ? inRange.filter((p: any) => p.tenant_id === tenantFilter) : inRange;
+    const byTenant = tenantFilter === "all" ? inRange : inRange.filter((p: any) => p.tenant_id === tenantFilter);
     const usd = byTenant.filter((p: any) => p.currency === "USD").reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
     const dop = byTenant.filter((p: any) => p.currency === "DOP").reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
     return { usd, dop, rows: byTenant };
@@ -145,7 +145,6 @@ const Reports = () => {
     if (!isAdmin) return [];
     const ow = ownerships ?? [];
     const inRange = (payments ?? []).filter((p: any) => p.received_date >= startDate && p.received_date <= endDate);
-    // Group by owner and currency
     const result = new Map<string, { name: string; usd: number; dop: number }>();
     inRange.forEach((p: any) => {
       const propId = p.lease?.property?.id || p.lease?.property_id || null;
@@ -202,7 +201,7 @@ const Reports = () => {
                     <SelectValue placeholder="All tenants" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All tenants</SelectItem>
+                    <SelectItem value="all">All tenants</SelectItem>
                     {(tenants ?? []).map((t) => (
                       <SelectItem key={t.id} value={t.id}>
                         {[t.first_name, t.last_name].filter(Boolean).join(" ") || "—"}
@@ -218,7 +217,7 @@ const Reports = () => {
                     <SelectValue placeholder="All owners" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All owners</SelectItem>
+                    <SelectItem value="all">All owners</SelectItem>
                     {(owners ?? []).map((o) => (
                       <SelectItem key={o.id} value={o.id}>
                         {[o.first_name, o.last_name].filter(Boolean).join(" ") || "—"}
@@ -363,7 +362,7 @@ const Reports = () => {
                     "owner_payouts.csv",
                     ["Owner", "USD", "DOP"],
                     ownerPayoutRows
-                      .filter((r) => (ownerFilter ? r.ownerId === ownerFilter : true))
+                      .filter((r) => (ownerFilter === "all" ? true : r.ownerId === ownerFilter))
                       .map((r) => [r.name, r.usd.toFixed(2), r.dop.toFixed(2)])
                   )
                 }
@@ -382,7 +381,7 @@ const Reports = () => {
                 </TableHeader>
                 <TableBody>
                   {ownerPayoutRows
-                    .filter((r) => (ownerFilter ? r.ownerId === ownerFilter : true))
+                    .filter((r) => (ownerFilter === "all" ? true : r.ownerId === ownerFilter))
                     .map((r) => (
                       <TableRow key={r.ownerId}>
                         <TableCell>{r.name}</TableCell>
