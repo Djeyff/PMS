@@ -12,6 +12,8 @@ export type LeaseRow = {
   deposit_amount: number | null;
   status: "draft" | "active" | "pending_renewal" | "expired" | "terminated";
   created_at: string;
+  auto_invoice_enabled?: boolean;
+  auto_invoice_day?: number;
 };
 
 export type LeaseWithMeta = LeaseRow & {
@@ -33,6 +35,8 @@ function normalizeLeaseRow(row: any): LeaseWithMeta {
     deposit_amount: row.deposit_amount,
     status: row.status,
     created_at: row.created_at,
+    auto_invoice_enabled: row.auto_invoice_enabled ?? false,
+    auto_invoice_day: typeof row.auto_invoice_day === "number" ? row.auto_invoice_day : 5,
     property: property ? { id: property.id, name: property.name } : null,
     tenant: tenant ? { id: tenant.id, first_name: tenant.first_name ?? null, last_name: tenant.last_name ?? null } : null,
   };
@@ -46,6 +50,7 @@ export async function fetchLeases(params: { role: Role | null; userId: string | 
     .from("leases")
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
+      auto_invoice_enabled, auto_invoice_day,
       property:properties ( id, name ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -64,6 +69,8 @@ export async function createLease(input: {
   rent_currency: "USD" | "DOP";
   deposit_amount?: number;
   status?: "draft" | "active" | "pending_renewal" | "expired" | "terminated";
+  auto_invoice_enabled?: boolean;
+  auto_invoice_day?: number;
 }) {
   const payload = {
     property_id: input.property_id,
@@ -74,6 +81,8 @@ export async function createLease(input: {
     rent_currency: input.rent_currency,
     deposit_amount: typeof input.deposit_amount === "number" ? input.deposit_amount : null,
     status: input.status ?? "active",
+    auto_invoice_enabled: !!input.auto_invoice_enabled,
+    auto_invoice_day: typeof input.auto_invoice_day === "number" ? input.auto_invoice_day : 5,
   };
 
   const { data, error } = await supabase
@@ -81,6 +90,7 @@ export async function createLease(input: {
     .insert(payload)
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
+      auto_invoice_enabled, auto_invoice_day,
       property:properties ( id, name ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -99,6 +109,8 @@ export async function updateLease(
     rent_currency: "USD" | "DOP";
     deposit_amount: number | null;
     status: "draft" | "active" | "pending_renewal" | "expired" | "terminated";
+    auto_invoice_enabled: boolean;
+    auto_invoice_day: number;
   }>
 ) {
   const payload: any = {};
@@ -108,6 +120,8 @@ export async function updateLease(
   if (typeof input.rent_currency !== "undefined") payload.rent_currency = input.rent_currency;
   if (typeof input.deposit_amount !== "undefined") payload.deposit_amount = input.deposit_amount;
   if (typeof input.status !== "undefined") payload.status = input.status;
+  if (typeof input.auto_invoice_enabled !== "undefined") payload.auto_invoice_enabled = input.auto_invoice_enabled;
+  if (typeof input.auto_invoice_day !== "undefined") payload.auto_invoice_day = input.auto_invoice_day;
 
   const { data, error } = await supabase
     .from("leases")
@@ -115,6 +129,7 @@ export async function updateLease(
     .eq("id", id)
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
+      auto_invoice_enabled, auto_invoice_day,
       property:properties ( id, name ),
       tenant:profiles ( id, first_name, last_name )
     `)

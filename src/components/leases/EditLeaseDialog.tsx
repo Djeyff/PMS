@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import type { LeaseWithMeta } from "@/services/leases";
 import { updateLease } from "@/services/leases";
 import { toast } from "sonner";
@@ -23,6 +24,7 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
   const [rentCurrency, setRentCurrency] = useState<"USD" | "DOP">(lease.rent_currency);
   const [depositAmount, setDepositAmount] = useState<string>(lease.deposit_amount == null ? "" : String(lease.deposit_amount));
   const [status, setStatus] = useState<"draft" | "active" | "pending_renewal" | "expired" | "terminated">(lease.status);
+  const [autoInvoiceEnabled, setAutoInvoiceEnabled] = useState<boolean>(!!lease.auto_invoice_enabled);
 
   const reset = () => {
     setStartDate(lease.start_date);
@@ -31,6 +33,7 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
     setRentCurrency(lease.rent_currency);
     setDepositAmount(lease.deposit_amount == null ? "" : String(lease.deposit_amount));
     setStatus(lease.status);
+    setAutoInvoiceEnabled(!!lease.auto_invoice_enabled);
   };
 
   const onSave = async () => {
@@ -43,6 +46,8 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
         rent_currency: rentCurrency,
         deposit_amount: depositAmount === "" ? null : Number(depositAmount),
         status,
+        auto_invoice_enabled: autoInvoiceEnabled,
+        auto_invoice_day: 5,
       });
       toast.success("Lease updated");
       setOpen(false);
@@ -111,6 +116,10 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
                 <SelectItem value="terminated">Terminated</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div className="flex items-center justify-between">
+            <Label className="flex-1">Auto-invoice monthly on the 5th</Label>
+            <Switch checked={autoInvoiceEnabled} onCheckedChange={setAutoInvoiceEnabled} />
           </div>
           <div className="pt-2">
             <Button onClick={onSave} disabled={saving}>

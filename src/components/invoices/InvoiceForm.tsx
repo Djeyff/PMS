@@ -74,15 +74,15 @@ const InvoiceForm = ({ onCreated }: { onCreated?: () => void }) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>Crear Factura</Button>
+        <Button>Create Invoice</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Crear Factura</DialogTitle>
+          <DialogTitle>Create Invoice</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Contrato</Label>
+            <Label>Lease</Label>
             <Select
               value={leaseId}
               onValueChange={(v) => {
@@ -95,12 +95,12 @@ const InvoiceForm = ({ onCreated }: { onCreated?: () => void }) => {
               }}
             >
               <SelectTrigger className="min-w-[260px]">
-                <SelectValue placeholder="Seleccione contrato" />
+                <SelectValue placeholder="Select lease" />
               </SelectTrigger>
               <SelectContent>
                 {(leases ?? []).map((l: any) => {
-                  const propName = l.property?.name ?? (l.property_id ? l.property_id.slice(0, 8) : "Propiedad");
-                  const tenantName = [l.tenant?.first_name, l.tenant?.last_name].filter(Boolean).join(" ") || (l.tenant_id ? l.tenant_id.slice(0, 6) : "Inquilino");
+                  const propName = l.property?.name ?? (l.property_id ? l.property_id.slice(0, 8) : "Property");
+                  const tenantName = [l.tenant?.first_name, l.tenant?.last_name].filter(Boolean).join(" ") || (l.tenant_id ? l.tenant_id.slice(0, 6) : "Tenant");
                   return (
                     <SelectItem key={l.id} value={l.id}>
                       {propName} — {tenantName}
@@ -116,30 +116,30 @@ const InvoiceForm = ({ onCreated }: { onCreated?: () => void }) => {
             const rentText = new Intl.NumberFormat(undefined, { style: "currency", currency: sel.rent_currency }).format(sel.rent_amount);
             return (
               <div className="text-xs text-muted-foreground">
-                Renta del contrato: {rentText}
+                Lease rent: {rentText}
               </div>
             );
           })()}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Número de factura (opcional)</Label>
-              <Input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="p.ej., FAC-2025-0001" />
+              <Label>Invoice Number (optional)</Label>
+              <Input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="e.g., FAC-2025-0001" />
             </div>
             <div className="space-y-2">
-              <Label>Fecha de emisión</Label>
+              <Label>Issue Date</Label>
               <Input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Fecha de vencimiento</Label>
+              <Label>Due Date</Label>
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>Moneda</Label>
+              <Label>Currency</Label>
               <Select value={currency} onValueChange={(v) => setCurrency(v as "USD" | "DOP")}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Moneda" />
+                  <SelectValue placeholder="Currency" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="USD">USD</SelectItem>
@@ -149,12 +149,12 @@ const InvoiceForm = ({ onCreated }: { onCreated?: () => void }) => {
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Importe total</Label>
+            <Label>Total Amount</Label>
             <Input type="number" min={0} value={total} onChange={(e) => setTotal(e.target.value)} placeholder="0.00" />
           </div>
           <div className="pt-2">
             <Button onClick={onSave} disabled={saving || !canSubmit}>
-              {saving ? "Guardando..." : "Crear Factura"}
+              {saving ? "Saving..." : "Create Invoice"}
             </Button>
           </div>
         </div>

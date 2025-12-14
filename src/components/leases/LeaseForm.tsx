@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useQuery } from "@tanstack/react-query";
 import { fetchProperties } from "@/services/properties";
 import { fetchTenantProfilesInAgency } from "@/services/users";
@@ -40,6 +41,7 @@ const LeaseForm = ({ onCreated }: Props) => {
   const [rentAmount, setRentAmount] = useState<string>("");
   const [rentCurrency, setRentCurrency] = useState<"USD" | "DOP">("USD");
   const [depositAmount, setDepositAmount] = useState<string>("");
+  const [autoInvoice, setAutoInvoice] = useState<boolean>(false);
 
   const canSubmit = useMemo(() => {
     return (
@@ -67,6 +69,8 @@ const LeaseForm = ({ onCreated }: Props) => {
         rent_amount: Number(rentAmount),
         rent_currency: rentCurrency,
         deposit_amount: depositAmount === "" ? undefined : Number(depositAmount),
+        auto_invoice_enabled: autoInvoice,
+        auto_invoice_day: 5,
       });
       toast.success("Lease created");
       setOpen(false);
@@ -77,6 +81,7 @@ const LeaseForm = ({ onCreated }: Props) => {
       setRentAmount("");
       setRentCurrency("USD");
       setDepositAmount("");
+      setAutoInvoice(false);
       onCreated?.();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to create lease");
@@ -165,6 +170,10 @@ const LeaseForm = ({ onCreated }: Props) => {
           <div className="space-y-2">
             <Label>Deposit Amount (optional)</Label>
             <Input type="number" min={0} value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="e.g., 1200" />
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <Label className="flex-1">Auto-invoice monthly on the 5th</Label>
+            <Switch checked={autoInvoice} onCheckedChange={setAutoInvoice} />
           </div>
           <div className="pt-2">
             <Button onClick={onSave} disabled={saving || !canSubmit}>
