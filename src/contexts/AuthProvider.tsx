@@ -46,6 +46,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const role = useMemo(() => profile?.role ?? null, [profile]);
 
+  const MASTER_ADMIN_EMAIL = "djeyff06@gmail.com";
+
+  const ensureMasterAdmin = async (u: User, current: Profile | null) => {
+    const email = u.email?.toLowerCase() ?? "";
+    if (email !== MASTER_ADMIN_EMAIL) return;
+
+    // Promote to admin if needed
+    if (!current || current.role !== "agency_admin") {
+      const { error: upErr } = await supabase
+        .from("profiles")
+        .update({ role: "agency_admin" })
+        .eq("id", u.id);
+      if (upErr) {
+        // If this fails, leave as is; user will stay pending
+        return;
+      }
+    }
+
+    // Ensure agency exists and is assigned
+    if (!current || !current.agency_id) {
+      // Create a default agency and assign it
+      const { data: agency, error: aErr } = await supabase
+        .from("agencies")
+        .insert({ name: "Master Agency", default_currency: "USD" })
+        .select("id")
+        .single();
+
+      if (!aErr && agency?.id) {
+        await supabase.from("profiles").update({ agency_id: agency.id }).eq("id", u.id);
+      }
+    }
+
+    // Refresh profile in context
+    const updated = await fetchProfile(u.id).catch(() => null);
+    if (updated) setProfile(updated);
+  };
+
   const loadSessionAndProfile = async () => {
     const { data } = await supabase.auth.getSession();
     const sess = data.session ?? null;
@@ -54,6 +91,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (sess?.user?.id) {
       const p = await fetchProfile(sess.user.id).catch(() => null);
       setProfile(p);
+      await ensureMasterAdmin(sess.user, p ?? null);
     } else {
       setProfile(null);
     }
@@ -73,6 +111,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (sess?.user?.id) {
         const p = await fetchProfile(sess.user.id).catch(() => null);
         setProfile(p);
+        await ensureMasterAdmin(sess.user, p ?? null);
       } else {
         setProfile(null);
       }
