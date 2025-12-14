@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchProperties } from "@/services/properties";
 import PropertyForm from "@/components/properties/PropertyForm";
 import EditPropertyDialog from "@/components/properties/EditPropertyDialog";
+import DeletePropertyDialog from "@/components/properties/DeletePropertyDialog";
 
 const data = [
   { name: "Ocean View Villa", type: "villa", status: "rented", bedrooms: 4, city: "Punta Cana" },
@@ -75,7 +76,10 @@ const Properties = () => {
                       <TableCell>{p.city ?? "-"}</TableCell>
                       {canCreate && (
                         <TableCell>
-                          <EditPropertyDialog property={p} onUpdated={() => refetch()} />
+                          <div className="flex gap-2">
+                            <EditPropertyDialog property={p} onUpdated={() => refetch()} />
+                            <DeletePropertyDialog id={p.id} name={p.name} onDeleted={() => refetch()} />
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
