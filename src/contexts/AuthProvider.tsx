@@ -57,6 +57,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const email = u.email?.toLowerCase() ?? "";
     if (email !== MASTER_ADMIN_EMAIL) return;
 
+    // Ensure profile exists with admin role
     const { error: upsertErr } = await supabase
       .from("profiles")
       .upsert({ id: u.id, role: "agency_admin" }, { onConflict: "id" });
@@ -69,12 +70,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     let agencyId = latest?.agency_id ?? null;
 
     if (!agencyId) {
-      // Use edge function to avoid RLS
-      const { error: funcErr } = await supabase.functions.invoke("create-agency", {
-        body: { name: "Master Agency", default_currency: "USD" },
-      });
-      if (funcErr) {
-        console.warn("ensureMasterAdmin: create-agency edge function failed", funcErr);
+      // Use edge function (direct fetch) to avoid RLS issues
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (token) {
+        const res = await fetch("https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/create-agency", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name: "Master Agency", default_currency: "USD" }),
+        }).catch((e) => {
+          console.warn("ensureMasterAdmin: edge fetch failed", e);
+          return null;
+        });
+        if (res && !res.ok) {
+          const err = await res.json().catch(() => ({} as any));
+          console.warn("ensureMasterAdmin: create-agency response error", err);
+        }
       }
     }
 
