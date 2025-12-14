@@ -21,9 +21,9 @@ export async function fetchUsersForAdmin() {
 export async function fetchTenantProfilesInAgency(agencyId: string) {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, role, agency_id, first_name, last_name, avatar_url")
-    .eq("agency_id", agencyId)
+    .select("id, role, agency_id, first_name, last_name, avatar_url, updated_at")
     .eq("role", "tenant")
+    .or(`agency_id.eq.${agencyId},agency_id.is.null`)
     .order("updated_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as UserRow[];
