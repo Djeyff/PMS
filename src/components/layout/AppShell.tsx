@@ -6,6 +6,7 @@ import { Home, Building2, Users, FileText, Wrench, Receipt, CreditCard, Settings
 import { useAuth } from "@/contexts/AuthProvider";
 import type { Role } from "@/contexts/AuthProvider";
 import CurrencySelector from "@/components/CurrencySelector";
+import { SidebarProvider } from "@/components/ui/sidebar";
 
 const AppShell = ({ children }: { children: React.ReactNode }) => {
   const { role, signOut } = useAuth();
@@ -25,51 +26,53 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
   ];
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
-      <Sidebar className="hidden md:flex">
-        <SidebarHeader>
-          <Link to="/dashboard" className="font-semibold text-lg">PMS</Link>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {navItems
-                  .filter((n) => !role || n.roles.includes(role as Role))
-                  .map((item) => (
-                    <SidebarMenuItem key={item.to}>
-                      <SidebarMenuButton asChild isActive={location.pathname.startsWith(item.to)}>
-                        <Link to={item.to} className="flex items-center gap-2">
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.label}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
-        <SidebarFooter>
-          <Button variant="ghost" className="w-full justify-start gap-2" onClick={async () => { await signOut(); navigate("/login"); }}>
-            <LogOut className="h-4 w-4" /> Sign out
-          </Button>
-        </SidebarFooter>
-      </Sidebar>
-      <div className="flex-1 flex flex-col">
-        <header className="h-14 border-b flex items-center justify-between px-3 md:px-6">
-          <div className="md:hidden">
+    <SidebarProvider>
+      <div className="flex min-h-screen bg-background text-foreground">
+        <Sidebar className="hidden md:flex">
+          <SidebarHeader>
             <Link to="/dashboard" className="font-semibold text-lg">PMS</Link>
-          </div>
-          <div className="flex-1" />
-          <div className="flex items-center gap-3">
-            <CurrencySelector />
-          </div>
-        </header>
-        <main className="flex-1 p-3 md:p-6">{children}</main>
+          </SidebarHeader>
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {navItems
+                    .filter((n) => !role || n.roles.includes(role as Role))
+                    .map((item) => (
+                      <SidebarMenuItem key={item.to}>
+                        <SidebarMenuButton asChild isActive={location.pathname.startsWith(item.to)}>
+                          <Link to={item.to} className="flex items-center gap-2">
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.label}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+          <SidebarFooter>
+            <Button variant="ghost" className="w-full justify-start gap-2" onClick={async () => { await signOut(); navigate("/login"); }}>
+              <LogOut className="h-4 w-4" /> Sign out
+            </Button>
+          </SidebarFooter>
+        </Sidebar>
+        <div className="flex-1 flex flex-col">
+          <header className="h-14 border-b flex items-center justify-between px-3 md:px-6">
+            <div className="md:hidden">
+              <Link to="/dashboard" className="font-semibold text-lg">PMS</Link>
+            </div>
+            <div className="flex-1" />
+            <div className="flex items-center gap-3">
+              <CurrencySelector />
+            </div>
+          </header>
+          <main className="flex-1 p-3 md:p-6">{children}</main>
+        </div>
       </div>
-    </div>
+    </SidebarProvider>
   );
 };
 
