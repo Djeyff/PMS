@@ -107,6 +107,17 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
               </SelectContent>
             </Select>
           </div>
+          {/* Rent reminder for the selected lease */}
+          {leaseId && (() => {
+            const sel = (leases ?? []).find((l: any) => l.id === leaseId);
+            if (!sel) return null;
+            const rentText = new Intl.NumberFormat(undefined, { style: "currency", currency: sel.rent_currency }).format(sel.rent_amount);
+            return (
+              <div className="text-xs text-muted-foreground">
+                Rent for this lease: {rentText} per period
+              </div>
+            );
+          })()}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Amount</Label>
