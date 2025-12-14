@@ -31,6 +31,7 @@ const Settings = () => {
       toast.success("Agency created and assigned");
       setAgencyName("");
     } catch (e: any) {
+      console.error("Create agency failed:", e);
       toast.error(e?.message ?? "Failed to create agency");
     } finally {
       setSaving(false);
@@ -47,8 +48,11 @@ const Settings = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {hasAgency ? (
-              <div className="text-sm text-muted-foreground">
-                You are assigned to an agency. You can now manage users and properties.
+              <div className="space-y-2 text-sm">
+                <div className="text-muted-foreground">Status</div>
+                <div className="rounded-md border p-3">
+                  You are assigned to an agency. You can now manage users and properties.
+                </div>
               </div>
             ) : (
               <>
