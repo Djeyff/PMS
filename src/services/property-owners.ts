@@ -64,3 +64,34 @@ export async function fetchMyOwnerships(userId: string) {
   });
   return map;
 }
+
+export async function fetchAgencyOwnerships(agencyId: string) {
+  const { data, error } = await supabase
+    .from("property_owners")
+    .select(`
+      property_id,
+      owner_id,
+      ownership_percent,
+      owner:profiles ( first_name, last_name ),
+      property:properties!inner ( id, agency_id )
+    `)
+    .eq("property.agency_id", agencyId);
+  if (error) throw error;
+  return (data ?? []).map((row: any) => {
+    const ownerRel = Array.isArray(row.owner) ? row.owner[0] : row.owner ?? null;
+    return {
+      property_id: row.property_id,
+      owner_id: row.owner_id,
+      ownership_percent: row.ownership_percent == null ? null : Number(row.ownership_percent),
+      owner: ownerRel ? {
+        first_name: ownerRel.first_name ?? null,
+        last_name: ownerRel.last_name ?? null
+      } : null
+    } as {
+      property_id: string;
+      owner_id: string;
+      ownership_percent: number | null;
+      owner: { first_name: string | null; last_name: string | null } | null;
+    };
+  });
+}

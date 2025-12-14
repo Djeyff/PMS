@@ -1,32 +1,405 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import Money from "@/components/Money";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthProvider";
+import { useQuery } from "@tanstack/react-query";
+import { fetchLeases } from "@/services/leases";
+import { fetchPayments } from "@/services/payments";
+import { fetchInvoices } from "@/services/invoices";
+import { fetchProperties } from "@/services/properties";
+import { fetchTenantProfilesInAgency, fetchOwnerProfilesInAgency } from "@/services/users";
+import { fetchAgencyOwnerships } from "@/services/property-owners";
+
+function fmtMoney(amount: number, currency: "USD" | "DOP") {
+  return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
+}
+
+function overlapLease(lease: any, start: string, end: string) {
+  // overlap if lease.start <= end && lease.end >= start
+  return lease.start_date <= end && lease.end_date >= start;
+}
+
+function exportCSV(filename: string, headers: string[], rows: (string | number)[][]) {
+  const csv = [headers.join(","), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 const Reports = () => {
+  const { role, user, profile } = useAuth();
+  const agencyId = profile?.agency_id ?? null;
+  const isAdmin = role === "agency_admin";
+
+  // Filters
+  const today = new Date().toISOString().slice(0, 10);
+  const startDefault = new Date(); startDefault.setMonth(startDefault.getMonth() - 1);
+  const [startDate, setStartDate] = useState<string>(startDefault.toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState<string>(today);
+  const [tenantFilter, setTenantFilter] = useState<string>("");
+  const [ownerFilter, setOwnerFilter] = useState<string>("");
+
+  // Data
+  const { data: properties } = useQuery({
+    queryKey: ["rpt-properties", role, user?.id, agencyId],
+    enabled: !!agencyId && !!role,
+    queryFn: () => fetchProperties({ role, userId: user?.id ?? null, agencyId }),
+  });
+
+  const { data: leases } = useQuery({
+    queryKey: ["rpt-leases", role, user?.id, agencyId],
+    enabled: !!agencyId && !!role,
+    queryFn: () => fetchLeases({ role, userId: user?.id ?? null, agencyId }),
+  });
+
+  const { data: payments } = useQuery({
+    queryKey: ["rpt-payments", role, user?.id, agencyId],
+    enabled: !!agencyId && !!role,
+    queryFn: () => fetchPayments({ role, userId: user?.id ?? null, agencyId }),
+  });
+
+  const { data: invoices } = useQuery({
+    queryKey: ["rpt-invoices", role, user?.id, agencyId],
+    enabled: !!agencyId && !!role,
+    queryFn: fetchInvoices,
+  });
+
+  const { data: tenants } = useQuery({
+    queryKey: ["rpt-tenants", agencyId],
+    enabled: !!agencyId && isAdmin,
+    queryFn: () => fetchTenantProfilesInAgency(agencyId!),
+  });
+
+  const { data: owners } = useQuery({
+    queryKey: ["rpt-owners", agencyId],
+    enabled: !!agencyId && isAdmin,
+    queryFn: () => fetchOwnerProfilesInAgency(agencyId!),
+  });
+
+  const { data: ownerships } = useQuery({
+    queryKey: ["rpt-ownerships", agencyId],
+    enabled: !!agencyId && isAdmin,
+    queryFn: () => fetchAgencyOwnerships(agencyId!),
+  });
+
+  // Occupancy
+  const occupancy = useMemo(() => {
+    const totalProps = properties?.length ?? 0;
+    if (totalProps === 0) return { percent: 0, activeProps: 0, totalProps: 0 };
+    const activePropsSet = new Set<string>();
+    (leases ?? []).forEach((l: any) => {
+      if (overlapLease(l, startDate, endDate)) {
+        activePropsSet.add(l.property_id);
+      }
+    });
+    const activeProps = activePropsSet.size;
+    const percent = Math.round((activeProps / totalProps) * 100);
+    return { percent, activeProps, totalProps };
+  }, [properties, leases, startDate, endDate]);
+
+  // Revenue (by currency)
+  const revenue = useMemo(() => {
+    const inRange = (payments ?? []).filter((p: any) => p.received_date >= startDate && p.received_date <= endDate);
+    const byTenant = tenantFilter ? inRange.filter((p: any) => p.tenant_id === tenantFilter) : inRange;
+    const usd = byTenant.filter((p: any) => p.currency === "USD").reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+    const dop = byTenant.filter((p: any) => p.currency === "DOP").reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+    return { usd, dop, rows: byTenant };
+  }, [payments, startDate, endDate, tenantFilter]);
+
+  // Invoice aging
+  const aging = useMemo(() => {
+    const todayStr = endDate; // consider endDate as "today" for report
+    const pendings = (invoices ?? []).filter((inv: any) => inv.status !== "paid" && inv.status !== "void");
+    const inRange = pendings.filter((inv: any) => inv.due_date <= todayStr);
+    const bucket = { current: 0, "1-30": 0, "31-60": 0, "61+": 0 };
+    inRange.forEach((inv: any) => {
+      const days = Math.max(0, Math.floor((Date.parse(todayStr) - Date.parse(inv.due_date)) / (24 * 3600 * 1000)));
+      if (days === 0) bucket.current += 1;
+      else if (days <= 30) bucket["1-30"] += 1;
+      else if (days <= 60) bucket["31-60"] += 1;
+      else bucket["61+"] += 1;
+    });
+    // Totals by currency
+    const totals = (invoices ?? [])
+      .filter((inv: any) => inv.status !== "paid" && inv.status !== "void")
+      .reduce((acc: any, inv: any) => {
+        const cur = inv.currency;
+        acc[cur] = (acc[cur] ?? 0) + Number(inv.total_amount || 0);
+        return acc;
+      }, {} as Record<string, number>);
+    return { bucket, totals };
+  }, [invoices, endDate]);
+
+  // Owner payouts (weighted by ownership)
+  const ownerPayoutRows = useMemo(() => {
+    if (!isAdmin) return [];
+    const ow = ownerships ?? [];
+    const inRange = (payments ?? []).filter((p: any) => p.received_date >= startDate && p.received_date <= endDate);
+    // Group by owner and currency
+    const result = new Map<string, { name: string; usd: number; dop: number }>();
+    inRange.forEach((p: any) => {
+      const propId = p.lease?.property?.id || p.lease?.property_id || null;
+      if (!propId) return;
+      const ownersForProp = ow.filter((o) => o.property_id === propId);
+      ownersForProp.forEach((o) => {
+        const percent = o.ownership_percent == null ? 100 : Math.max(0, Math.min(100, Number(o.ownership_percent)));
+        const share = (Number(p.amount || 0) * percent) / 100;
+        const ownerName = [o.owner?.first_name ?? "", o.owner?.last_name ?? ""].filter(Boolean).join(" ") || "—";
+        const key = o.owner_id;
+        const row = result.get(key) ?? { name: ownerName, usd: 0, dop: 0 };
+        if (p.currency === "USD") row.usd += share;
+        else row.dop += share;
+        result.set(key, row);
+      });
+    });
+    return Array.from(result.entries()).map(([ownerId, val]) => ({ ownerId, ...val }));
+  }, [ownerships, payments, startDate, endDate, isAdmin]);
+
+  // Tenant payment history table rows (filtered by tenant)
+  const tenantHistoryRows = useMemo(() => {
+    const rows = revenue.rows.map((p: any) => {
+      const propName = p.lease?.property?.name ?? "—";
+      const tenantName = [p.tenant?.first_name, p.tenant?.last_name].filter(Boolean).join(" ") || "—";
+      return {
+        date: p.received_date,
+        property: propName,
+        tenant: tenantName,
+        method: String(p.method).replace("_", " "),
+        amount: fmtMoney(Number(p.amount), p.currency),
+      };
+    });
+    return rows;
+  }, [revenue.rows]);
+
   return (
     <AppShell>
       <div className="space-y-6">
-        <h1 className="text-xl font-semibold">Reports</h1>
-        <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <div className="text-sm text-muted-foreground">Start</div>
+            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-[180px]" />
+          </div>
+          <div>
+            <div className="text-sm text-muted-foreground">End</div>
+            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-[180px]" />
+          </div>
+          {isAdmin && (
+            <>
+              <div>
+                <div className="text-sm text-muted-foreground">Tenant</div>
+                <Select value={tenantFilter} onValueChange={setTenantFilter}>
+                  <SelectTrigger className="w-[220px]">
+                    <SelectValue placeholder="All tenants" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All tenants</SelectItem>
+                    {(tenants ?? []).map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {[t.first_name, t.last_name].filter(Boolean).join(" ") || "—"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <div className="text-sm text-muted-foreground">Owner (payout report)</div>
+                <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                  <SelectTrigger className="w-[220px]">
+                    <SelectValue placeholder="All owners" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All owners</SelectItem>
+                    {(owners ?? []).map((o) => (
+                      <SelectItem key={o.id} value={o.id}>
+                        {[o.first_name, o.last_name].filter(Boolean).join(" ") || "—"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
           <Card>
-            <CardHeader>
-              <CardTitle>Occupancy</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">Portfolio occupancy is 92%.</CardContent>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Occupancy</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold">{`${occupancy.percent}%`}</CardContent>
           </Card>
           <Card>
-            <CardHeader>
-              <CardTitle>Revenue vs Expenses</CardTitle>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Revenue USD</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold">{fmtMoney(revenue.usd, "USD")}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Revenue DOP</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold">{fmtMoney(revenue.dop, "DOP")}</CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Invoice Aging</CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => exportCSV("invoice_aging.csv", ["Bucket", "Count", "Total USD", "Total DOP"], [
+                  ["Current", String(aging.bucket.current), String(aging.totals["USD"] ?? 0), String(aging.totals["DOP"] ?? 0)],
+                  ["1-30", String(aging.bucket["1-30"]), "", ""],
+                  ["31-60", String(aging.bucket["31-60"]), "", ""],
+                  ["61+", String(aging.bucket["61+"]), "", ""],
+                ])}
+              >
+                Export CSV
+              </Button>
             </CardHeader>
-            <CardContent className="text-sm">
-              <div className="space-y-2">
-                <div>Revenue: <Money amount={42000} currency="USD" showConverted /></div>
-                <div>Expenses: <Money amount={8600} currency="USD" showConverted /></div>
-              </div>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Bucket</TableHead>
+                    <TableHead>Count</TableHead>
+                    <TableHead>Total USD</TableHead>
+                    <TableHead>Total DOP</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>Current</TableCell>
+                    <TableCell>{aging.bucket.current}</TableCell>
+                    <TableCell>{fmtMoney(aging.totals["USD"] ?? 0, "USD")}</TableCell>
+                    <TableCell>{fmtMoney(aging.totals["DOP"] ?? 0, "DOP")}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>1-30</TableCell>
+                    <TableCell>{aging.bucket["1-30"]}</TableCell>
+                    <TableCell>—</TableCell>
+                    <TableCell>—</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>31-60</TableCell>
+                    <TableCell>{aging.bucket["31-60"]}</TableCell>
+                    <TableCell>—</TableCell>
+                    <TableCell>—</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>61+</TableCell>
+                    <TableCell>{aging.bucket["61+"]}</TableCell>
+                    <TableCell>—</TableCell>
+                    <TableCell>—</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Tenant Payment History</CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  exportCSV(
+                    "tenant_payments.csv",
+                    ["Date", "Property", "Tenant", "Method", "Amount"],
+                    tenantHistoryRows.map(r => [r.date, r.property, r.tenant, r.method, r.amount])
+                  )
+                }
+              >
+                Export CSV
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Property</TableHead>
+                    <TableHead>Tenant</TableHead>
+                    <TableHead>Method</TableHead>
+                    <TableHead>Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tenantHistoryRows.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="text-muted-foreground text-sm">No payments in range.</TableCell></TableRow>
+                  ) : (
+                    tenantHistoryRows.map((r, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell>{r.date}</TableCell>
+                        <TableCell>{r.property}</TableCell>
+                        <TableCell>{r.tenant}</TableCell>
+                        <TableCell className="capitalize">{r.method}</TableCell>
+                        <TableCell>{r.amount}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </div>
+
+        {isAdmin && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Owner Payouts</CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  exportCSV(
+                    "owner_payouts.csv",
+                    ["Owner", "USD", "DOP"],
+                    ownerPayoutRows
+                      .filter((r) => (ownerFilter ? r.ownerId === ownerFilter : true))
+                      .map((r) => [r.name, r.usd.toFixed(2), r.dop.toFixed(2)])
+                  )
+                }
+              >
+                Export CSV
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Owner</TableHead>
+                    <TableHead>USD</TableHead>
+                    <TableHead>DOP</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {ownerPayoutRows
+                    .filter((r) => (ownerFilter ? r.ownerId === ownerFilter : true))
+                    .map((r) => (
+                      <TableRow key={r.ownerId}>
+                        <TableCell>{r.name}</TableCell>
+                        <TableCell>{fmtMoney(r.usd, "USD")}</TableCell>
+                        <TableCell>{fmtMoney(r.dop, "DOP")}</TableCell>
+                      </TableRow>
+                    ))}
+                  {ownerPayoutRows.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-muted-foreground text-sm">No payouts in range.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </AppShell>
   );
