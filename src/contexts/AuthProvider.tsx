@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
-import supabase from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 export type Role = "agency_admin" | "owner" | "tenant";
 export type Profile = {
@@ -25,15 +25,14 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const fetchProfile = async (userId: string): Promise/Profile | null> => {
+const fetchProfile = async (userId: string): Promise<Profile | null> => {
   const { data, error } = await supabase
     .from("profiles")
     .select("id, role, agency_id, first_name, last_name, avatar_url")
     .eq("id", userId)
     .single();
   if (error) {
-    // If profile row not found yet, return null (user will be taken to onboarding)
-    if (error.code === "PGRST116" /* No rows returned */) return null;
+    if ((error as any).code === "PGRST116") return null;
     throw error;
   }
   return data as Profile;

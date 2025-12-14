@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import { Home, Building2, Users, FileText, Wrench, Receipt, CreditCard, Settings, LogOut, BarChart3 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthProvider";
+import type { Role } from "@/contexts/AuthProvider";
 import CurrencySelector from "@/components/CurrencySelector";
 
 const AppShell = ({ children }: { children: React.ReactNode }) => {
@@ -11,17 +12,17 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const navItems = [
-    { to: "/dashboard", label: "Dashboard", icon: Home, roles: ["agency_admin", "owner", "tenant"] },
-    { to: "/properties", label: "Properties", icon: Building2, roles: ["agency_admin", "owner"] },
-    { to: "/tenants", label: "Tenants", icon: Users, roles: ["agency_admin"] },
-    { to: "/leases", label: "Leases", icon: FileText, roles: ["agency_admin"] },
-    { to: "/invoices", label: "Invoices", icon: Receipt, roles: ["agency_admin", "owner", "tenant"] },
-    { to: "/payments", label: "Payments", icon: CreditCard, roles: ["agency_admin", "owner", "tenant"] },
-    { to: "/maintenance", label: "Maintenance", icon: Wrench, roles: ["agency_admin", "owner", "tenant"] },
-    { to: "/reports", label: "Reports", icon: BarChart3, roles: ["agency_admin", "owner"] },
-    { to: "/settings", label: "Settings", icon: Settings, roles: ["agency_admin"] },
-  ] as const;
+  const navItems: { to: string; label: string; icon: any; roles: Role[] }[] = [
+    { to: "/dashboard", label: "Dashboard", icon: Home, roles: ["agency_admin", "owner", "tenant"] as Role[] },
+    { to: "/properties", label: "Properties", icon: Building2, roles: ["agency_admin", "owner"] as Role[] },
+    { to: "/tenants", label: "Tenants", icon: Users, roles: ["agency_admin"] as Role[] },
+    { to: "/leases", label: "Leases", icon: FileText, roles: ["agency_admin"] as Role[] },
+    { to: "/invoices", label: "Invoices", icon: Receipt, roles: ["agency_admin", "owner", "tenant"] as Role[] },
+    { to: "/payments", label: "Payments", icon: CreditCard, roles: ["agency_admin", "owner", "tenant"] as Role[] },
+    { to: "/maintenance", label: "Maintenance", icon: Wrench, roles: ["agency_admin", "owner", "tenant"] as Role[] },
+    { to: "/reports", label: "Reports", icon: BarChart3, roles: ["agency_admin", "owner"] as Role[] },
+    { to: "/settings", label: "Settings", icon: Settings, roles: ["agency_admin"] as Role[] },
+  ];
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -35,7 +36,7 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
             <SidebarGroupContent>
               <SidebarMenu>
                 {navItems
-                  .filter((n) => !role || (n.roles as string[]).includes(role))
+                  .filter((n) => !role || n.roles.includes(role as Role))
                   .map((item) => (
                     <SidebarMenuItem key={item.to}>
                       <SidebarMenuButton asChild isActive={location.pathname.startsWith(item.to)}>
