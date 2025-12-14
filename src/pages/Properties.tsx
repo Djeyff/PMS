@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
 import { fetchProperties } from "@/services/properties";
 import PropertyForm from "@/components/properties/PropertyForm";
+import EditPropertyDialog from "@/components/properties/EditPropertyDialog";
 
 const data = [
   { name: "Ocean View Villa", type: "villa", status: "rented", bedrooms: 4, city: "Punta Cana" },
@@ -61,6 +62,7 @@ const Properties = () => {
                     <TableHead>Status</TableHead>
                     <TableHead>Bedrooms</TableHead>
                     <TableHead>City</TableHead>
+                    {canCreate && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -71,6 +73,11 @@ const Properties = () => {
                       <TableCell className="capitalize">{p.status}</TableCell>
                       <TableCell>{p.bedrooms ?? "-"}</TableCell>
                       <TableCell>{p.city ?? "-"}</TableCell>
+                      {canCreate && (
+                        <TableCell>
+                          <EditPropertyDialog property={p} onUpdated={() => refetch()} />
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

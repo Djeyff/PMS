@@ -74,3 +74,31 @@ export async function createProperty(input: {
   if (error) throw error;
   return data as Property;
 }
+
+export async function updateProperty(
+  id: string,
+  input: {
+    name?: string;
+    type?: Property["type"];
+    status?: Property["status"];
+    city?: string;
+    bedrooms?: number;
+  }
+) {
+  const payload: any = {};
+  if (typeof input.name !== "undefined") payload.name = input.name;
+  if (typeof input.type !== "undefined") payload.type = input.type;
+  if (typeof input.status !== "undefined") payload.status = input.status;
+  if (typeof input.city !== "undefined") payload.city = input.city ?? null;
+  if (typeof input.bedrooms !== "undefined") payload.bedrooms = typeof input.bedrooms === "number" ? input.bedrooms : null;
+
+  const { data, error } = await supabase
+    .from("properties")
+    .update(payload)
+    .eq("id", id)
+    .select("id, agency_id, name, type, city, bedrooms, status, created_at")
+    .single();
+
+  if (error) throw error;
+  return data as Property;
+}
