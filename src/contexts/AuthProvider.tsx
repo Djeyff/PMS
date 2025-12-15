@@ -82,51 +82,57 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const loadSessionAndProfile = async () => {
-    // Move loading handling inside to ensure we wait for bootstrap
-    setLoading(true);
+    // Revert: do not set loading here; effect controls it.
     const { data } = await supabase.auth.getSession();
     const sess = data.session ?? null;
     setSession(sess);
     setUser(sess?.user ?? null);
-
     if (sess?.user?.id) {
       const p = await fetchProfile(sess.user.id).catch(() => null);
       setProfile(p);
-      // Await admin/bootstrap and then refresh the profile before allowing UI to proceed
-      await ensureMasterAdmin(sess.user, p ?? null);
-      await refreshProfile();
+      // Run admin bootstrap in background so loading doesn't block
+      ensureMasterAdmin(sess.user, p ?? null).then(() => {
+        // after background bootstrap, try to refresh profile once
+        refreshProfile().catch(() => {});
+      });
     } else {
       setProfile(null);
     }
-
-    setLoading(false);
   };
 
   useEffect(() => {
     let mounted = true;
     (async () => {
-      // Call loader; it sets loading internally and will only flip to false after bootstrap
+      // Control loading here; finish after initial profile load without waiting bootstrap
+      setLoading(true);
       await loadSessionAndProfile();
+      if (mounted) setLoading(false);
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-      // Keep loading true while we process state change and bootstrap profile
-      setLoading(true);
+      // Revert: do not toggle loading here; make changes non-blocking
       setSession(sess ?? null);
       setUser(sess?.user ?? null);
       if (sess?.user?.id) {
         const p = await fetchProfile(sess.user.id).catch(() => null);
         setProfile(p);
-        await ensureMasterAdmin(sess.user, p ?? null);
-        await refreshProfile();
+        // Run bootstrap without awaiting to avoid UI stalls
+        ensureMasterAdmin(sess.user, p ?? null).then(() => {
+          refreshProfile().catch(() => {});
+        });
       } else {
         setProfile(null);
       }
-      setLoading(false);
     });
+
+    // Restore loading fallback to avoid indefinite spinner in edge cases
+    const loadingFallback = setTimeout(() => {
+      if (mounted) setLoading(false);
+    }, 4000);
 
     return () => {
       mounted = false;
+      clearTimeout(loadingFallback);
       sub?.subscription?.unsubscribe();
     };
   }, []);
