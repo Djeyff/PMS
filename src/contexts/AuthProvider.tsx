@@ -44,6 +44,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileReady, setProfileReady] = useState(false);
 
   const MASTER_ADMIN_EMAIL = "djeyff06@gmail.com";
 
@@ -117,22 +118,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     let mounted = true;
     (async () => {
       setLoading(true);
+      setProfileReady(false);
       await loadSessionAndProfile();
-      // Wait for profile and agency (if admin) before clearing loading
-      const waitForReady = async () => {
-        let attempts = 0;
-        while (mounted && attempts < 20) {
-          const { data: sess } = await supabase.auth.getSession();
-          const uid = sess?.session?.user?.id;
-          if (!uid) break;
-          const p = await fetchProfile(uid).catch(() => null);
-          const ready = p && (p.role !== "agency_admin" || !!p.agency_id);
-          if (ready) break;
-          await new Promise(r => setTimeout(r, 200));
-          attempts++;
-        }
-      };
-      await waitForReady();
       if (mounted) setLoading(false);
     })();
 
@@ -174,6 +161,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       sub?.subscription?.unsubscribe();
     };
   }, []);
+
+  // Update profileReady flag whenever profile changes
+  useEffect(() => {
+    const ready = !!profile && (profile.role !== "agency_admin" || !!profile.agency_id);
+    setProfileReady(ready);
+  }, [profile]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
