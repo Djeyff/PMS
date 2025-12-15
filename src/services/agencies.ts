@@ -59,11 +59,11 @@ export async function assignSelfToAgency(agencyId: string) {
 export async function fetchAgencyById(id: string) {
   const { data, error } = await supabase
     .from("agencies")
-    .select("id, name, default_currency, timezone")
+    .select("id, name, default_currency, timezone, address")
     .eq("id", id)
     .single();
   if (error) throw error;
-  return data as { id: string; name: string; default_currency: string; timezone: string | null };
+  return data as { id: string; name: string; default_currency: string; timezone: string | null; address: string | null };
 }
 
 // New: update agency timezone
