@@ -49,9 +49,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Immediate role fallback for master email so UI doesn't bounce to Pending
   const role: Role | null = useMemo(() => {
-    if (profile?.role) return profile.role;
-    if ((user?.email?.toLowerCase() ?? "") === MASTER_ADMIN_EMAIL) return "agency_admin";
-    return null;
+    // UPDATED: rely only on the profile role; do not assume admin by email
+    return profile?.role ?? null;
   }, [profile?.role, user?.email]);
 
   const ensureMasterAdmin = async (u: User, current: Profile | null) => {

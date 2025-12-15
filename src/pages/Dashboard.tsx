@@ -42,8 +42,6 @@ const Dashboard = () => {
       {role === "agency_admin" && <AgencyDashboard />}
       {role === "owner" && <OwnerDashboard />}
       {role === "tenant" && <TenantDashboard />}
-      {/* For the master admin fallback, show admin dashboard even if role hasn't persisted yet */}
-      {!role && (user?.email ?? "").toLowerCase() === MASTER_ADMIN_EMAIL && <AgencyDashboard />}
     </AppShell>
   );
 };
