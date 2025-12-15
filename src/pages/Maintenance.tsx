@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
-import { fetchMaintenanceRequests, updateMaintenanceStatus, addMaintenanceLog, fetchMaintenanceLogsBulk } from "@/services/maintenance";
+import { fetchMaintenanceRequests, updateMaintenanceStatus, addMaintenanceLog } from "@/services/maintenance";
 import NewRequestDialog from "@/components/maintenance/NewRequestDialog";
 import { toast } from "sonner";
 import { fetchAgencyById } from "@/services/agencies";
@@ -18,7 +18,7 @@ const Maintenance = () => {
   const agencyId = profile?.agency_id ?? null;
 
   const [noteById, setNoteById] = useState<Record<string, string>>({});
-  const [localNotesById, setLocalNotesById] = useState<Record<string, Array<{ id: string; note: string; created_at: string; user?: { first_name: string | null; last_name: string | null } | null }>>>({});
+  const [localNotesById, setLocalNotesById] = useState<Record<string, Array<{ id: string; note: string; created_at: string }>>>({});
 
   const { data: agency } = useQuery({
     queryKey: ["agency", agencyId],
@@ -36,7 +36,7 @@ const Maintenance = () => {
 
   // Cache notes in localStorage so they show instantly and persist across refresh/restart
   const cacheKey = "maint_notes_cache";
-  const getCache = (): Record<string, Array<{ id: string; note: string; created_at: string; user?: { first_name: string | null; last_name: string | null } | null }>> => {
+  const getCache = (): Record<string, Array<{ id: string; note: string; created_at: string }>> => {
     try {
       const raw = localStorage.getItem(cacheKey);
       return raw ? JSON.parse(raw) : {};
@@ -44,7 +44,7 @@ const Maintenance = () => {
       return {};
     }
   };
-  const setCache = (map: Record<string, Array<{ id: string; note: string; created_at: string; user?: { first_name: string | null; last_name: string | null } | null }>>) => {
+  const setCache = (map: Record<string, Array<{ id: string; note: string; created_at: string }>>) => {
     try {
       localStorage.setItem(cacheKey, JSON.stringify(map));
     } catch {
@@ -52,46 +52,22 @@ const Maintenance = () => {
     }
   };
 
-  // Load cached notes for visible requests on mount/data change
+  // Load cached notes for visible requests when list changes
   const requestIds = (data ?? []).map((m) => m.id);
   useEffect(() => {
     const cache = getCache();
-    const next: Record<string, Array<{ id: string; note: string; created_at: string; user?: { first_name: string | null; last_name: string | null } | null }>> = {};
+    const next: Record<string, Array<{ id: string; note: string; created_at: string }>> = {};
     requestIds.forEach((rid) => {
       if (cache[rid]?.length) next[rid] = cache[rid];
     });
     setLocalNotesById(next);
   }, [requestIds.length]);
 
-  const { data: bulkLogs, isLoading: logsLoading, refetch: refetchBulkLogs } = useQuery({
-    queryKey: ["maint-logs-bulk", agencyId, requestIds],
-    enabled: !!agencyId && requestIds.length > 0,
-    queryFn: () => fetchMaintenanceLogsBulk(requestIds),
-  });
-
-  // Merge server logs into local cache without blocking UI
-  useEffect(() => {
-    if (!bulkLogs) return;
-    const merged: Record<string, Array<{ id: string; note: string; created_at: string; user?: { first_name: string | null; last_name: string | null } | null }>> = { ...localNotesById };
-    Object.entries(bulkLogs).forEach(([rid, logs]) => {
-      const existing = merged[rid] ?? [];
-      const union = new Map<string, { id: string; note: string; created_at: string; user?: { first_name: string | null; last_name: string | null } | null }>();
-      [...logs.map((l: any) => ({ id: l.id, note: l.note, created_at: l.created_at, user: l.user ?? null })), ...existing].forEach((ln) => {
-        union.set(ln.id, ln);
-      });
-      merged[rid] = Array.from(union.values());
-    });
-    setLocalNotesById(merged);
-    setCache(merged);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bulkLogs]);
-
   const onUpdateStatus = async (id: string, status: "open" | "in_progress" | "closed") => {
     try {
       await updateMaintenanceStatus(id, status);
       toast.success("Status updated");
       refetch();
-      refetchBulkLogs();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to update status");
     }
@@ -103,7 +79,7 @@ const Maintenance = () => {
       toast.error("Please write a note");
       return;
     }
-    // Optimistic: add locally and cache immediately
+    // Optimistic local add and cache
     const tempId = `local-${Date.now()}`;
     const createdAt = new Date().toISOString();
     setLocalNotesById((prev) => {
@@ -117,18 +93,18 @@ const Maintenance = () => {
 
     try {
       const created = await addMaintenanceLog(id, note);
-      // Replace temp note with server note (keep order)
+      // Replace temp note with server note
       setLocalNotesById((prev) => {
         const arr = (prev[id] ?? []).map((ln) => (ln.id === tempId ? { id: created.id, note: created.note, created_at: created.created_at } : ln));
         const next = { ...prev, [id]: arr };
         setCache(next);
         return next;
       });
+      // Refresh requests to pull persistent logs
+      refetch();
       toast.success("Note saved");
-      // Background refresh (no await) to bring author names if needed
-      refetchBulkLogs();
     } catch (e: any) {
-      // Roll back optimistic insert on error
+      // Roll back optimistic insertion on error
       setLocalNotesById((prev) => {
         const arr = (prev[id] ?? []).filter((ln) => ln.id !== tempId);
         const next = { ...prev, [id]: arr };
@@ -200,12 +176,12 @@ const Maintenance = () => {
                           </div>
                           <div className="mt-2">
                             <div className="text-xs text-muted-foreground">Recent notes</div>
-                            {(localNotesById[m.id]?.length ?? 0) > 0 || (bulkLogs?.[m.id]?.length ?? 0) > 0 ? (
+                            {((m.logs?.length ?? 0) > 0) || ((localNotesById[m.id]?.length ?? 0) > 0) ? (
                               <ul className="mt-1 space-y-1">
-                                {[...(localNotesById[m.id] ?? []), ...(bulkLogs?.[m.id] ?? [])]
+                                {[...(m.logs ?? []).map((ln) => ({ ...ln })), ...(localNotesById[m.id] ?? [])]
                                   .slice(-3)
                                   .reverse()
-                                  .map((ln) => (
+                                  .map((ln: any) => (
                                     <li key={ln.id} className="text-sm">
                                       <div className="flex justify-between text-xs text-muted-foreground">
                                         <span>{[ln.user?.first_name ?? "", ln.user?.last_name ?? ""].filter(Boolean).join(" ") || "—"}</span>
@@ -215,8 +191,6 @@ const Maintenance = () => {
                                     </li>
                                   ))}
                               </ul>
-                            ) : logsLoading ? (
-                              <div className="text-xs text-muted-foreground mt-1">Loading notes...</div>
                             ) : (
                               <div className="text-xs text-muted-foreground mt-1">No notes yet.</div>
                             )}

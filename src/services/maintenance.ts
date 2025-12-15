@@ -10,6 +10,7 @@ export type MaintenanceRow = {
   due_date?: string | null;
   created_at: string;
   property?: { id: string; name: string } | null;
+  logs?: Array<{ id: string; note: string; created_at: string; user?: { first_name: string | null; last_name: string | null } | null }>;
 };
 
 type MaintenanceLogRow = {
@@ -23,6 +24,16 @@ type MaintenanceLogRow = {
 
 function normalize(row: any): MaintenanceRow {
   const propRel = Array.isArray(row.property) ? row.property[0] : row.property ?? null;
+  const rawLogs = Array.isArray(row.logs) ? row.logs : [];
+  const logs = rawLogs.map((l: any) => {
+    const userRel = Array.isArray(l.user) ? l.user[0] : l.user ?? null;
+    return {
+      id: l.id,
+      note: l.note,
+      created_at: l.created_at,
+      user: userRel ? { first_name: userRel.first_name ?? null, last_name: userRel.last_name ?? null } : null,
+    };
+  });
   return {
     id: row.id,
     property_id: row.property_id,
@@ -33,13 +44,18 @@ function normalize(row: any): MaintenanceRow {
     due_date: row.due_date ?? null,
     created_at: row.created_at,
     property: propRel ? { id: propRel.id, name: propRel.name } : null,
+    logs,
   };
 }
 
 export async function fetchMaintenanceRequests(params: { agencyId: string; status?: ("open" | "in_progress" | "closed")[] }) {
   let query = supabase
     .from("maintenance_requests")
-    .select(`id, property_id, title, description, priority, status, due_date, created_at, property:properties!inner ( id, name, agency_id )`)
+    .select(`
+      id, property_id, title, description, priority, status, due_date, created_at,
+      property:properties!inner ( id, name, agency_id ),
+      logs:maintenance_logs ( id, note, created_at, user:profiles ( first_name, last_name ) )
+    `)
     .eq("property.agency_id", params.agencyId)
     .order("due_date", { ascending: true })
     .order("created_at", { ascending: false });
@@ -120,33 +136,6 @@ export async function fetchMaintenanceLogs(requestId: string) {
       user: userRel ? { first_name: userRel.first_name ?? null, last_name: userRel.last_name ?? null } : null,
     } as MaintenanceLogRow;
   });
-}
-
-export async function fetchMaintenanceLogsBulk(requestIds: string[]) {
-  if (!requestIds || requestIds.length === 0) return {} as Record<string, MaintenanceLogRow[]>;
-  const { data, error } = await supabase
-    .from("maintenance_logs")
-    .select(`id, request_id, user_id, note, created_at, user:profiles ( first_name, last_name )`)
-    .in("request_id", requestIds)
-    .order("created_at", { ascending: true });
-  if (error) throw error;
-
-  const map: Record<string, MaintenanceLogRow[]> = {};
-  (data ?? []).forEach((row: any) => {
-    const userRel = Array.isArray(row.user) ? row.user[0] : row.user ?? null;
-    const normalized: MaintenanceLogRow = {
-      id: row.id,
-      request_id: row.request_id,
-      user_id: row.user_id ?? null,
-      note: row.note,
-      created_at: row.created_at,
-      user: userRel ? { first_name: userRel.first_name ?? null, last_name: userRel.last_name ?? null } : null,
-    };
-    if (!map[normalized.request_id]) map[normalized.request_id] = [];
-    map[normalized.request_id].push(normalized);
-  });
-
-  return map;
 }
 
 export async function addMaintenanceLog(requestId: string, note: string) {
