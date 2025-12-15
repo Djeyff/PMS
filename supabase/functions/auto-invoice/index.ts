@@ -44,23 +44,32 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
   }
 
-  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-
-  // Bind anon client to Authorization header and verify JWT
+  // ADDED: Validate JWT and ensure caller is agency_admin
+  const SUPABASE_URL_ANON = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  const anon = createClient(SUPABASE_URL_ANON, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
   });
   const { data: userRes } = await anon.auth.getUser();
   if (!userRes?.user) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
   }
-  const { data: isAdmin } = await anon.rpc("is_agency_admin", { u: userRes.user.id });
-  if (!isAdmin) {
-    return new Response(JSON.stringify({ error: "Forbidden: admin role required" }), { status: 403, headers: corsHeaders });
+  const userId = userRes.user.id;
+
+  const { data: callerProfile } = await anon
+    .from("profiles")
+    .select("role, agency_id")
+    .eq("id", userId)
+    .single();
+
+  if (callerProfile?.role !== "agency_admin" || !callerProfile?.agency_id) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
   }
+  const adminAgencyId = callerProfile.agency_id;
+
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 
   const EMAIL_TO = "contact@lasterrenas.properties";
 
@@ -117,6 +126,9 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: leaseErr.message }), { status: 500, headers: corsHeaders });
   }
 
+  // ADDED: Scope to leases belonging to the admin's agency
+  const scopedLeases = (leases ?? []).filter((l: any) => l?.property?.agency_id === adminAgencyId);
+
   const issueDate = todayStr();
   const dueDate = plusDays(issueDate, 7);
 
@@ -131,11 +143,8 @@ serve(async (req) => {
   const errors: string[] = [];
   const emailAttachments: Array<{ filename: string; content: string }> = [];
 
-  // ADDED: Defaults for PDF header text used below
-  const agencyName = "Las Terrenas Properties";
-  const agencyAddress = "278 calle Duarte, LTI building, Las Terrenas";
-
-  for (const l of leases ?? []) {
+  // CHANGED: Iterate over scoped leases only
+  for (const l of scopedLeases) {
     const todayStrIso = today.toISOString().slice(0, 10);
     if (l.status !== "active" || l.start_date > todayStrIso || l.end_date < todayStrIso) continue;
 

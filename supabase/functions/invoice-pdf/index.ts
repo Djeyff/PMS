@@ -23,6 +23,18 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
   }
 
+  // ADDED: Validate JWT using anon client bound to incoming Authorization header
+  const SUPABASE_URL_ANON = Deno.env.get("SUPABASE_URL")!;
+  const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const anon = createClient(SUPABASE_URL_ANON, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: userRes } = await anon.auth.getUser();
+  if (!userRes?.user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+  }
+  const userId = userRes.user.id;
+
   let body: { invoiceId: string; sendEmail?: boolean; lang?: "en" | "es" };
   try {
     body = await req.json();
@@ -34,16 +46,6 @@ serve(async (req) => {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-
-  // ADDED: Bind anon client to Authorization header and verify JWT
-  const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: userRes } = await anon.auth.getUser();
-  if (!userRes?.user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
-  }
 
   const EMAIL_TO = "contact@lasterrenas.properties";
 
@@ -83,7 +85,7 @@ serve(async (req) => {
     return null;
   }
 
-  const { data: inv, error } = await anon
+  const { data: inv, error } = await supabase
     .from("invoices")
     .select(`
       id, number, issue_date, due_date, currency, total_amount,
@@ -97,7 +99,35 @@ serve(async (req) => {
     .single();
 
   if (error || !inv) {
-    return new Response(JSON.stringify({ error: "Invoice not found or access denied" }), { status: 403, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: error?.message || "Invoice not found" }), { status: 404, headers: corsHeaders });
+  }
+
+  // ADDED: Authorization check - only agency admin of the same agency, the tenant on the invoice, or a property owner may proceed
+  const propertyId = inv.lease?.property?.id;
+  const agencyId = inv.lease?.property?.agency_id ?? null;
+
+  const { data: callerProfile } = await supabase
+    .from("profiles")
+    .select("role, agency_id")
+    .eq("id", userId)
+    .single();
+
+  const isAdmin = callerProfile?.role === "agency_admin" && callerProfile?.agency_id && agencyId && callerProfile.agency_id === agencyId;
+  const isTenant = inv.tenant?.id === userId;
+
+  let isOwner = false;
+  if (propertyId) {
+    const { data: ownerRows } = await supabase
+      .from("property_owners")
+      .select("owner_id")
+      .eq("property_id", propertyId)
+      .eq("owner_id", userId)
+      .limit(1);
+    isOwner = !!ownerRows && ownerRows.length > 0;
+  }
+
+  if (!(isAdmin || isTenant || isOwner)) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
   }
 
   // Fetch agency for name/address (fallback if missing)
