@@ -128,41 +128,36 @@ const AgencyDashboard = () => {
         <Stat title="Overdue Invoices" value={String(overdueCount)} />
         <Stat title="Open Maintenance" value={String(maintenance?.length ?? 0)} />
       </div>
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+      <div className="grid gap-4 grid-cols-1">
         <Card>
           <CardHeader>
             <CardTitle>Pending Invoices</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-3">
             {pendingInvoices.length === 0 ? (
               <div className="text-sm text-muted-foreground">No pending invoices.</div>
             ) : (
-              <ul className="space-y-2">
-                {pendingInvoices.map((inv: any) => (
-                  <li key={inv.id} className="flex items-center justify-between">
-                    <div className="truncate">
-                      <span className="font-medium">
-                        {inv.lease?.property?.name ?? (inv.lease_id ? inv.lease_id.slice(0, 8) : "Property")}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {" — "}
-                        {[(inv.tenant?.first_name ?? ""), (inv.tenant?.last_name ?? "")]
-                          .filter(Boolean)
-                          .join(" ") || (inv.tenant_id ? inv.tenant_id.slice(0, 6) : "Tenant")}
-                      </span>
-                    </div>
-                    <div className="text-right">
+              <ul className="space-y-4">
+                {pendingInvoices.map((inv: any) => {
+                  const propName = inv.lease?.property?.name ?? (inv.lease_id ? inv.lease_id.slice(0, 8) : "Property");
+                  const tenantName =
+                    [inv.tenant?.first_name ?? "", inv.tenant?.last_name ?? ""].filter(Boolean).join(" ") ||
+                    (inv.tenant_id ? inv.tenant_id.slice(0, 6) : "Tenant");
+                  const amtText = new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(inv.remaining);
+                  const remainingText = inv.currency === "DOP" ? `DOP ${amtText}` : amtText;
+                  return (
+                    <li key={inv.id} className="space-y-1">
+                      <div className="font-medium">{propName} — {tenantName}</div>
                       <div className="text-sm text-muted-foreground">{inv.due_date}</div>
-                      <div className="text-sm">
-                        Remaining: {new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(inv.remaining)}
-                      </div>
-                    </div>
-                  </li>
-                ))}
+                      <div className="text-sm">Remaining: {remainingText}</div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Lease Expirations</CardTitle>
