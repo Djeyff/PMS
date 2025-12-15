@@ -16,7 +16,7 @@ export type InvoiceRow = {
 };
 
 export type InvoiceWithMeta = InvoiceRow & {
-  lease?: { id: string; property?: { id: string; name: string } | null } | null;
+  lease?: { id: string; property?: { id: string; name: string; agency_id?: string } | null } | null;
   tenant?: { id: string; first_name: string | null; last_name: string | null } | null;
   payments?: { amount: number; currency: "USD" | "DOP" }[] | null;
 };
@@ -44,7 +44,9 @@ function normalizeInvoiceRow(row: any): InvoiceWithMeta {
     lease: leaseRel
       ? {
           id: leaseRel.id,
-          property: leaseRel.property ? { id: leaseRel.property.id, name: leaseRel.property.name } : null,
+          property: leaseRel.property
+            ? { id: leaseRel.property.id, name: leaseRel.property.name, agency_id: leaseRel.property.agency_id }
+            : null,
         }
       : null,
     tenant: tenantRel ? { id: tenantRel.id, first_name: tenantRel.first_name ?? null, last_name: tenantRel.last_name ?? null } : null,
@@ -59,7 +61,7 @@ export async function fetchInvoices() {
       id, lease_id, tenant_id, number, issue_date, due_date, currency, total_amount, status, created_at, pdf_lang, pdf_url,
       lease:leases (
         id,
-        property:properties ( id, name )
+        property:properties ( id, name, agency_id )
       ),
       tenant:profiles ( id, first_name, last_name ),
       payments:payments ( amount, currency )

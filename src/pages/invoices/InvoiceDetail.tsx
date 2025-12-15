@@ -3,6 +3,8 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { fetchInvoices } from "@/services/invoices";
 import { Button } from "@/components/ui/button";
+import { fetchAgencyById } from "@/services/agencies";
+import { getLogoPublicUrl } from "@/services/branding";
 
 const InvoiceDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -12,6 +14,18 @@ const InvoiceDetail = () => {
   });
 
   const inv = (data ?? []).find((i: any) => i.id === id);
+  const agencyId = inv?.lease?.property?.agency_id ?? null;
+
+  const { data: agency } = useQuery({
+    queryKey: ["invoice-agency", agencyId],
+    enabled: !!agencyId,
+    queryFn: () => fetchAgencyById(agencyId!),
+  });
+
+  const [logoUrl, setLogoUrl] = React.useState<string>("");
+  React.useEffect(() => {
+    getLogoPublicUrl().then((url) => setLogoUrl(url)).catch(() => setLogoUrl(""));
+  }, []);
 
   if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>;
   if (!inv) return <div className="p-6">Invoice not found. <Link to="/invoices" className="underline text-blue-600">Back</Link></div>;
@@ -60,7 +74,7 @@ const InvoiceDetail = () => {
   const fmtLocale = lang === "es" ? "es-ES" : "en-US";
   const fmt = (amt: number, cur: string) => new Intl.NumberFormat(fmtLocale, { style: "currency", currency: cur }).format(amt);
 
-  // Compute paid/balance and derived display status (same as list page)
+  // Compute paid/balance and derived display status
   const paid = (inv.payments ?? []).filter((p: any) => p.currency === inv.currency).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
   const balance = Math.max(0, Number(inv.total_amount) - paid);
   const today = new Date().toISOString().slice(0, 10);
@@ -69,12 +83,20 @@ const InvoiceDetail = () => {
   else if (inv.due_date < today && inv.status !== "void") displayStatus = "overdue";
   else if (paid > 0) displayStatus = "partial";
 
+  // Branding
+  const agencyName = agency?.name ?? "Las Terrenas Properties";
+  const agencyAddress = agency?.address ?? "278 calle Duarte, LTI building, Las Terrenas";
+
   return (
     <div className="p-6 max-w-3xl mx-auto bg-white text-black">
-      <div className="flex justify-between items-start mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">{t.title}</h1>
-          <div className="text-sm text-gray-600">#{inv.number ?? inv.id.slice(0, 8)}</div>
+      {/* Branding header */}
+      <div className="flex items-start justify-between mb-6">
+        <div className="flex items-start gap-3">
+          {logoUrl ? <img src={logoUrl} alt="Logo" className="h-12 w-auto rounded" /> : null}
+          <div>
+            <div className="font-semibold">{agencyName}</div>
+            <div className="text-xs text-gray-600 whitespace-pre-line">{agencyAddress}</div>
+          </div>
         </div>
         <div className="space-x-2 print:hidden">
           <Button variant="secondary" asChild><Link to="/invoices">{t.back}</Link></Button>
@@ -82,6 +104,13 @@ const InvoiceDetail = () => {
             <Button asChild><a href={inv.pdf_url} target="_blank" rel="noreferrer">{t.openPdf}</a></Button>
           ) : null}
           <Button onClick={() => window.print()}>{t.print}</Button>
+        </div>
+      </div>
+
+      <div className="flex justify-between items-start mb-6">
+        <div>
+          <h1 className="text-2xl font-bold">{t.title}</h1>
+          <div className="text-sm text-gray-600">#{inv.number ?? inv.id.slice(0, 8)}</div>
         </div>
       </div>
 
