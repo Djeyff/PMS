@@ -150,15 +150,25 @@ export async function fetchMaintenanceLogs(requestId: string) {
 }
 
 export async function addMaintenanceLog(requestId: string, note: string) {
-  const { data: sess } = await supabase.auth.getSession();
-  const uid = sess.session?.user?.id ?? null;
+  const { data: userRes } = await supabase.auth.getUser();
+  const uid = userRes.user?.id ?? null;
 
   const { data, error } = await supabase
     .from("maintenance_logs")
     .insert({ request_id: requestId, user_id: uid, note })
-    .select(`id, note, created_at, user_id`)
+    .select(`id, note, created_at, user_id, user:profiles ( first_name, last_name )`)
     .single();
 
   if (error) throw error;
-  return data as { id: string; note: string; created_at: string; user_id: string | null };
+  // Normalize user relation
+  const userRel = Array.isArray((data as any).user) ? (data as any).user[0] : (data as any).user ?? null;
+  return {
+    id: data.id,
+    note: data.note,
+    created_at: data.created_at,
+    user_id: data.user_id ?? null,
+    user: userRel
+      ? { first_name: userRel.first_name ?? null, last_name: userRel.last_name ?? null }
+      : null,
+  };
 }
