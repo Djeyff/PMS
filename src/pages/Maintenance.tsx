@@ -34,11 +34,11 @@ const Maintenance = () => {
     queryFn: () => fetchMaintenanceRequests({ agencyId: agencyId!, status: ["open", "in_progress", "closed"] }),
   });
 
-  // Cache notes in sessionStorage so they show instantly and persist across refresh
+  // Cache notes in localStorage so they show instantly and persist across refresh/restart
   const cacheKey = "maint_notes_cache";
   const getCache = (): Record<string, Array<{ id: string; note: string; created_at: string }>> => {
     try {
-      const raw = sessionStorage.getItem(cacheKey);
+      const raw = localStorage.getItem(cacheKey);
       return raw ? JSON.parse(raw) : {};
     } catch {
       return {};
@@ -46,7 +46,7 @@ const Maintenance = () => {
   };
   const setCache = (map: Record<string, Array<{ id: string; note: string; created_at: string }>>) => {
     try {
-      sessionStorage.setItem(cacheKey, JSON.stringify(map));
+      localStorage.setItem(cacheKey, JSON.stringify(map));
     } catch {
       // ignore storage errors
     }
