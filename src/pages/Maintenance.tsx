@@ -27,17 +27,18 @@ const Maintenance = () => {
 
   const tz = agency?.timezone ?? "UTC";
 
-  const requestIds = (data ?? []).map((m) => m.id);
-  const { data: bulkLogs, isLoading: logsLoading, refetch: refetchBulkLogs } = useQuery({
-    queryKey: ["maint-logs-bulk", agencyId, requestIds],
-    enabled: !!agencyId && requestIds.length > 0,
-    queryFn: () => fetchMaintenanceLogsBulk(requestIds),
-  });
-
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["maintenance", agencyId],
     enabled: !!agencyId,
     queryFn: () => fetchMaintenanceRequests({ agencyId: agencyId!, status: ["open", "in_progress", "closed"] }),
+  });
+
+  const requestIds = (data ?? []).map((m) => m.id);
+
+  const { data: bulkLogs, isLoading: logsLoading, refetch: refetchBulkLogs } = useQuery({
+    queryKey: ["maint-logs-bulk", agencyId, requestIds],
+    enabled: !!agencyId && requestIds.length > 0,
+    queryFn: () => fetchMaintenanceLogsBulk(requestIds),
   });
 
   const onUpdateStatus = async (id: string, status: "open" | "in_progress" | "closed") => {
