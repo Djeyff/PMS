@@ -167,7 +167,7 @@ serve(async (req) => {
       let y = 800;
       if (logoBytes) {
         const img = await pdf.embedPng(logoBytes);
-        const w = 110;
+        const w = 330; // 3x larger than previous 110
         const h = (img.height / img.width) * w;
         page.drawImage(img, { x: 50, y: 800 - h, width: w, height: h });
       }
@@ -181,12 +181,12 @@ serve(async (req) => {
           if (ag?.address) agencyAddress = ag.address;
         }
       } catch {}
-      page.drawText(agencyName, { x: 200, y: 800, size: 14, font: fontBold });
+      page.drawText(agencyName, { x: 400, y: 800, size: 14, font: fontBold });
       const lines = agencyAddress.includes(",") ? agencyAddress.split(",") : [agencyAddress];
       const line1 = lines[0] ?? "";
       const line2 = lines.slice(1).join(", ").trim();
-      page.drawText(line1, { x: 200, y: 784, size: 10, font });
-      if (line2) page.drawText(line2, { x: 200, y: 770, size: 10, font });
+      page.drawText(line1, { x: 400, y: 784, size: 10, font });
+      if (line2) page.drawText(line2, { x: 400, y: 770, size: 10, font });
       y = 740;
 
       const draw = (text: string, opts: { x?: number; y?: number; size?: number; bold?: boolean } = {}) => {
