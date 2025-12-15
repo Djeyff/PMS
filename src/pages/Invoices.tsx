@@ -21,12 +21,13 @@ const data = [
 ];
 
 const Invoices = () => {
-  const { role } = useAuth();
+  const { role, user, profile, loading } = useAuth();
   const isAdmin = role === "agency_admin";
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["invoices"],
+    queryKey: ["invoices", role, user?.id, profile?.agency_id],
     queryFn: fetchInvoices,
+    enabled: !loading && !!role && (!!user) && (isAdmin ? !!profile?.agency_id : true),
   });
 
   const rows = useMemo(() => {

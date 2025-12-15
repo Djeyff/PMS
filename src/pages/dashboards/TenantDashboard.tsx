@@ -6,18 +6,18 @@ import { fetchLeases } from "@/services/leases";
 import { fetchInvoices } from "@/services/invoices";
 
 const TenantDashboard = () => {
-  const { role, user } = useAuth();
+  const { role, user, loading } = useAuth();
 
   const { data: leases } = useQuery({
-    queryKey: ["tenant-leases", user?.id],
+    queryKey: ["tenant-leases", role, user?.id],
     queryFn: () => fetchLeases({ role, userId: user?.id ?? null, agencyId: null }),
-    enabled: role === "tenant" && !!user,
+    enabled: !loading && role === "tenant" && !!user,
   });
 
   const { data: invoices } = useQuery({
-    queryKey: ["tenant-invoices", user?.id],
+    queryKey: ["tenant-invoices", role, user?.id],
     queryFn: fetchInvoices,
-    enabled: role === "tenant" && !!user,
+    enabled: !loading && role === "tenant" && !!user,
   });
 
   const lease = (leases ?? [])[0];
