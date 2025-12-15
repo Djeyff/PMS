@@ -149,19 +149,35 @@ serve(async (req) => {
     let y = 800;
     if (logoBytes) {
       const img = await pdf.embedPng(logoBytes);
-      const w = 330; // 3x larger than previous 110
+      const w = 495; // span most of the page width (A4 width ~595, left margin ~50)
       const h = (img.height / img.width) * w;
-      page.drawImage(img, { x: 50, y: 800 - h, width: w, height: h });
+      page.drawImage(img, { x: 50, y: 820 - h, width: w, height: h });
+
+      // Place agency name and address BELOW the larger logo
+      let textY = 820 - h - 12;
+      page.drawText(agencyName, { x: 50, y: textY, size: 14, font: fontBold });
+      const addr = agencyAddress;
+      const lines = addr.includes(",") ? addr.split(",") : [addr];
+      const line1 = lines[0] ?? "";
+      const line2 = lines.slice(1).join(", ").trim();
+      textY -= 16;
+      page.drawText(line1, { x: 50, y: textY, size: 10, font });
+      if (line2) {
+        textY -= 14;
+        page.drawText(line2, { x: 50, y: textY, size: 10, font });
+      }
+      y = textY - 24; // continue body below header
+    } else {
+      // Fallback: no logo, keep text at top-right
+      page.drawText(agencyName, { x: 400, y: 800, size: 14, font: fontBold });
+      const addr = agencyAddress;
+      const lines = addr.includes(",") ? addr.split(",") : [addr];
+      const line1 = lines[0] ?? "";
+      const line2 = lines.slice(1).join(", ").trim();
+      page.drawText(line1, { x: 400, y: 784, size: 10, font });
+      if (line2) page.drawText(line2, { x: 400, y: 770, size: 10, font });
+      y = 740;
     }
-    // Company name and address on the right/top (moved to avoid overlapping larger logo)
-    page.drawText(agencyName, { x: 400, y: 800, size: 14, font: fontBold });
-    const addr = agencyAddress;
-    const lines = addr.includes(",") ? addr.split(",") : [addr];
-    const line1 = lines[0] ?? "";
-    const line2 = lines.slice(1).join(", ").trim();
-    page.drawText(line1, { x: 400, y: 784, size: 10, font });
-    if (line2) page.drawText(line2, { x: 400, y: 770, size: 10, font });
-    y = 740;
 
     const draw = (text: string, opts: { x?: number; y?: number; size?: number; bold?: boolean } = {}) => {
       const size = opts.size ?? 12;

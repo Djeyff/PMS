@@ -167,27 +167,33 @@ serve(async (req) => {
       let y = 800;
       if (logoBytes) {
         const img = await pdf.embedPng(logoBytes);
-        const w = 330; // 3x larger than previous 110
+        const w = 495; // span most of the page width
         const h = (img.height / img.width) * w;
-        page.drawImage(img, { x: 50, y: 800 - h, width: w, height: h });
-      }
-      const agencyId = l.property?.agency_id ?? null;
-      let agencyName = "Las Terrenas Properties";
-      let agencyAddress = "278 calle Duarte, LTI building, Las Terrenas";
-      try {
-        if (agencyId) {
-          const { data: ag } = await supabase.from("agencies").select("name, address").eq("id", agencyId).single();
-          if (ag?.name) agencyName = ag.name;
-          if (ag?.address) agencyAddress = ag.address;
+        page.drawImage(img, { x: 50, y: 820 - h, width: w, height: h });
+
+        // Agency name/address beneath the logo
+        let textY = 820 - h - 12;
+        page.drawText(agencyName, { x: 50, y: textY, size: 14, font: fontBold });
+        const lines = agencyAddress.includes(",") ? agencyAddress.split(",") : [agencyAddress];
+        const line1 = lines[0] ?? "";
+        const line2 = lines.slice(1).join(", ").trim();
+        textY -= 16;
+        page.drawText(line1, { x: 50, y: textY, size: 10, font });
+        if (line2) {
+          textY -= 14;
+          page.drawText(line2, { x: 50, y: textY, size: 10, font });
         }
-      } catch {}
-      page.drawText(agencyName, { x: 400, y: 800, size: 14, font: fontBold });
-      const lines = agencyAddress.includes(",") ? agencyAddress.split(",") : [agencyAddress];
-      const line1 = lines[0] ?? "";
-      const line2 = lines.slice(1).join(", ").trim();
-      page.drawText(line1, { x: 400, y: 784, size: 10, font });
-      if (line2) page.drawText(line2, { x: 400, y: 770, size: 10, font });
-      y = 740;
+        y = textY - 24;
+      } else {
+        // Fallback without logo
+        page.drawText(agencyName, { x: 400, y: 800, size: 14, font: fontBold });
+        const lines = agencyAddress.includes(",") ? agencyAddress.split(",") : [agencyAddress];
+        const line1 = lines[0] ?? "";
+        const line2 = lines.slice(1).join(", ").trim();
+        page.drawText(line1, { x: 400, y: 784, size: 10, font });
+        if (line2) page.drawText(line2, { x: 400, y: 770, size: 10, font });
+        y = 740;
+      }
 
       const draw = (text: string, opts: { x?: number; y?: number; size?: number; bold?: boolean } = {}) => {
         const size = opts.size ?? 12;
