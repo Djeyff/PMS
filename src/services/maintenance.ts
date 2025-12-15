@@ -53,11 +53,9 @@ export async function fetchMaintenanceRequests(params: { agencyId: string; statu
     .from("maintenance_requests")
     .select(`
       id, property_id, title, description, priority, status, due_date, created_at,
-      property:properties!inner ( id, name, agency_id ),
-      logs:maintenance_logs ( id, note, created_at, user:profiles ( first_name, last_name ) )
+      property:properties!inner ( id, name, agency_id )
     `)
     .eq("property.agency_id", params.agencyId)
-    .order("due_date", { ascending: true })
     .order("created_at", { ascending: false });
 
   if (params.status && params.status.length > 0) {
@@ -66,7 +64,20 @@ export async function fetchMaintenanceRequests(params: { agencyId: string; statu
 
   const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []).map(normalize);
+  return (data ?? []).map((row: any) => {
+    const propRel = Array.isArray(row.property) ? row.property[0] : row.property ?? null;
+    return {
+      id: row.id,
+      property_id: row.property_id,
+      title: row.title,
+      description: row.description ?? null,
+      priority: row.priority,
+      status: row.status,
+      due_date: row.due_date ?? null,
+      created_at: row.created_at,
+      property: propRel ? { id: propRel.id, name: propRel.name } : null,
+    } as MaintenanceRow;
+  });
 }
 
 export async function createMaintenanceRequest(input: { property_id: string; title: string; description?: string; priority: "low" | "medium" | "high"; due_date?: string }) {
