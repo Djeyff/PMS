@@ -87,13 +87,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setSession(sess);
     setUser(sess?.user ?? null);
     if (sess?.user?.id) {
-      const p = await fetchProfile(sess.user.id).catch(() => null);
+      let p = await fetchProfile(sess.user.id).catch(() => null);
+      if (!p) {
+        // Ensure profile row exists
+        const { error: upsertErr } = await supabase
+          .from("profiles")
+          .upsert({ id: sess.user.id }, { onConflict: "id" });
+        if (upsertErr) console.warn("ensureProfileRow failed", upsertErr);
+        p = await fetchProfile(sess.user.id).catch(() => null);
+      }
       setProfile(p);
-      // Run admin bootstrap in background so loading doesn't block
-      ensureMasterAdmin(sess.user, p ?? null).then(() => {
-        // after background bootstrap, try to refresh profile once
-        refreshProfile().catch(() => {});
-      });
+
+      // If admin but no agency, bootstrap agency
+      if (p?.role === "agency_admin" && !p.agency_id) {
+        try {
+          await createAgencyService({ name: "Master Agency", default_currency: "USD" });
+        } catch (e) {
+          console.warn("createAgency fallback failed", e);
+        }
+        const updated = await fetchProfile(sess.user.id).catch(() => null);
+        if (updated) setProfile(updated);
+      }
     } else {
       setProfile(null);
     }
@@ -111,25 +125,37 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setSession(sess ?? null);
       setUser(sess?.user ?? null);
       if (sess?.user?.id) {
-        const p = await fetchProfile(sess.user.id).catch(() => null);
+        let p = await fetchProfile(sess.user.id).catch(() => null);
+        if (!p) {
+          const { error: upsertErr } = await supabase
+            .from("profiles")
+            .upsert({ id: sess.user.id }, { onConflict: "id" });
+          if (upsertErr) console.warn("ensureProfileRow failed", upsertErr);
+          p = await fetchProfile(sess.user.id).catch(() => null);
+        }
         setProfile(p);
-        // Run bootstrap without awaiting to avoid UI stalls
-        ensureMasterAdmin(sess.user, p ?? null).then(() => {
-          refreshProfile().catch(() => {});
-        });
+
+        if (p?.role === "agency_admin" && !p.agency_id) {
+          try {
+            await createAgencyService({ name: "Master Agency", default_currency: "USD" });
+          } catch (e) {
+            console.warn("createAgency fallback failed", e);
+          }
+          const updated = await fetchProfile(sess.user.id).catch(() => null);
+          if (updated) setProfile(updated);
+        }
       } else {
         setProfile(null);
       }
     });
 
-    // Fallback: ensure loading doesn't remain true due to unexpected delays
-    const loadingFallback = setTimeout(() => {
+    const fallback = setTimeout(() => {
       if (mounted) setLoading(false);
     }, 4000);
 
     return () => {
       mounted = false;
-      clearTimeout(loadingFallback);
+      clearTimeout(fallback);
       sub?.subscription?.unsubscribe();
     };
   }, []);
