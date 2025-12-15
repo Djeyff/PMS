@@ -118,6 +118,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     (async () => {
       setLoading(true);
       await loadSessionAndProfile();
+      // Wait for profile and agency (if admin) before clearing loading
+      const waitForReady = async () => {
+        let attempts = 0;
+        while (mounted && attempts < 20) {
+          const { data: sess } = await supabase.auth.getSession();
+          const uid = sess?.session?.user?.id;
+          if (!uid) break;
+          const p = await fetchProfile(uid).catch(() => null);
+          const ready = p && (p.role !== "agency_admin" || !!p.agency_id);
+          if (ready) break;
+          await new Promise(r => setTimeout(r, 200));
+          attempts++;
+        }
+      };
+      await waitForReady();
       if (mounted) setLoading(false);
     })();
 
