@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
-import { fetchMaintenanceRequests, updateMaintenanceStatus, addMaintenanceLog } from "@/services/maintenance";
+import { fetchMaintenanceRequests, updateMaintenanceStatus, addMaintenanceLog, fetchMaintenanceLogsBulk } from "@/services/maintenance";
 import NewRequestDialog from "@/components/maintenance/NewRequestDialog";
 import { toast } from "sonner";
 import { fetchAgencyById } from "@/services/agencies";
@@ -18,7 +18,6 @@ const Maintenance = () => {
   const agencyId = profile?.agency_id ?? null;
 
   const [noteById, setNoteById] = useState<Record<string, string>>({});
-  const [savedNotesById, setSavedNotesById] = useState<Record<string, Array<{ id: string; note: string; created_at: string }>>>({});
 
   const { data: agency } = useQuery({
     queryKey: ["agency", agencyId],
@@ -27,6 +26,13 @@ const Maintenance = () => {
   });
 
   const tz = agency?.timezone ?? "UTC";
+
+  const requestIds = (data ?? []).map((m) => m.id);
+  const { data: bulkLogs, isLoading: logsLoading, refetch: refetchBulkLogs } = useQuery({
+    queryKey: ["maint-logs-bulk", agencyId, requestIds],
+    enabled: !!agencyId && requestIds.length > 0,
+    queryFn: () => fetchMaintenanceLogsBulk(requestIds),
+  });
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["maintenance", agencyId],
@@ -39,6 +45,7 @@ const Maintenance = () => {
       await updateMaintenanceStatus(id, status);
       toast.success("Status updated");
       refetch();
+      await refetchBulkLogs();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to update status");
     }
@@ -51,14 +58,10 @@ const Maintenance = () => {
       return;
     }
     try {
-      const created = await addMaintenanceLog(id, note);
+      await addMaintenanceLog(id, note);
       toast.success("Note saved");
       setNoteById((prev) => ({ ...prev, [id]: "" }));
-      setSavedNotesById((prev) => {
-        const arr = prev[id] ? [...prev[id]] : [];
-        arr.push({ id: created.id, note: created.note, created_at: created.created_at });
-        return { ...prev, [id]: arr };
-      });
+      await refetchBulkLogs();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to save note");
     }
@@ -123,22 +126,26 @@ const Maintenance = () => {
                           <div className="flex justify-end">
                             <Button size="sm" onClick={() => onSaveNote(m.id)}>Save note</Button>
                           </div>
-                          {(savedNotesById[m.id]?.length ?? 0) > 0 && (
-                            <div className="mt-2">
-                              <div className="text-xs text-muted-foreground">Recent notes</div>
+                          <div className="mt-2">
+                            <div className="text-xs text-muted-foreground">Recent notes</div>
+                            {logsLoading ? (
+                              <div className="text-xs text-muted-foreground mt-1">Loading notes...</div>
+                            ) : (bulkLogs?.[m.id]?.length ?? 0) === 0 ? (
+                              <div className="text-xs text-muted-foreground mt-1">No notes yet.</div>
+                            ) : (
                               <ul className="mt-1 space-y-1">
-                                {(savedNotesById[m.id] ?? []).slice(-3).reverse().map((ln) => (
+                                {(bulkLogs?.[m.id] ?? []).slice(-3).reverse().map((ln) => (
                                   <li key={ln.id} className="text-sm">
                                     <div className="flex justify-between text-xs text-muted-foreground">
-                                      <span>—</span>
+                                      <span>{[ln.user?.first_name ?? "", ln.user?.last_name ?? ""].filter(Boolean).join(" ") || "—"}</span>
                                       <span>{formatDateTimeInTZ(ln.created_at, tz)}</span>
                                     </div>
                                     <div>{ln.note}</div>
                                   </li>
                                 ))}
                               </ul>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </TableCell>
                     </TableRow>

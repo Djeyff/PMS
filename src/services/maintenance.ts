@@ -122,6 +122,33 @@ export async function fetchMaintenanceLogs(requestId: string) {
   });
 }
 
+export async function fetchMaintenanceLogsBulk(requestIds: string[]) {
+  if (!requestIds || requestIds.length === 0) return {} as Record<string, MaintenanceLogRow[]>;
+  const { data, error } = await supabase
+    .from("maintenance_logs")
+    .select(`id, request_id, user_id, note, created_at, user:profiles ( first_name, last_name )`)
+    .in("request_id", requestIds)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+
+  const map: Record<string, MaintenanceLogRow[]> = {};
+  (data ?? []).forEach((row: any) => {
+    const userRel = Array.isArray(row.user) ? row.user[0] : row.user ?? null;
+    const normalized: MaintenanceLogRow = {
+      id: row.id,
+      request_id: row.request_id,
+      user_id: row.user_id ?? null,
+      note: row.note,
+      created_at: row.created_at,
+      user: userRel ? { first_name: userRel.first_name ?? null, last_name: userRel.last_name ?? null } : null,
+    };
+    if (!map[normalized.request_id]) map[normalized.request_id] = [];
+    map[normalized.request_id].push(normalized);
+  });
+
+  return map;
+}
+
 export async function addMaintenanceLog(requestId: string, note: string) {
   const { data: user } = await supabase.auth.getUser();
   const uid = user.user?.id ?? null;
