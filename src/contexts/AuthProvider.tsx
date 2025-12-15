@@ -63,29 +63,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const email = u.email?.toLowerCase() ?? "";
     if (email !== MASTER_ADMIN_EMAIL) return;
 
-    // Use authed client for all writes to ensure RLS passes immediately after refresh
+    // Invoke edge function to perform atomic server-side bootstrap (bypasses RLS)
     const { data: sess } = await supabase.auth.getSession();
-    const db = getAuthedClient(sess.session?.access_token);
+    const token = sess.session?.access_token;
+    if (!token) return;
 
-    // Upsert profile with admin role
-    const { error: upsertErr } = await db
-      .from("profiles")
-      .upsert({ id: u.id, role: "agency_admin" }, { onConflict: "id" });
-    if (upsertErr) {
-      console.warn("ensureMasterAdmin: upsert profile failed", upsertErr);
-      return;
+    const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/bootstrap-admin";
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+
+    // If function failed, log and continue (UI should still work)
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.warn("bootstrap-admin failed:", err);
     }
 
-    const latest = await fetchProfile(u.id).catch(() => null);
-    if (!latest?.agency_id) {
-      // Create agency (function assigns agency_id), then refresh profile
-      try {
-        await createAgencyService({ name: "Master Agency", default_currency: "USD" });
-      } catch (e) {
-        console.warn("ensureMasterAdmin: createAgency fallback path failed", e);
-      }
-    }
-
+    // Always refresh profile after attempting bootstrap
     const updated = await fetchProfile(u.id).catch(() => null);
     if (updated) setProfile(updated);
   };
