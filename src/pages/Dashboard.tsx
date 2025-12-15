@@ -32,7 +32,7 @@ const Dashboard = () => {
     return <Loader />;
   }
 
-  // Show loader while role is still resolving to avoid blank page on hard refresh
+  // If role hasn't loaded yet and user is not the master admin, show a loader instead of rendering nothing
   if (!role && (user?.email ?? "").toLowerCase() !== MASTER_ADMIN_EMAIL) {
     return <Loader />;
   }
@@ -42,6 +42,8 @@ const Dashboard = () => {
       {role === "agency_admin" && <AgencyDashboard />}
       {role === "owner" && <OwnerDashboard />}
       {role === "tenant" && <TenantDashboard />}
+      {/* For the master admin fallback, show admin dashboard even if role hasn't persisted yet */}
+      {!role && (user?.email ?? "").toLowerCase() === MASTER_ADMIN_EMAIL && <AgencyDashboard />}
     </AppShell>
   );
 };
