@@ -10,11 +10,17 @@ const AuthQuerySync = () => {
     const role = profile?.role;
     const agencyReady = role !== "agency_admin" || !!profile?.agency_id;
     const ready = !loading && !!session && !!role && agencyReady;
-    if (!ready) return;
+    console.log("[AuthQuerySync] check:", { loading, session: !!session, role, agencyReady, ready });
+    if (!ready) {
+      console.log("[AuthQuerySync] not ready, skipping invalidate");
+      return;
+    }
 
+    console.log("[AuthQuerySync] ready, invalidating and refetching queries");
     qc.invalidateQueries();
     const t = setTimeout(() => {
       qc.refetchQueries({ type: "inactive" });
+      console.log("[AuthQuerySync] refetchQueries executed");
     }, 150);
 
     return () => clearTimeout(t);

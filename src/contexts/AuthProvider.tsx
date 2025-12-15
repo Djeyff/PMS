@@ -83,12 +83,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const loadSessionAndProfile = async () => {
+    console.log("[AuthProvider] loadSessionAndProfile start");
     const { data } = await supabase.auth.getSession();
     const sess = data.session ?? null;
+    console.log("[AuthProvider] session:", sess ? "present" : "none");
     setSession(sess);
     setUser(sess?.user ?? null);
     if (sess?.user?.id) {
       let p = await fetchProfile(sess.user.id).catch(() => null);
+      console.log("[AuthProvider] initial profile:", p);
       if (!p) {
         // Ensure profile row exists
         const { error: upsertErr } = await supabase
@@ -96,17 +99,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           .upsert({ id: sess.user.id }, { onConflict: "id" });
         if (upsertErr) console.warn("ensureProfileRow failed", upsertErr);
         p = await fetchProfile(sess.user.id).catch(() => null);
+        console.log("[AuthProvider] profile after ensure row:", p);
       }
       setProfile(p);
 
       // If admin but no agency, bootstrap agency
       if (p?.role === "agency_admin" && !p.agency_id) {
+        console.log("[AuthProvider] admin without agency, bootstrapping agency");
         try {
           await createAgencyService({ name: "Master Agency", default_currency: "USD" });
         } catch (e) {
           console.warn("createAgency fallback failed", e);
         }
         const updated = await fetchProfile(sess.user.id).catch(() => null);
+        console.log("[AuthProvider] profile after agency bootstrap:", updated);
         if (updated) setProfile(updated);
       }
     } else {
@@ -117,33 +123,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     let mounted = true;
     (async () => {
+      console.log("[AuthProvider] useEffect init start");
       setLoading(true);
       setProfileReady(false);
       await loadSessionAndProfile();
       if (mounted) setLoading(false);
+      console.log("[AuthProvider] useEffect init end, loading cleared");
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, sess) => {
+      console.log("[AuthProvider] onAuthStateChange:", _event, sess ? "session present" : "no session");
       setSession(sess ?? null);
       setUser(sess?.user ?? null);
       if (sess?.user?.id) {
         let p = await fetchProfile(sess.user.id).catch(() => null);
+        console.log("[AuthProvider] onAuthStateChange profile:", p);
         if (!p) {
           const { error: upsertErr } = await supabase
             .from("profiles")
             .upsert({ id: sess.user.id }, { onConflict: "id" });
           if (upsertErr) console.warn("ensureProfileRow failed", upsertErr);
           p = await fetchProfile(sess.user.id).catch(() => null);
+          console.log("[AuthProvider] onAuthStateChange profile after ensure row:", p);
         }
         setProfile(p);
 
         if (p?.role === "agency_admin" && !p.agency_id) {
+          console.log("[AuthProvider] onAuthStateChange admin without agency, bootstrapping agency");
           try {
             await createAgencyService({ name: "Master Agency", default_currency: "USD" });
           } catch (e) {
             console.warn("createAgency fallback failed", e);
           }
           const updated = await fetchProfile(sess.user.id).catch(() => null);
+          console.log("[AuthProvider] onAuthStateChange profile after agency bootstrap:", updated);
           if (updated) setProfile(updated);
         }
       } else {
@@ -153,6 +166,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const fallback = setTimeout(() => {
       if (mounted) setLoading(false);
+      console.log("[AuthProvider] fallback timeout cleared loading");
     }, 4000);
 
     return () => {
@@ -165,6 +179,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Update profileReady flag whenever profile changes
   useEffect(() => {
     const ready = !!profile && (profile.role !== "agency_admin" || !!profile.agency_id);
+    console.log("[AuthProvider] profileReady check:", { profile, ready });
     setProfileReady(ready);
   }, [profile]);
 
