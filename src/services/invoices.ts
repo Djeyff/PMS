@@ -174,3 +174,23 @@ export async function fetchPendingInvoicesByLease(leaseId: string) {
     return { ...row, tenant: tenantRel };
   });
 }
+
+export async function generateSpanishInvoicePDF(invoiceId: string, opts: { sendEmail?: boolean; sendWhatsApp?: boolean } = {}) {
+  const { data: sess } = await supabase.auth.getSession();
+  const token = sess.session?.access_token;
+  if (!token) throw new Error("Not authenticated");
+
+  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/invoice-pdf";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ invoiceId, sendEmail: !!opts.sendEmail, sendWhatsApp: !!opts.sendWhatsApp }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `Generate invoice PDF failed (${res.status})`);
+  }
+
+  return (await res.json()) as { ok: true; url: string };
+}

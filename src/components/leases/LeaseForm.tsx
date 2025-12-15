@@ -42,6 +42,8 @@ const LeaseForm = ({ onCreated }: Props) => {
   const [rentCurrency, setRentCurrency] = useState<"USD" | "DOP">("USD");
   const [depositAmount, setDepositAmount] = useState<string>("");
   const [autoInvoice, setAutoInvoice] = useState<boolean>(false);
+  const [autoDay, setAutoDay] = useState<number>(5);
+  const [autoIntervalMonths, setAutoIntervalMonths] = useState<number>(1);
 
   const canSubmit = useMemo(() => {
     return (
@@ -70,7 +72,8 @@ const LeaseForm = ({ onCreated }: Props) => {
         rent_currency: rentCurrency,
         deposit_amount: depositAmount === "" ? undefined : Number(depositAmount),
         auto_invoice_enabled: autoInvoice,
-        auto_invoice_day: 5,
+        auto_invoice_day: autoDay,
+        auto_invoice_interval_months: autoIntervalMonths,
       });
       toast.success("Lease created");
       setOpen(false);
@@ -82,6 +85,8 @@ const LeaseForm = ({ onCreated }: Props) => {
       setRentCurrency("USD");
       setDepositAmount("");
       setAutoInvoice(false);
+      setAutoDay(5);
+      setAutoIntervalMonths(1);
       onCreated?.();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to create lease");
@@ -171,9 +176,37 @@ const LeaseForm = ({ onCreated }: Props) => {
             <Label>Deposit Amount (optional)</Label>
             <Input type="number" min={0} value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="e.g., 1200" />
           </div>
-          <div className="flex items-center justify-between py-2">
-            <Label className="flex-1">Auto-invoice monthly on the 5th</Label>
-            <Switch checked={autoInvoice} onCheckedChange={setAutoInvoice} />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between py-2">
+              <Label className="flex-1">Auto-invoice</Label>
+              <Switch checked={autoInvoice} onCheckedChange={setAutoInvoice} />
+            </div>
+            {autoInvoice && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Day of month</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={28}
+                    value={autoDay}
+                    onChange={(e) => setAutoDay(Math.max(1, Math.min(28, Number(e.target.value || 1))))}
+                    placeholder="e.g., 5"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Every N months</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={autoIntervalMonths}
+                    onChange={(e) => setAutoIntervalMonths(Math.max(1, Math.min(12, Number(e.target.value || 1))))}
+                    placeholder="e.g., 1 for monthly, 3 for quarterly"
+                  />
+                </div>
+              </div>
+            )}
           </div>
           <div className="pt-2">
             <Button onClick={onSave} disabled={saving || !canSubmit}>

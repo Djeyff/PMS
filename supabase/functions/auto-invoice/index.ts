@@ -16,13 +16,11 @@ function toBase64(bytes: Uint8Array) {
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
-
 function plusDays(dateStr: string, days: number) {
   const d = new Date(dateStr);
   d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
 }
-
 function autoNumber(): string {
   const d = new Date();
   const y = d.getFullYear();
@@ -30,6 +28,10 @@ function autoNumber(): string {
   const day = String(d.getDate()).padStart(2, "0");
   const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
   return `FAC-${y}${m}${day}-${rand}`;
+}
+function monthsBetween(startDate: string, refDate: Date) {
+  const s = new Date(startDate);
+  return (refDate.getFullYear() - s.getFullYear()) * 12 + (refDate.getMonth() - s.getMonth());
 }
 
 serve(async (req) => {
@@ -54,22 +56,14 @@ serve(async (req) => {
 
   const force = new URL(req.url).searchParams.get("force") === "true";
   const today = new Date();
-  const is5th = today.getDate() === 5;
-
-  if (!is5th && !force) {
-    return new Response(JSON.stringify({ ok: true, message: "Not the 5th — pass ?force=true to test." }), {
-      status: 200,
-      headers: corsHeaders,
-    });
-  }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // Fetch leases that should be auto-invoiced and are active today
   const { data: leases, error: leaseErr } = await supabase
     .from("leases")
     .select(`
-      id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, status, auto_invoice_enabled, auto_invoice_day,
+      id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, status,
+      auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months,
       property:properties ( id, name ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -82,7 +76,6 @@ serve(async (req) => {
   const issueDate = todayStr();
   const dueDate = plusDays(issueDate, 7);
 
-  // Ensure public storage bucket for PDF links
   const bucketName = "invoices";
   const { data: bucketList } = await supabase.storage.listBuckets();
   const hasBucket = (bucketList ?? []).some((b: any) => b.name === bucketName);
@@ -94,17 +87,24 @@ serve(async (req) => {
   const errors: string[] = [];
 
   for (const l of leases ?? []) {
-    // Only active and using configured day (5th)
-    if (l.status !== "active") continue;
+    // Only active leases within date range
+    const todayStrIso = today.toISOString().slice(0, 10);
+    if (l.status !== "active" || l.start_date > todayStrIso || l.end_date < todayStrIso) continue;
+
     const day = typeof l.auto_invoice_day === "number" ? l.auto_invoice_day : 5;
-    if (!force && today.getDate() !== day) continue;
+    const interval = typeof l.auto_invoice_interval_months === "number" ? l.auto_invoice_interval_months : 1;
+
+    const okDay = today.getDate() === day;
+    const monthsDiff = monthsBetween(l.start_date, today);
+    const okInterval = monthsDiff >= 0 && monthsDiff % Math.max(1, interval) === 0;
+
+    if (!force && (!okDay || !okInterval)) continue;
 
     const tenantName = [l.tenant?.first_name ?? "", l.tenant?.last_name ?? ""].filter(Boolean).join(" ") || "—";
     const propertyName = l.property?.name ?? (l.property_id?.slice(0, 8) || "Propiedad");
     const amount = Number(l.rent_amount || 0);
     const currency = l.rent_currency;
 
-    // Insert invoice
     const invoiceNumber = autoNumber();
     const { data: inv, error: invErr } = await supabase
       .from("invoices")
@@ -126,10 +126,9 @@ serve(async (req) => {
       continue;
     }
 
-    // Build Spanish PDF
     try {
       const pdf = await PDFDocument.create();
-      const page = pdf.addPage([595.28, 841.89]); // A4
+      const page = pdf.addPage([595.28, 841.89]);
       const font = await pdf.embedFont(StandardFonts.Helvetica);
       const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
@@ -155,14 +154,13 @@ serve(async (req) => {
       draw(`Importe total: ${new Intl.NumberFormat("es-ES", { style: "currency", currency }).format(amount)}`, { size: 14, bold: true });
       draw("", { size: 12 });
 
-      draw("Gracias por su pago puntal.", { size: 12 });
+      draw("Gracias por su pago puntual.", { size: 12 });
       draw("Las Terrenas Properties", { size: 12 });
 
       const pdfBytes = await pdf.save();
       const fileName = `invoice_${inv.id}.pdf`;
       const path = `${inv.id}/${fileName}`;
 
-      // Upload to public storage for WhatsApp
       const { error: upErr } = await supabase.storage.from(bucketName).upload(path, pdfBytes, {
         contentType: "application/pdf",
         upsert: true,
@@ -171,11 +169,9 @@ serve(async (req) => {
         errors.push(`Upload PDF failed for invoice ${inv.id}: ${upErr.message}`);
       }
 
-      // Get public URL
       const { data: pub } = supabase.storage.from(bucketName).getPublicUrl(path);
       const pdfUrl = pub.publicUrl;
 
-      // Email PDF as attachment (Spanish content)
       if (RESEND_API_KEY) {
         const res = await fetch("https://api.resend.com/emails", {
           method: "POST",
@@ -207,14 +203,13 @@ serve(async (req) => {
         errors.push("RESEND_API_KEY not set — email skipped");
       }
 
-      // Send WhatsApp message with PDF link
       if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_WHATSAPP_FROM) {
         const bodyText = `Factura ${invoiceNumber}\nPropiedad: ${propertyName}\nInquilino: ${tenantName}\nImporte: ${new Intl.NumberFormat("es-ES", { style: "currency", currency }).format(amount)}\nPDF: ${pdfUrl}`;
         const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
         const auth = btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`);
         const form = new URLSearchParams({
           From: TWILIO_WHATSAPP_FROM,
-          To: WHATSAPP_TO,
+          To: "whatsapp:+18092044903",
           Body: bodyText,
           MediaUrl: pdfUrl,
         });

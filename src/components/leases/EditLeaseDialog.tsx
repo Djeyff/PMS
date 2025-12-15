@@ -25,6 +25,8 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
   const [depositAmount, setDepositAmount] = useState<string>(lease.deposit_amount == null ? "" : String(lease.deposit_amount));
   const [status, setStatus] = useState<"draft" | "active" | "pending_renewal" | "expired" | "terminated">(lease.status);
   const [autoInvoiceEnabled, setAutoInvoiceEnabled] = useState<boolean>(!!lease.auto_invoice_enabled);
+  const [autoDay, setAutoDay] = useState<number>(lease.auto_invoice_day ?? 5);
+  const [autoIntervalMonths, setAutoIntervalMonths] = useState<number>(lease.auto_invoice_interval_months ?? 1);
 
   const reset = () => {
     setStartDate(lease.start_date);
@@ -34,6 +36,8 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
     setDepositAmount(lease.deposit_amount == null ? "" : String(lease.deposit_amount));
     setStatus(lease.status);
     setAutoInvoiceEnabled(!!lease.auto_invoice_enabled);
+    setAutoDay(lease.auto_invoice_day ?? 5);
+    setAutoIntervalMonths(lease.auto_invoice_interval_months ?? 1);
   };
 
   const onSave = async () => {
@@ -47,7 +51,8 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
         deposit_amount: depositAmount === "" ? null : Number(depositAmount),
         status,
         auto_invoice_enabled: autoInvoiceEnabled,
-        auto_invoice_day: 5,
+        auto_invoice_day: autoDay,
+        auto_invoice_interval_months: autoIntervalMonths,
       });
       toast.success("Lease updated");
       setOpen(false);
@@ -118,9 +123,33 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
             </Select>
           </div>
           <div className="flex items-center justify-between">
-            <Label className="flex-1">Auto-invoice monthly on the 5th</Label>
+            <Label className="flex-1">Auto-invoice</Label>
             <Switch checked={autoInvoiceEnabled} onCheckedChange={setAutoInvoiceEnabled} />
           </div>
+          {autoInvoiceEnabled && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Day of month</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={28}
+                  value={autoDay}
+                  onChange={(e) => setAutoDay(Math.max(1, Math.min(28, Number(e.target.value || 1))))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Every N months</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={autoIntervalMonths}
+                  onChange={(e) => setAutoIntervalMonths(Math.max(1, Math.min(12, Number(e.target.value || 1))))}
+                />
+              </div>
+            </div>
+          )}
           <div className="pt-2">
             <Button onClick={onSave} disabled={saving}>
               {saving ? "Saving..." : "Save changes"}
