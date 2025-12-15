@@ -26,6 +26,7 @@ import Users from "./pages/Users";
 import InvoiceDetail from "./pages/invoices/InvoiceDetail";
 import Owners from "./pages/Owners";
 import { ThemeProvider } from "./contexts/ThemeProvider";
+import AuthQuerySync from "./components/auth/AuthQuerySync";
 
 const queryClient = new QueryClient();
 
@@ -37,6 +38,8 @@ const App = () => (
           <ThemeProvider>
             <Toaster />
             <Sonner />
+            {/* Refetch queries when auth is ready to avoid empty data after refresh */}
+            <AuthQuerySync />
             <BrowserRouter>
               <Routes>
                 <Route path="/" element={<Index />} />
