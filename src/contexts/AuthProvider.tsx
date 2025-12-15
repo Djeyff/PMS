@@ -93,6 +93,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         if (!active) return;
         setProfile(p);
+
+        // Secure bootstrap: if role is missing, attempt server-side bootstrap-admin, then re-fetch profile
+        if (!p?.role) {
+          const token = sess?.access_token;
+          if (token) {
+            const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/bootstrap-admin";
+            await fetch(url, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+              body: JSON.stringify({}),
+            }).catch(() => {});
+            const refreshed = await fetchProfile(sess.user.id).catch(() => null);
+            if (active && refreshed) setProfile(refreshed);
+          }
+        }
       } else {
         setProfile(null);
       }
@@ -116,6 +131,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         if (!active) return;
         setProfile(p);
+
+        // Secure bootstrap on subsequent auth events if role still missing
+        if (!p?.role) {
+          const token = sess?.access_token;
+          if (token) {
+            const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/bootstrap-admin";
+            await fetch(url, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+              body: JSON.stringify({}),
+            }).catch(() => {});
+            const refreshed = await fetchProfile(sess.user.id).catch(() => null);
+            if (active && refreshed) setProfile(refreshed);
+          }
+        }
       } else {
         setProfile(null);
       }
