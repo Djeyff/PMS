@@ -22,11 +22,16 @@ export async function uploadLogo(file: File) {
   return true;
 }
 
-// For private buckets, callers should request a signed URL from a secure context.
-// This helper returns a short-lived signed URL for authenticated users.
+// Preferred: get a short-lived signed URL for the logo
 export async function getLogoSignedUrl() {
   await ensureBucket();
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl("logo.png", 60 * 15);
   if (error) throw error;
   return data.signedUrl;
+}
+
+// Compatibility: existing code may import getLogoPublicUrl.
+// We now return a signed URL instead of a public URL.
+export async function getLogoPublicUrl() {
+  return getLogoSignedUrl();
 }
