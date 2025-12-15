@@ -71,9 +71,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     let active = true;
     setLoading(true);
 
-    const hardStop = setTimeout(() => {
+    const finalize = () => {
       if (active) setLoading(false);
-    }, 2500);
+    };
 
     (async () => {
       const { data } = await supabase.auth.getSession();
@@ -84,78 +84,74 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(sess?.user ?? null);
 
       if (sess?.user?.id) {
+        // Step 1: ensure profile row exists
         let p = await fetchProfile(sess.user.id).catch(() => null);
-
         if (!p) {
           await ensureProfileRow(sess.user.id);
           p = await fetchProfile(sess.user.id).catch(() => null);
         }
-
         if (!active) return;
         setProfile(p);
 
-        // Secure bootstrap: if role is missing, attempt server-side bootstrap-admin, then re-fetch profile
-        if (!p?.role) {
-          const token = sess?.access_token;
-          if (token) {
+        // Step 2: if role missing, try secure server-side bootstrap once
+        if (!p?.role && sess.access_token) {
+          try {
             const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/bootstrap-admin";
             await fetch(url, {
               method: "POST",
-              headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+              headers: { Authorization: `Bearer ${sess.access_token}`, "Content-Type": "application/json" },
               body: JSON.stringify({}),
-            }).catch(() => {});
-            const refreshed = await fetchProfile(sess.user.id).catch(() => null);
-            if (active && refreshed) setProfile(refreshed);
-          }
+            });
+          } catch {}
+
+          // Re-fetch profile after bootstrap attempt
+          const refreshed = await fetchProfile(sess.user.id).catch(() => null);
+          if (active) setProfile(refreshed);
+        }
+      } else {
+        setProfile(null);
+      }
+
+      finalize();
+    })();
+
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, sess) => {
+      if (!active) return;
+
+      setLoading(true);
+      setSession(sess ?? null);
+      setUser(sess?.user ?? null);
+
+      if (sess?.user?.id) {
+        let p = await fetchProfile(sess.user.id).catch(() => null);
+        if (!p) {
+          await ensureProfileRow(sess.user.id);
+          p = await fetchProfile(sess.user.id).catch(() => null);
+        }
+        if (!active) return;
+        setProfile(p);
+
+        if (!p?.role && sess.access_token) {
+          try {
+            const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/bootstrap-admin";
+            await fetch(url, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${sess.access_token}`, "Content-Type": "application/json" },
+              body: JSON.stringify({}),
+            });
+          } catch {}
+          const refreshed = await fetchProfile(sess.user.id).catch(() => null);
+          if (active) setProfile(refreshed);
         }
       } else {
         setProfile(null);
       }
 
       if (active) setLoading(false);
-    })();
-
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-      if (!active) return;
-
-      setSession(sess ?? null);
-      setUser(sess?.user ?? null);
-
-      if (sess?.user?.id) {
-        let p = await fetchProfile(sess.user.id).catch(() => null);
-
-        if (!p) {
-          await ensureProfileRow(sess.user.id);
-          p = await fetchProfile(sess.user.id).catch(() => null);
-        }
-
-        if (!active) return;
-        setProfile(p);
-
-        // Secure bootstrap on subsequent auth events if role still missing
-        if (!p?.role) {
-          const token = sess?.access_token;
-          if (token) {
-            const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/bootstrap-admin";
-            await fetch(url, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-              body: JSON.stringify({}),
-            }).catch(() => {});
-            const refreshed = await fetchProfile(sess.user.id).catch(() => null);
-            if (active && refreshed) setProfile(refreshed);
-          }
-        }
-      } else {
-        setProfile(null);
-      }
-
-      setLoading(false);
     });
 
     return () => {
       active = false;
-      clearTimeout(hardStop);
       sub?.subscription?.unsubscribe();
     };
   }, []);
