@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { createAgency as createAgencyService } from "@/services/agencies";
+import { getAuthedClient } from "@/integrations/supabase/client";
 
 export type Role = "agency_admin" | "owner" | "tenant";
 export type Profile = {
@@ -27,7 +28,11 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const fetchProfile = async (userId: string): Promise<Profile | null> => {
-  const { data, error } = await supabase
+  // Always use an authed client so the Authorization header is present
+  const { data: sess } = await supabase.auth.getSession();
+  const db = getAuthedClient(sess.session?.access_token);
+
+  const { data, error } = await db
     .from("profiles")
     .select("id, role, agency_id, first_name, last_name, avatar_url")
     .eq("id", userId)
@@ -58,8 +63,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const email = u.email?.toLowerCase() ?? "";
     if (email !== MASTER_ADMIN_EMAIL) return;
 
+    // Use authed client for all writes to ensure RLS passes immediately after refresh
+    const { data: sess } = await supabase.auth.getSession();
+    const db = getAuthedClient(sess.session?.access_token);
+
     // Upsert profile with admin role
-    const { error: upsertErr } = await supabase
+    const { error: upsertErr } = await db
       .from("profiles")
       .upsert({ id: u.id, role: "agency_admin" }, { onConflict: "id" });
     if (upsertErr) {
@@ -69,7 +78,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const latest = await fetchProfile(u.id).catch(() => null);
     if (!latest?.agency_id) {
-      // Use service that tries edge function, then DB fallback
+      // Create agency (function assigns agency_id), then refresh profile
       try {
         await createAgencyService({ name: "Master Agency", default_currency: "USD" });
       } catch (e) {
@@ -82,8 +91,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const ensureProfileRow = async (uid: string) => {
-    // If the profile row doesn't exist, create a minimal one so RLS can work
-    const { error } = await supabase
+    const { data: sess } = await supabase.auth.getSession();
+    const db = getAuthedClient(sess.session?.access_token);
+    const { error } = await db
       .from("profiles")
       .upsert({ id: uid }, { onConflict: "id" });
     if (error) {
@@ -115,14 +125,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         let p = await fetchProfile(sess.user.id).catch(() => null);
 
         if (!p) {
-          // Create missing profile and re-fetch
-          await supabase.from("profiles").upsert({ id: sess.user.id }, { onConflict: "id" }).catch(() => {});
+          // Create missing profile and re-fetch using authed client
+          await ensureProfileRow(sess.user.id);
           p = await fetchProfile(sess.user.id).catch(() => null);
         }
 
         if (!active) return;
         setProfile(p);
 
+        // Bootstrap admin in background and refresh profile once
         ensureMasterAdmin(sess.user, p ?? null).then(() => {
           if (active) refreshProfile().catch(() => {});
         });
@@ -145,7 +156,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         let p = await fetchProfile(sess.user.id).catch(() => null);
 
         if (!p) {
-          await supabase.from("profiles").upsert({ id: sess.user.id }, { onConflict: "id" }).catch(() => {});
+          await ensureProfileRow(sess.user.id);
           p = await fetchProfile(sess.user.id).catch(() => null);
         }
 
