@@ -9,6 +9,8 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchMaintenanceRequests, updateMaintenanceStatus, addMaintenanceLog } from "@/services/maintenance";
 import NewRequestDialog from "@/components/maintenance/NewRequestDialog";
 import { toast } from "sonner";
+import { fetchAgencyById } from "@/services/agencies";
+import { formatDateTimeInTZ } from "@/utils/datetime";
 
 const Maintenance = () => {
   const { role, profile } = useAuth();
@@ -17,6 +19,14 @@ const Maintenance = () => {
 
   const [noteById, setNoteById] = useState<Record<string, string>>({});
   const [savedNotesById, setSavedNotesById] = useState<Record<string, Array<{ id: string; note: string; created_at: string }>>>({});
+
+  const { data: agency } = useQuery({
+    queryKey: ["agency", agencyId],
+    enabled: !!agencyId,
+    queryFn: () => fetchAgencyById(agencyId!),
+  });
+
+  const tz = agency?.timezone ?? "UTC";
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["maintenance", agencyId],
@@ -121,7 +131,7 @@ const Maintenance = () => {
                                   <li key={ln.id} className="text-sm">
                                     <div className="flex justify-between text-xs text-muted-foreground">
                                       <span>—</span>
-                                      <span>{new Date(ln.created_at).toISOString().slice(0, 16).replace("T", " ")}</span>
+                                      <span>{formatDateTimeInTZ(ln.created_at, tz)}</span>
                                     </div>
                                     <div>{ln.note}</div>
                                   </li>

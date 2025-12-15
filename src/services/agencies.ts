@@ -54,3 +54,26 @@ export async function assignSelfToAgency(agencyId: string) {
   // Edge function / fallback already assigns; this is a no-op.
   return { id: agencyId };
 }
+
+// New: fetch agency by id (name, currency, timezone)
+export async function fetchAgencyById(id: string) {
+  const { data, error } = await supabase
+    .from("agencies")
+    .select("id, name, default_currency, timezone")
+    .eq("id", id)
+    .single();
+  if (error) throw error;
+  return data as { id: string; name: string; default_currency: string; timezone: string | null };
+}
+
+// New: update agency timezone
+export async function updateAgencyTimezone(id: string, timezone: string) {
+  const { data, error } = await supabase
+    .from("agencies")
+    .update({ timezone })
+    .eq("id", id)
+    .select("id")
+    .single();
+  if (error) throw error;
+  return data as { id: string };
+}

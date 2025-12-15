@@ -9,6 +9,8 @@ import { useState } from "react";
 import { createAgency } from "@/services/agencies";
 import { useAuth } from "@/contexts/AuthProvider";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
+import { fetchAgencyById, updateAgencyTimezone } from "@/services/agencies";
 
 const Settings = () => {
   const { profile, refreshProfile } = useAuth();
@@ -17,6 +19,28 @@ const Settings = () => {
   const [saving, setSaving] = useState(false);
 
   const hasAgency = !!profile?.agency_id;
+
+  const { data: agency } = useQuery({
+    queryKey: ["agency", profile?.agency_id],
+    enabled: hasAgency,
+    queryFn: () => fetchAgencyById(profile!.agency_id!),
+  });
+
+  // Curated timezone list (values are IANA tz names)
+  const TIMEZONES = [
+    { value: "UTC", label: "UTC (GMT+0)" },
+    { value: "America/Santo_Domingo", label: "GMT-4 — Dominican Republic" },
+    { value: "America/New_York", label: "GMT-5/4 — New York" },
+    { value: "Europe/London", label: "GMT+0/1 — London" },
+    { value: "Europe/Madrid", label: "GMT+1/2 — Madrid" },
+    { value: "America/Los_Angeles", label: "GMT-8/7 — Los Angeles" },
+  ];
+  const [timezone, setTimezone] = useState<string>(agency?.timezone ?? "UTC");
+
+  // Keep timezone in sync when agency loads
+  React.useEffect(() => {
+    if (agency?.timezone != null) setTimezone(agency.timezone || "UTC");
+  }, [agency?.timezone]);
 
   const onCreateAgency = async () => {
     if (!agencyName) {
@@ -37,6 +61,19 @@ const Settings = () => {
     }
   };
 
+  const onSaveTimezone = async () => {
+    if (!hasAgency || !profile?.agency_id) return;
+    setSaving(true);
+    try {
+      await updateAgencyTimezone(profile.agency_id, timezone);
+      toast.success("Timezone updated");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to update timezone");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <AppShell>
       <div className="space-y-6 max-w-2xl">
@@ -47,12 +84,32 @@ const Settings = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {hasAgency ? (
-              <div className="space-y-2 text-sm">
-                <div className="text-muted-foreground">Status</div>
-                <div className="rounded-md border p-3">
-                  You are assigned to an agency. You can now manage users and properties.
+              <>
+                <div className="space-y-2 text-sm">
+                  <div className="text-muted-foreground">Status</div>
+                  <div className="rounded-md border p-3">
+                    You are assigned to an agency. You can now manage users and properties.
+                  </div>
                 </div>
-              </div>
+                <div className="space-y-2">
+                  <Label>Timezone</Label>
+                  <Select value={timezone} onValueChange={(v) => setTimezone(v)}>
+                    <SelectTrigger className="w-[280px]">
+                      <SelectValue placeholder="Select timezone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIMEZONES.map((tz) => (
+                        <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="pt-2">
+                    <Button variant="outline" onClick={onSaveTimezone} disabled={saving}>
+                      {saving ? "Saving..." : "Save Timezone"}
+                    </Button>
+                  </div>
+                </div>
+              </>
             ) : (
               <>
                 <div className="space-y-2">
