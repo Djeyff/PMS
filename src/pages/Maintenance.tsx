@@ -18,7 +18,7 @@ const Maintenance = () => {
   const agencyId = profile?.agency_id ?? null;
 
   const [noteById, setNoteById] = useState<Record<string, string>>({});
-  const [localNotesById, setLocalNotesById] = useState<Record<string, Array<{ id: string; note: string; created_at: string }>>>({});
+  const [localNotesById, setLocalNotesById] = useState<Record<string, Array<{ id: string; note: string; created_at: string; user?: { first_name: string | null; last_name: string | null } | null }>>>({});
 
   const { data: agency } = useQuery({
     queryKey: ["agency", agencyId],
@@ -36,7 +36,7 @@ const Maintenance = () => {
 
   // Cache notes in localStorage so they show instantly and persist across refresh/restart
   const cacheKey = "maint_notes_cache";
-  const getCache = (): Record<string, Array<{ id: string; note: string; created_at: string }>> => {
+  const getCache = (): Record<string, Array<{ id: string; note: string; created_at: string; user?: { first_name: string | null; last_name: string | null } | null }>> => {
     try {
       const raw = localStorage.getItem(cacheKey);
       return raw ? JSON.parse(raw) : {};
@@ -44,7 +44,7 @@ const Maintenance = () => {
       return {};
     }
   };
-  const setCache = (map: Record<string, Array<{ id: string; note: string; created_at: string }>>) => {
+  const setCache = (map: Record<string, Array<{ id: string; note: string; created_at: string; user?: { first_name: string | null; last_name: string | null } | null }>>) => {
     try {
       localStorage.setItem(cacheKey, JSON.stringify(map));
     } catch {
@@ -56,7 +56,7 @@ const Maintenance = () => {
   const requestIds = (data ?? []).map((m) => m.id);
   useEffect(() => {
     const cache = getCache();
-    const next: Record<string, Array<{ id: string; note: string; created_at: string }>> = {};
+    const next: Record<string, Array<{ id: string; note: string; created_at: string; user?: { first_name: string | null; last_name: string | null } | null }>> = {};
     requestIds.forEach((rid) => {
       if (cache[rid]?.length) next[rid] = cache[rid];
     });
@@ -72,11 +72,11 @@ const Maintenance = () => {
   // Merge server logs into local cache without blocking UI
   useEffect(() => {
     if (!bulkLogs) return;
-    const merged: Record<string, Array<{ id: string; note: string; created_at: string }>> = { ...localNotesById };
+    const merged: Record<string, Array<{ id: string; note: string; created_at: string; user?: { first_name: string | null; last_name: string | null } | null }>> = { ...localNotesById };
     Object.entries(bulkLogs).forEach(([rid, logs]) => {
       const existing = merged[rid] ?? [];
-      const union = new Map<string, { id: string; note: string; created_at: string }>();
-      [...logs.map((l: any) => ({ id: l.id, note: l.note, created_at: l.created_at })), ...existing].forEach((ln) => {
+      const union = new Map<string, { id: string; note: string; created_at: string; user?: { first_name: string | null; last_name: string | null } | null }>();
+      [...logs.map((l: any) => ({ id: l.id, note: l.note, created_at: l.created_at, user: l.user ?? null })), ...existing].forEach((ln) => {
         union.set(ln.id, ln);
       });
       merged[rid] = Array.from(union.values());
