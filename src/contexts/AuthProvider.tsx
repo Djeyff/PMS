@@ -116,21 +116,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-      if (!active) return;
-
-      setLoading(true);
+      // Do not set loading true here; avoid flicker on token refresh events
       setSession(sess ?? null);
       setUser(sess?.user ?? null);
 
       if (sess?.user?.id) {
         let p = await fetchProfile(sess.user.id).catch(() => null);
+
         if (!p) {
           await ensureProfileRow(sess.user.id);
           p = await fetchProfile(sess.user.id).catch(() => null);
         }
-        if (!active) return;
+
         setProfile(p);
 
+        // Try server-side bootstrap once if role is still missing
         if (!p?.role && sess.access_token) {
           try {
             const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/bootstrap-admin";
@@ -141,13 +141,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             });
           } catch {}
           const refreshed = await fetchProfile(sess.user.id).catch(() => null);
-          if (active) setProfile(refreshed);
+          setProfile(refreshed);
         }
       } else {
         setProfile(null);
       }
 
-      if (active) setLoading(false);
+      // Do not modify loading here; initial load controls it.
     });
 
     return () => {

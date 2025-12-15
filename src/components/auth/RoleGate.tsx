@@ -11,8 +11,14 @@ type Props = {
 const RoleGate = ({ allow, children }: Props) => {
   const { loading, role, session } = useAuth();
 
-  // Still initializing auth or bootstrapping role
-  if (loading || (session && !role)) return <Loader />;
+  // Show loader only while the overall auth is initializing (first load)
+  if (loading) return <Loader />;
+
+  // If the user is signed in but we haven't resolved a role yet, allow rendering.
+  // Backend RLS will still enforce access.
+  if (session && !role) {
+    return <>{children}</>;
+  }
 
   if (!role || !allow.includes(role)) {
     return (
