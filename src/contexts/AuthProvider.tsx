@@ -81,11 +81,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (updated) setProfile(updated);
   };
 
+  const ensureProfileRow = async (uid: string) => {
+    // If the profile row doesn't exist, create a minimal one so RLS can work
+    const { error } = await supabase
+      .from("profiles")
+      .upsert({ id: uid }, { onConflict: "id" });
+    if (error) {
+      console.warn("ensureProfileRow: upsert failed", error);
+      return false;
+    }
+    return true;
+  };
+
   useEffect(() => {
     let active = true;
     setLoading(true);
 
-    // Fetch initial session immediately (do not rely only on onAuthStateChange)
+    // Fetch initial session immediately
     (async () => {
       const { data } = await supabase.auth.getSession();
       const sess = data.session ?? null;
@@ -95,11 +107,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(sess?.user ?? null);
 
       if (sess?.user?.id) {
-        const p = await fetchProfile(sess.user.id).catch(() => null);
+        let p = await fetchProfile(sess.user.id).catch(() => null);
         if (!active) return;
+
+        if (!p) {
+          // Create missing profile and re-fetch
+          await ensureProfileRow(sess.user.id);
+          p = await fetchProfile(sess.user.id).catch(() => null);
+        }
+
         setProfile(p);
 
-        // Bootstrap admin in background, then refresh profile once
+        // Bootstrap admin in background and refresh profile once
         ensureMasterAdmin(sess.user, p ?? null).then(() => {
           if (active) refreshProfile().catch(() => {});
         });
@@ -119,8 +138,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(sess?.user ?? null);
 
       if (sess?.user?.id) {
-        const p = await fetchProfile(sess.user.id).catch(() => null);
+        let p = await fetchProfile(sess.user.id).catch(() => null);
         if (!active) return;
+
+        if (!p) {
+          // Create missing profile and re-fetch
+          await ensureProfileRow(sess.user.id);
+          p = await fetchProfile(sess.user.id).catch(() => null);
+        }
+
         setProfile(p);
 
         ensureMasterAdmin(sess.user, p ?? null).then(() => {
