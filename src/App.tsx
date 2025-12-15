@@ -26,7 +26,6 @@ import Users from "./pages/Users";
 import InvoiceDetail from "./pages/invoices/InvoiceDetail";
 import Owners from "./pages/Owners";
 import Debug from "./pages/Debug";
-import ProfileBootstrap from "./components/auth/ProfileBootstrap";
 import { ThemeProvider } from "./contexts/ThemeProvider";
 import AuthQuerySync from "./components/auth/AuthQuerySync";
 
@@ -40,8 +39,6 @@ const App = () => (
           <ThemeProvider>
             <Toaster />
             <Sonner />
-            {/* Ensure DB profile is ready (role/agency_id) right after refresh */}
-            <ProfileBootstrap />
             {/* Refetch queries when auth becomes ready */}
             <AuthQuerySync />
             <BrowserRouter>

@@ -7,7 +7,8 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { loading, session } = useAuth();
   const location = useLocation();
 
-  if (loading) {
+  // Show loader only while we don't yet know if a session exists
+  if (!session && loading) {
     return <Loader />;
   }
 
