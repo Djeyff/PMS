@@ -150,13 +150,15 @@ export async function fetchMaintenanceLogsBulk(requestIds: string[]) {
 }
 
 export async function addMaintenanceLog(requestId: string, note: string) {
-  const { data: user } = await supabase.auth.getUser();
-  const uid = user.user?.id ?? null;
+  const { data: sess } = await supabase.auth.getSession();
+  const uid = sess.session?.user?.id ?? null;
+
   const { data, error } = await supabase
     .from("maintenance_logs")
     .insert({ request_id: requestId, user_id: uid, note })
     .select(`id, note, created_at, user_id`)
     .single();
+
   if (error) throw error;
   return data as { id: string; note: string; created_at: string; user_id: string | null };
 }

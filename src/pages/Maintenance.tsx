@@ -18,6 +18,7 @@ const Maintenance = () => {
   const agencyId = profile?.agency_id ?? null;
 
   const [noteById, setNoteById] = useState<Record<string, string>>({});
+  const [localNotesById, setLocalNotesById] = useState<Record<string, Array<{ id: string; note: string; created_at: string }>>>({});
 
   const { data: agency } = useQuery({
     queryKey: ["agency", agencyId],
@@ -59,9 +60,16 @@ const Maintenance = () => {
       return;
     }
     try {
-      await addMaintenanceLog(id, note);
-      toast.success("Note saved");
+      const created = await addMaintenanceLog(id, note);
+      // Show locally right away
+      setLocalNotesById((prev) => {
+        const arr = prev[id] ? [...prev[id]] : [];
+        arr.push({ id: created.id, note: created.note, created_at: created.created_at });
+        return { ...prev, [id]: arr };
+      });
       setNoteById((prev) => ({ ...prev, [id]: "" }));
+      toast.success("Note saved");
+      // Refresh server logs so they persist across sessions
       await refetchBulkLogs();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to save note");
@@ -131,19 +139,22 @@ const Maintenance = () => {
                             <div className="text-xs text-muted-foreground">Recent notes</div>
                             {logsLoading ? (
                               <div className="text-xs text-muted-foreground mt-1">Loading notes...</div>
-                            ) : (bulkLogs?.[m.id]?.length ?? 0) === 0 ? (
+                            ) : (bulkLogs?.[m.id]?.length ?? 0) === 0 && (localNotesById[m.id]?.length ?? 0) === 0 ? (
                               <div className="text-xs text-muted-foreground mt-1">No notes yet.</div>
                             ) : (
                               <ul className="mt-1 space-y-1">
-                                {(bulkLogs?.[m.id] ?? []).slice(-3).reverse().map((ln) => (
-                                  <li key={ln.id} className="text-sm">
-                                    <div className="flex justify-between text-xs text-muted-foreground">
-                                      <span>{[ln.user?.first_name ?? "", ln.user?.last_name ?? ""].filter(Boolean).join(" ") || "—"}</span>
-                                      <span>{formatDateTimeInTZ(ln.created_at, tz)}</span>
-                                    </div>
-                                    <div>{ln.note}</div>
-                                  </li>
-                                ))}
+                                {[...(bulkLogs?.[m.id] ?? []), ...(localNotesById[m.id] ?? [])]
+                                  .slice(-3)
+                                  .reverse()
+                                  .map((ln) => (
+                                    <li key={ln.id} className="text-sm">
+                                      <div className="flex justify-between text-xs text-muted-foreground">
+                                        <span>{[ln.user?.first_name ?? "", ln.user?.last_name ?? ""].filter(Boolean).join(" ") || "—"}</span>
+                                        <span>{formatDateTimeInTZ(ln.created_at, tz)}</span>
+                                      </div>
+                                      <div>{ln.note}</div>
+                                    </li>
+                                  ))}
                               </ul>
                             )}
                           </div>
