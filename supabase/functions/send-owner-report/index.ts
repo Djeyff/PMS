@@ -7,11 +7,13 @@ const corsHeaders = {
 };
 
 function toBase64(str: string) {
+  // Convert string to base64 safely
   const bytes = new TextEncoder().encode(str);
   let binary = "";
   for (let i = 0; i < bytes.byteLength; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
+  // btoa works with binary strings
   return btoa(binary);
 }
 
@@ -21,7 +23,7 @@ serve(async (req) => {
   }
 
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
   }
 
@@ -46,19 +48,6 @@ serve(async (req) => {
 
   if (!RESEND_API_KEY) {
     return new Response(JSON.stringify({ error: "Missing RESEND_API_KEY secret" }), { status: 500, headers: corsHeaders });
-  }
-
-  // Verify JWT and require admin role
-  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
-  const { data: userRes, error: userErr } = await anon.auth.getUser();
-  if (userErr || !userRes?.user?.id) {
-    return new Response(JSON.stringify({ error: "Invalid token" }), { status: 401, headers: corsHeaders });
-  }
-  const userId = userRes.user.id;
-  const { data: prof } = await anon.from("profiles").select("role").eq("id", userId).single();
-  const isAdmin = prof?.role === "agency_admin";
-  if (!isAdmin) {
-    return new Response(JSON.stringify({ error: "Forbidden: admin only" }), { status: 403, headers: corsHeaders });
   }
 
   // Get owner email using service role

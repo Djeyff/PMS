@@ -1,4 +1,4 @@
-import { supabase, getAuthedClient } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import type { Role } from "@/contexts/AuthProvider";
 
 export type Property = {
@@ -17,12 +17,9 @@ export async function fetchProperties(params: { role: Role | null; userId: strin
 
   if (!role) return [];
 
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-
   if (role === "agency_admin") {
     if (!agencyId) return [];
-    const { data, error } = await db
+    const { data, error } = await supabase
       .from("properties")
       .select("id, agency_id, name, type, city, bedrooms, status, created_at")
       .eq("agency_id", agencyId)
@@ -36,7 +33,7 @@ export async function fetchProperties(params: { role: Role | null; userId: strin
   if (role === "owner") {
     if (!userId) return [];
     // Join via foreign table embedding
-    const { data, error } = await db
+    const { data, error } = await supabase
       .from("properties")
       .select("id, agency_id, name, type, city, bedrooms, status, created_at, property_owners!inner(owner_id)")
       .eq("property_owners.owner_id", userId)
@@ -68,10 +65,7 @@ export async function createProperty(input: {
     status: input.status ?? "active",
   };
 
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("properties")
     .insert(payload)
     .select("id, agency_id, name, type, city, bedrooms, status, created_at")
@@ -98,10 +92,7 @@ export async function updateProperty(
   if (typeof input.city !== "undefined") payload.city = input.city ?? null;
   if (typeof input.bedrooms !== "undefined") payload.bedrooms = typeof input.bedrooms === "number" ? input.bedrooms : null;
 
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("properties")
     .update(payload)
     .eq("id", id)
@@ -113,9 +104,7 @@ export async function updateProperty(
 }
 
 export async function deleteProperty(id: string) {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { error } = await db.from("properties").delete().eq("id", id);
+  const { error } = await supabase.from("properties").delete().eq("id", id);
   if (error) throw error;
   return true;
 }

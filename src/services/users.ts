@@ -1,4 +1,4 @@
-import { supabase, getAuthedClient } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 export type UserRow = {
   id: string;
@@ -10,9 +10,7 @@ export type UserRow = {
 };
 
 export async function fetchUsersForAdmin() {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("profiles")
     .select("id, role, agency_id, first_name, last_name, avatar_url")
     .order("updated_at", { ascending: false });
@@ -21,9 +19,7 @@ export async function fetchUsersForAdmin() {
 }
 
 export async function fetchTenantProfilesInAgency(agencyId: string) {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("profiles")
     .select("id, role, agency_id, first_name, last_name, avatar_url, updated_at")
     .eq("role", "tenant")
@@ -34,9 +30,7 @@ export async function fetchTenantProfilesInAgency(agencyId: string) {
 }
 
 export async function fetchOwnerProfilesInAgency(agencyId: string) {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("profiles")
     .select("id, role, agency_id, first_name, last_name, avatar_url, updated_at")
     .eq("role", "owner")
@@ -52,29 +46,11 @@ export async function updateUserRoleAndAgency(params: {
   agencyId: string;
 }) {
   const { userId, role, agencyId } = params;
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("profiles")
     .update({ role, agency_id: agencyId })
     .eq("id", userId)
     .select("id")
-    .single();
-  if (error) throw error;
-  return data;
-}
-
-export async function updateUserName(userId: string, names: { first_name: string | null; last_name: string | null }) {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
-    .from("profiles")
-    .update({
-      first_name: names.first_name,
-      last_name: names.last_name,
-    })
-    .eq("id", userId)
-    .select("id, first_name, last_name, updated_at")
     .single();
   if (error) throw error;
   return data;

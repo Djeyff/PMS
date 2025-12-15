@@ -18,18 +18,14 @@ const data = [
 ];
 
 const Properties = () => {
-  const { user, profile, loading } = useAuth();
-
-  const isAdminReady = !loading && !!user && profile?.role === "agency_admin" && !!profile?.agency_id;
-  const isOwnerReady = !loading && !!user && profile?.role === "owner";
+  const { role, user, profile } = useAuth();
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["properties", user?.id, profile?.role, profile?.agency_id],
-    queryFn: () => fetchProperties({ role: profile?.role ?? null, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
-    enabled: isAdminReady || isOwnerReady,
+    queryKey: ["properties", role, user?.id, profile?.agency_id],
+    queryFn: () => fetchProperties({ role: role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
   });
 
-  const canCreate = profile?.role === "agency_admin";
+  const canCreate = role === "agency_admin";
 
   return (
     <AppShell>

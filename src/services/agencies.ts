@@ -1,4 +1,4 @@
-import { supabase, getAuthedClient } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 const FUNCTIONS_URL = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/create-agency";
 
@@ -57,9 +57,7 @@ export async function assignSelfToAgency(agencyId: string) {
 
 // New: fetch agency by id (name, currency, timezone)
 export async function fetchAgencyById(id: string) {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("agencies")
     .select("id, name, default_currency, timezone, address")
     .eq("id", id)
@@ -70,9 +68,7 @@ export async function fetchAgencyById(id: string) {
 
 // New: update agency timezone
 export async function updateAgencyTimezone(id: string, timezone: string) {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("agencies")
     .update({ timezone })
     .eq("id", id)
@@ -87,9 +83,7 @@ export async function updateAgencyProfile(id: string, fields: { name?: string | 
   if (typeof fields.name !== "undefined") payload.name = fields.name ?? null;
   if (typeof fields.address !== "undefined") payload.address = fields.address ?? null;
 
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("agencies")
     .update(payload)
     .eq("id", id)

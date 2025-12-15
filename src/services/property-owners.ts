@@ -1,4 +1,4 @@
-import { supabase, getAuthedClient } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 export type PropertyOwnerRow = {
   property_id: string;
@@ -7,9 +7,7 @@ export type PropertyOwnerRow = {
 };
 
 export async function fetchPropertyOwners(propertyId: string) {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("property_owners")
     .select("property_id, owner_id, ownership_percent")
     .eq("property_id", propertyId);
@@ -18,9 +16,7 @@ export async function fetchPropertyOwners(propertyId: string) {
 }
 
 export async function addPropertyOwner(params: { property_id: string; owner_id: string; ownership_percent?: number }) {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("property_owners")
     .insert({
       property_id: params.property_id,
@@ -34,9 +30,7 @@ export async function addPropertyOwner(params: { property_id: string; owner_id: 
 }
 
 export async function updatePropertyOwner(params: { property_id: string; owner_id: string; ownership_percent: number | null }) {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("property_owners")
     .update({ ownership_percent: params.ownership_percent })
     .eq("property_id", params.property_id)
@@ -48,9 +42,7 @@ export async function updatePropertyOwner(params: { property_id: string; owner_i
 }
 
 export async function deletePropertyOwner(params: { property_id: string; owner_id: string }) {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { error } = await db
+  const { error } = await supabase
     .from("property_owners")
     .delete()
     .eq("property_id", params.property_id)
@@ -60,9 +52,7 @@ export async function deletePropertyOwner(params: { property_id: string; owner_i
 }
 
 export async function fetchMyOwnerships(userId: string) {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("property_owners")
     .select("property_id, ownership_percent")
     .eq("owner_id", userId);
@@ -76,9 +66,7 @@ export async function fetchMyOwnerships(userId: string) {
 }
 
 export async function fetchAgencyOwnerships(agencyId: string) {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("property_owners")
     .select(`
       property_id,

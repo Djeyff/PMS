@@ -1,4 +1,4 @@
-import { supabase, getAuthedClient } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 export type InvoiceRow = {
   id: string;
@@ -40,8 +40,7 @@ function normalizeInvoiceRow(row: any): InvoiceWithMeta {
     status: row.status,
     created_at: row.created_at,
     pdf_lang: (row.pdf_lang === "es" ? "es" : "en"),
-    // Do not trust pdf_url; it will be null. Signed URLs are generated on demand.
-    pdf_url: null,
+    pdf_url: row.pdf_url ?? null,
     lease: leaseRel
       ? {
           id: leaseRel.id,
@@ -56,9 +55,7 @@ function normalizeInvoiceRow(row: any): InvoiceWithMeta {
 }
 
 export async function fetchInvoices() {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("invoices")
     .select(`
       id, lease_id, tenant_id, number, issue_date, due_date, currency, total_amount, status, created_at, pdf_lang, pdf_url,
@@ -107,9 +104,7 @@ export async function createInvoice(input: {
     pdf_url: null,
   };
 
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("invoices")
     .insert(payload)
     .select(`
@@ -148,11 +143,9 @@ export async function updateInvoice(
   if (typeof input.total_amount !== "undefined") payload.total_amount = input.total_amount;
   if (typeof input.status !== "undefined") payload.status = input.status;
   if (typeof input.pdf_lang !== "undefined") payload.pdf_lang = input.pdf_lang;
-  // Ignore pdf_url updates; we keep storage private and use signed URLs.
+  if (typeof input.pdf_url !== "undefined") payload.pdf_url = input.pdf_url;
 
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("invoices")
     .update(payload)
     .eq("id", id)
@@ -172,17 +165,13 @@ export async function updateInvoice(
 }
 
 export async function deleteInvoice(id: string) {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { error } = await db.from("invoices").delete().eq("id", id);
+  const { error } = await supabase.from("invoices").delete().eq("id", id);
   if (error) throw error;
   return true;
 }
 
 export async function fetchPendingInvoicesByLease(leaseId: string) {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("invoices")
     .select(`
       id, number, lease_id, tenant_id, due_date, currency, total_amount, status,
@@ -215,9 +204,25 @@ export async function generateInvoicePDF(invoiceId: string, lang: "en" | "es", o
     throw new Error(err?.error || `Generate invoice PDF failed (${res.status})`);
   }
 
-  return (await res.json()) as { ok: true; url: string; path: string };
+  return (await res.json()) as { ok: true; url: string };
 }
 
 export async function generateSpanishInvoicePDF(invoiceId: string, opts: { sendEmail?: boolean; sendWhatsApp?: boolean } = {}) {
-  return generateInvoicePDF(invoiceId, "es", opts);
+  const { data: sess } = await supabase.auth.getSession();
+  const token = sess.session?.access_token;
+  if (!token) throw new Error("Not authenticated");
+
+  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/invoice-pdf";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ invoiceId, sendEmail: !!opts.sendEmail, sendWhatsApp: !!opts.sendWhatsApp }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `Generate invoice PDF failed (${res.status})`);
+  }
+
+  return (await res.json()) as { ok: true; url: string };
 }

@@ -2,7 +2,6 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { createAgency as createAgencyService } from "@/services/agencies";
-import { getAuthedClient } from "@/integrations/supabase/client";
 
 export type Role = "agency_admin" | "owner" | "tenant";
 export type Profile = {
@@ -28,10 +27,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const fetchProfile = async (userId: string): Promise<Profile | null> => {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("profiles")
     .select("id, role, agency_id, first_name, last_name, avatar_url")
     .eq("id", userId)
@@ -49,103 +45,91 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Role resolves only from profile
-  const role: Role | null = useMemo(() => {
-    return profile?.role ?? null;
-  }, [profile?.role]);
+  const MASTER_ADMIN_EMAIL = "djeyff06@gmail.com";
 
-  const ensureProfileRow = async (uid: string) => {
-    const { data: sess } = await supabase.auth.getSession();
-    const db = getAuthedClient(sess.session?.access_token);
-    const { error } = await db
+  // Immediate role fallback for master email so UI doesn't bounce to Pending
+  const role: Role | null = useMemo(() => {
+    if (profile?.role) return profile.role;
+    if ((user?.email?.toLowerCase() ?? "") === MASTER_ADMIN_EMAIL) return "agency_admin";
+    return null;
+  }, [profile?.role, user?.email]);
+
+  const ensureMasterAdmin = async (u: User, current: Profile | null) => {
+    const email = u.email?.toLowerCase() ?? "";
+    if (email !== MASTER_ADMIN_EMAIL) return;
+
+    // Upsert profile with admin role
+    const { error: upsertErr } = await supabase
       .from("profiles")
-      .upsert({ id: uid }, { onConflict: "id" });
-    if (error) {
-      console.warn("ensureProfileRow: upsert failed", error);
-      return false;
+      .upsert({ id: u.id, role: "agency_admin" }, { onConflict: "id" });
+    if (upsertErr) {
+      console.warn("ensureMasterAdmin: upsert profile failed", upsertErr);
+      return;
     }
-    return true;
+
+    const latest = await fetchProfile(u.id).catch(() => null);
+    if (!latest?.agency_id) {
+      // Use service that tries edge function, then DB fallback
+      try {
+        await createAgencyService({ name: "Master Agency", default_currency: "USD" });
+      } catch (e) {
+        console.warn("ensureMasterAdmin: createAgency fallback path failed", e);
+      }
+    }
+
+    const updated = await fetchProfile(u.id).catch(() => null);
+    if (updated) setProfile(updated);
+  };
+
+  const loadSessionAndProfile = async () => {
+    const { data } = await supabase.auth.getSession();
+    const sess = data.session ?? null;
+    setSession(sess);
+    setUser(sess?.user ?? null);
+    if (sess?.user?.id) {
+      const p = await fetchProfile(sess.user.id).catch(() => null);
+      setProfile(p);
+      // Run admin bootstrap in background so loading doesn't block
+      ensureMasterAdmin(sess.user, p ?? null).then(() => {
+        // after background bootstrap, try to refresh profile once
+        refreshProfile().catch(() => {});
+      });
+    } else {
+      setProfile(null);
+    }
   };
 
   useEffect(() => {
-    let active = true;
-    setLoading(true);
-
-    const finalize = () => {
-      if (active) setLoading(false);
-    };
-
+    let mounted = true;
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      const sess = data.session ?? null;
-
-      if (!active) return;
-      setSession(sess);
-      setUser(sess?.user ?? null);
-
-      if (sess?.user?.id) {
-        // Ensure profile row exists and fetch it
-        let p = await fetchProfile(sess.user.id).catch(() => null);
-        if (!p) {
-          await ensureProfileRow(sess.user.id);
-          p = await fetchProfile(sess.user.id).catch(() => null);
-        }
-        if (!active) return;
-        setProfile(p);
-
-        // Secure bootstrap:
-        // 1) If role missing OR 2) If admin role but agency missing, call bootstrap-admin
-        if (sess.access_token && (!p?.role || (p.role === "agency_admin" && !p.agency_id))) {
-          try {
-            const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/bootstrap-admin";
-            await fetch(url, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${sess.access_token}`, "Content-Type": "application/json" },
-              body: JSON.stringify({}),
-            });
-          } catch {}
-          const refreshed = await fetchProfile(sess.user.id).catch(() => null);
-          if (active) setProfile(refreshed);
-        }
-      } else {
-        setProfile(null);
-      }
-
-      finalize();
+      setLoading(true);
+      await loadSessionAndProfile();
+      if (mounted) setLoading(false);
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-      // Don't toggle loading here; avoid flicker loops
       setSession(sess ?? null);
       setUser(sess?.user ?? null);
-
       if (sess?.user?.id) {
-        let p = await fetchProfile(sess.user.id).catch(() => null);
-        if (!p) {
-          await ensureProfileRow(sess.user.id);
-          p = await fetchProfile(sess.user.id).catch(() => null);
-        }
+        const p = await fetchProfile(sess.user.id).catch(() => null);
         setProfile(p);
-
-        if (sess.access_token && (!p?.role || (p.role === "agency_admin" && !p.agency_id))) {
-          try {
-            const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/bootstrap-admin";
-            await fetch(url, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${sess.access_token}`, "Content-Type": "application/json" },
-              body: JSON.stringify({}),
-            });
-          } catch {}
-          const refreshed = await fetchProfile(sess.user.id).catch(() => null);
-          setProfile(refreshed);
-        }
+        // Run bootstrap without awaiting to avoid UI stalls
+        ensureMasterAdmin(sess.user, p ?? null).then(() => {
+          refreshProfile().catch(() => {});
+        });
       } else {
         setProfile(null);
       }
     });
 
+    // Fallback: ensure loading doesn't remain true due to unexpected delays
+    const loadingFallback = setTimeout(() => {
+      if (mounted) setLoading(false);
+    }, 4000);
+
     return () => {
-      active = false;
+      mounted = false;
+      clearTimeout(loadingFallback);
       sub?.subscription?.unsubscribe();
     };
   }, []);

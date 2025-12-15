@@ -13,7 +13,6 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchAgencyById, updateAgencyTimezone, updateAgencyProfile } from "@/services/agencies";
 import { useTheme } from "@/contexts/ThemeProvider";
 import { uploadLogo, getLogoPublicUrl } from "@/services/branding";
-import { updateUserName } from "@/services/users";
 
 const Settings = () => {
   const { profile, refreshProfile } = useAuth();
@@ -40,37 +39,6 @@ const Settings = () => {
     if (agency?.name != null) setAgencyDisplayName(agency.name || "");
     if (agency?.address != null) setAddress(agency.address || "");
   }, [agency?.name, agency?.address]);
-
-  // Profile name states
-  const [firstName, setFirstName] = useState<string>(profile?.first_name ?? "");
-  const [lastName, setLastName] = useState<string>(profile?.last_name ?? "");
-  const [savingName, setSavingName] = useState(false);
-
-  React.useEffect(() => {
-    setFirstName(profile?.first_name ?? "");
-    setLastName(profile?.last_name ?? "");
-  }, [profile?.first_name, profile?.last_name]);
-
-  const onSaveName = async () => {
-    if (!profile?.id) return;
-    if (!(firstName?.trim() || lastName?.trim())) {
-      toast.error("Please enter at least a first or last name");
-      return;
-    }
-    setSavingName(true);
-    try {
-      await updateUserName(profile.id, {
-        first_name: firstName.trim() || null,
-        last_name: lastName.trim() || null,
-      });
-      toast.success("Name updated");
-      await refreshProfile();
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to update name");
-    } finally {
-      setSavingName(false);
-    }
-  };
 
   // Curated timezone list (values are IANA tz names)
   const TIMEZONES = [
@@ -167,39 +135,6 @@ const Settings = () => {
     <AppShell>
       <div className="space-y-6 max-w-2xl">
         <h1 className="text-xl font-semibold">Settings</h1>
-
-        {/* My Profile */}
-        <Card>
-          <CardHeader>
-            <CardTitle>My Profile</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>First Name</Label>
-                <Input
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="Your first name"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Last Name</Label>
-                <Input
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Your last name"
-                />
-              </div>
-            </div>
-            <div className="pt-2">
-              <Button variant="outline" onClick={onSaveName} disabled={savingName}>
-                {savingName ? "Saving..." : "Save Name"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader>
             <CardTitle>Agency Setup</CardTitle>

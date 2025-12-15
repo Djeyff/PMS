@@ -1,4 +1,4 @@
-import { supabase, getAuthedClient } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import type { Role } from "@/contexts/AuthProvider";
 
 export type LeaseRow = {
@@ -48,10 +48,7 @@ export async function fetchLeases(params: { role: Role | null; userId: string | 
   const { role } = params;
   if (!role) return [];
 
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("leases")
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
@@ -92,10 +89,7 @@ export async function createLease(input: {
     auto_invoice_interval_months: typeof input.auto_invoice_interval_months === "number" ? input.auto_invoice_interval_months : 1,
   };
 
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("leases")
     .insert(payload)
     .select(`
@@ -135,10 +129,7 @@ export async function updateLease(
   if (typeof input.auto_invoice_day !== "undefined") payload.auto_invoice_day = input.auto_invoice_day;
   if (typeof input.auto_invoice_interval_months !== "undefined") payload.auto_invoice_interval_months = input.auto_invoice_interval_months;
 
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("leases")
     .update(payload)
     .eq("id", id)
@@ -155,9 +146,7 @@ export async function updateLease(
 }
 
 export async function deleteLease(id: string) {
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { error } = await db.from("leases").delete().eq("id", id);
+  const { error } = await supabase.from("leases").delete().eq("id", id);
   if (error) throw error;
   return true;
 }

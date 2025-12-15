@@ -4,12 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = "https://tsfswvmwkfairaoccfqa.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzZnN3dm13a2ZhaXJhb2NjZnFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU3NDI3NjYsImV4cCI6MjA4MTMxODc2Nn0.BSXKdrmK3_nYg4jsGe_Q15XKHCNtb0X6_tAAJovchOQ";
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+// Import the supabase client like this:
+// import { supabase } from "@/integrations/supabase/client";
 
-// NEW: return a client that always sends the Authorization header
-export const getAuthedClient = (accessToken: string | null | undefined) => {
-  if (!accessToken) return supabase;
-  return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${accessToken}` } }
-  });
-};
+export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);

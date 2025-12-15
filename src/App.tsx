@@ -25,9 +25,7 @@ import Pending from "./pages/Pending";
 import Users from "./pages/Users";
 import InvoiceDetail from "./pages/invoices/InvoiceDetail";
 import Owners from "./pages/Owners";
-import Debug from "./pages/Debug";
 import { ThemeProvider } from "./contexts/ThemeProvider";
-import AuthQuerySync from "./components/auth/AuthQuerySync";
 
 const queryClient = new QueryClient();
 
@@ -39,8 +37,6 @@ const App = () => (
           <ThemeProvider>
             <Toaster />
             <Sonner />
-            {/* Refetch queries when auth becomes ready */}
-            <AuthQuerySync />
             <BrowserRouter>
               <Routes>
                 <Route path="/" element={<Index />} />
@@ -186,14 +182,6 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <Pending />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/debug"
-                  element={
-                    <ProtectedRoute>
-                      <Debug />
                     </ProtectedRoute>
                   }
                 />

@@ -21,14 +21,12 @@ const data = [
 ];
 
 const Invoices = () => {
-  const { user, profile, loading } = useAuth();
-  const isAdminReady = !loading && !!user && profile?.role === "agency_admin" && !!profile?.agency_id;
-  const isOwnerOrTenantReady = !loading && !!user && (profile?.role === "owner" || profile?.role === "tenant");
+  const { role } = useAuth();
+  const isAdmin = role === "agency_admin";
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["invoices", user?.id, profile?.role, profile?.agency_id],
+    queryKey: ["invoices"],
     queryFn: fetchInvoices,
-    enabled: isAdminReady || isOwnerOrTenantReady,
   });
 
   const rows = useMemo(() => {
@@ -52,7 +50,7 @@ const Invoices = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Invoices</h1>
-          {isAdminReady ? <InvoiceForm onCreated={() => refetch()} /> : null}
+          {isAdmin ? <InvoiceForm onCreated={() => refetch()} /> : null}
         </div>
         <Card>
           <CardHeader>
@@ -76,7 +74,7 @@ const Invoices = () => {
                     <TableHead>Paid</TableHead>
                     <TableHead>Balance</TableHead>
                     <TableHead>Status</TableHead>
-                    {isAdminReady && <TableHead>Actions</TableHead>}
+                    {isAdmin && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -96,7 +94,7 @@ const Invoices = () => {
                         <TableCell>{fmt(inv.paid, inv.currency)}</TableCell>
                         <TableCell>{fmt(inv.balance, inv.currency)}</TableCell>
                         <TableCell className="capitalize">{String(inv.displayStatus).replace("_", " ")}</TableCell>
-                        {isAdminReady && (
+                        {isAdmin && (
                           <TableCell>
                             <div className="flex gap-2">
                               <Button asChild size="sm" variant="outline"><Link to={`/invoices/${inv.id}`}>View</Link></Button>

@@ -17,32 +17,30 @@ const Stat = ({ title, value, children }: { title: string; value?: string; child
 );
 
 const OwnerDashboard = () => {
-  const { user, profile, loading } = useAuth();
-
-  const isReady = !loading && !!user && profile?.role === "owner";
+  const { role, user, profile } = useAuth();
 
   const { data: props } = useQuery({
-    queryKey: ["owner-props", user?.id, profile?.role],
-    queryFn: () => fetchProperties({ role: profile?.role ?? null, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
-    enabled: isReady,
+    queryKey: ["owner-props", role, user?.id],
+    queryFn: () => fetchProperties({ role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
+    enabled: role === "owner" && !!user,
   });
 
   const { data: leases } = useQuery({
-    queryKey: ["owner-leases", user?.id, profile?.role],
-    queryFn: () => fetchLeases({ role: profile?.role ?? null, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
-    enabled: isReady,
+    queryKey: ["owner-leases", role, user?.id],
+    queryFn: () => fetchLeases({ role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
+    enabled: role === "owner" && !!user,
   });
 
   const { data: payments } = useQuery({
-    queryKey: ["owner-payments", user?.id, profile?.role],
-    queryFn: () => fetchPayments({ role: profile?.role ?? null, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
-    enabled: isReady,
+    queryKey: ["owner-payments", role, user?.id],
+    queryFn: () => fetchPayments({ role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
+    enabled: role === "owner" && !!user,
   });
 
   const { data: myShares } = useQuery({
-    queryKey: ["owner-shares", user?.id, profile?.role],
+    queryKey: ["owner-shares", user?.id],
     queryFn: () => fetchMyOwnerships(user!.id),
-    enabled: isReady,
+    enabled: role === "owner" && !!user,
   });
 
   const occupancy = (() => {

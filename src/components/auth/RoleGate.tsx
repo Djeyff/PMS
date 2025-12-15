@@ -9,10 +9,9 @@ type Props = {
 };
 
 const RoleGate = ({ allow, children }: Props) => {
-  const { loading, role, session } = useAuth();
+  const { loading, role } = useAuth();
 
-  // Show loader while auth is initializing or role hasn't resolved yet
-  if (loading || (session && !role)) return <Loader />;
+  if (loading) return <Loader />;
 
   if (!role || !allow.includes(role)) {
     return (
@@ -22,7 +21,7 @@ const RoleGate = ({ allow, children }: Props) => {
             <CardTitle>Access denied</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            You don't have permission to view this page.
+            You don’t have permission to view this page.
           </CardContent>
         </Card>
       </div>

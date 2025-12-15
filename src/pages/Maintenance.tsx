@@ -13,23 +13,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { fetchAgencyById } from "@/services/agencies";
 
 const Maintenance = () => {
-  const { profile, loading } = useAuth();
-  const isAdminReady = !loading && profile?.role === "agency_admin" && !!profile?.agency_id;
+  const { role, profile } = useAuth();
+  const isAdmin = role === "agency_admin";
+  const agencyId = profile?.agency_id ?? null;
 
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "in_progress" | "closed">("all");
   const statuses = statusFilter === "all" ? ["open", "in_progress", "closed"] as const : [statusFilter];
 
   const { data: agency } = useQuery({
-    queryKey: ["agency-for-maint", profile?.agency_id],
-    enabled: isAdminReady,
-    queryFn: () => fetchAgencyById(profile!.agency_id!),
+    queryKey: ["agency-for-maint", agencyId],
+    enabled: !!agencyId,
+    queryFn: () => fetchAgencyById(agencyId!),
   });
   const tz = agency?.timezone ?? "UTC";
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["maintenance", profile?.agency_id, statusFilter, profile?.role],
-    enabled: isAdminReady,
-    queryFn: () => fetchMaintenanceRequests({ agencyId: profile!.agency_id!, status: statuses as any }),
+    queryKey: ["maintenance", agencyId, statusFilter],
+    enabled: !!agencyId,
+    queryFn: () => fetchMaintenanceRequests({ agencyId: agencyId!, status: statuses as any }),
   });
 
   const onUpdateStatus = async (id: string, status: "open" | "in_progress" | "closed") => {
@@ -60,7 +61,7 @@ const Maintenance = () => {
               </SelectContent>
             </Select>
             <Button variant="outline" onClick={() => refetch()}>Refresh</Button>
-            {isAdminReady && profile?.agency_id ? <NewRequestDialog onCreated={() => refetch()} /> : null}
+            {isAdmin && agencyId ? <NewRequestDialog onCreated={() => refetch()} /> : null}
           </div>
         </div>
         <Card>
@@ -95,7 +96,7 @@ const Maintenance = () => {
                       <TableCell className="capitalize">{m.status.replace("_", " ")}</TableCell>
                       <TableCell>{m.due_date ?? "—"}</TableCell>
                       <TableCell className="space-x-2">
-                        {isAdminReady ? (
+                        {isAdmin ? (
                           <>
                             {m.status !== "in_progress" && (
                               <Button size="sm" variant="outline" onClick={() => onUpdateStatus(m.id, "in_progress")}>Start</Button>

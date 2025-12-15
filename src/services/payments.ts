@@ -1,4 +1,4 @@
-import { supabase, getAuthedClient } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import type { Role } from "@/contexts/AuthProvider";
 
 export type PaymentRow = {
@@ -48,9 +48,7 @@ function normalizePaymentRow(row: any): PaymentWithMeta {
 export async function fetchPayments(params: { role: Role | null; userId: string | null; agencyId: string | null }) {
   const { role } = params;
   if (!role) return [];
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("payments")
     .select(`
       id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at,
@@ -84,9 +82,7 @@ export async function createPayment(input: {
     invoice_id: input.invoice_id ?? null,
   };
 
-  const { data: sess } = await supabase.auth.getSession();
-  const db = getAuthedClient(sess.session?.access_token);
-  const { data, error } = await db
+  const { data, error } = await supabase
     .from("payments")
     .insert(payload)
     .select("id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at, invoice_id")

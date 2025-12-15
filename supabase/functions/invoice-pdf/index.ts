@@ -19,7 +19,7 @@ serve(async (req) => {
   }
 
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
   }
 
@@ -32,39 +32,10 @@ serve(async (req) => {
   const lang = body.lang === "es" ? "es" : "en";
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-  const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 
   const EMAIL_TO = "contact@lasterrenas.properties";
-
-  // Verify JWT and get user
-  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
-  const { data: userRes, error: userErr } = await anon.auth.getUser();
-  if (userErr || !userRes?.user?.id) {
-    return new Response(JSON.stringify({ error: "Invalid token" }), { status: 401, headers: corsHeaders });
-  }
-  const userId = userRes.user.id;
-
-  // Confirm the requester can access this invoice via RLS using the anon client
-  const { data: invRls, error: invRlsErr } = await anon
-    .from("invoices")
-    .select("id")
-    .eq("id", body.invoiceId)
-    .single();
-  if (invRlsErr || !invRls?.id) {
-    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
-  }
-
-  // If sending email, require agency_admin role
-  let isAdmin = false;
-  {
-    const { data: prof } = await anon.from("profiles").select("role").eq("id", userId).single();
-    isAdmin = prof?.role === "agency_admin";
-    if (body.sendEmail && !isAdmin) {
-      return new Response(JSON.stringify({ error: "Forbidden: sendEmail requires admin" }), { status: 403, headers: corsHeaders });
-    }
-  }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -72,8 +43,7 @@ serve(async (req) => {
     const { data: buckets } = await supabase.storage.listBuckets();
     const exists = (buckets ?? []).some((b: any) => b.name === "branding");
     if (!exists) {
-      // Make branding bucket private
-      await supabase.storage.createBucket("branding", { public: false });
+      await supabase.storage.createBucket("branding", { public: true });
     }
   }
 
@@ -86,6 +56,17 @@ serve(async (req) => {
         if (blob) {
           const ab = await blob.arrayBuffer();
           return new Uint8Array(ab);
+        }
+      } catch {}
+      try {
+        const { data: pub } = supabase.storage.from("branding").getPublicUrl(name);
+        const url = pub.publicUrl;
+        if (url) {
+          const res = await fetch(url);
+          if (res.ok) {
+            const ab = await res.arrayBuffer();
+            return new Uint8Array(ab);
+          }
         }
       } catch {}
     }
@@ -121,39 +102,37 @@ serve(async (req) => {
     }
   } catch {}
 
-  const t = lang === "es"
-    ? {
-        title: "Factura",
-        number: "Número",
-        issue: "Fecha de emisión",
-        due: "Fecha de vencimiento",
-        property: "Propiedad",
-        tenant: "Inquilino",
-        total: "Importe total",
-        thanks: "Gracias por su pago puntual.",
-        signature: agencyName,
-        emailSubject: (n: string) => `Factura ${n}`,
-        emailText: (prop: string, tenant: string, amountText: string) =>
-          `Estimado equipo,\n\nAdjuntamos la factura generada:\nPropiedad: ${prop}\nInquilino: ${tenant}\nImporte: ${amountText}\n\nGracias,\n${agencyName}`,
-      }
-    : {
-        title: "Invoice",
-        number: "Number",
-        issue: "Issue Date",
-        due: "Due Date",
-        property: "Property",
-        tenant: "Billed To",
-        total: "Total Amount",
-        thanks: "Thank you for your prompt payment.",
-        signature: agencyName,
-        emailSubject: (n: string) => `Invoice ${n}`,
-        emailText: (prop: string, tenant: string, amountText: string) =>
-          `Dear team,\n\nAttached is the generated invoice:\nProperty: ${prop}\nTenant: ${tenant}\nAmount: ${amountText}\n\nRegards,\n${agencyName}`,
-      };
+  const t = body.lang === "es" ? {
+    title: "Factura",
+    number: "Número",
+    issue: "Fecha de emisión",
+    due: "Fecha de vencimiento",
+    property: "Propiedad",
+    tenant: "Inquilino",
+    total: "Importe total",
+    thanks: "Gracias por su pago puntual.",
+    signature: agencyName,
+    emailSubject: (n: string) => `Factura ${n}`,
+    emailText: (prop: string, tenant: string, amountText: string) =>
+      `Estimado equipo,\n\nAdjuntamos la factura generada:\nPropiedad: ${prop}\nInquilino: ${tenant}\nImporte: ${amountText}\n\nGracias,\n${agencyName}`,
+  } : {
+    title: "Invoice",
+    number: "Number",
+    issue: "Issue Date",
+    due: "Due Date",
+    property: "Property",
+    tenant: "Billed To",
+    total: "Total Amount",
+    thanks: "Thank you for your prompt payment.",
+    signature: agencyName,
+    emailSubject: (n: string) => `Invoice ${n}`,
+    emailText: (prop: string, tenant: string, amountText: string) =>
+      `Dear team,\n\nAttached is the generated invoice:\nProperty: ${prop}\nTenant: ${tenant}\nAmount: ${amountText}\n\nRegards,\n${agencyName}`,
+  };
 
-  const invoiceNumber = inv.number || (lang === "es" ? "SIN-NUMERO" : "NO-NUMBER");
+  const invoiceNumber = inv.number || (body.lang === "es" ? "SIN-NUMERO" : "NO-NUMBER");
   const tenantName = [inv.tenant?.first_name ?? "", inv.tenant?.last_name ?? ""].filter(Boolean).join(" ") || "—";
-  const propertyName = inv.lease?.property?.name ?? (lang === "es" ? "Propiedad" : "Property");
+  const propertyName = inv.lease?.property?.name ?? (body.lang === "es" ? "Propiedad" : "Property");
   const amount = Number(inv.total_amount || 0);
   const currency = inv.currency;
   const issueDate = inv.issue_date;
@@ -165,14 +144,16 @@ serve(async (req) => {
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
+    // Branding header with logo and address
     const logoBytes = await getLogoBytes();
     let y = 800;
     if (logoBytes) {
       const img = await pdf.embedPng(logoBytes);
-      const w = 495;
+      const w = 495; // span most of the page width (A4 width ~595, left margin ~50)
       const h = (img.height / img.width) * w;
       page.drawImage(img, { x: 50, y: 820 - h, width: w, height: h });
 
+      // Place agency name and address BELOW the larger logo
       let textY = 820 - h - 12;
       page.drawText(agencyName, { x: 50, y: textY, size: 14, font: fontBold });
       const addr = agencyAddress;
@@ -185,8 +166,9 @@ serve(async (req) => {
         textY -= 14;
         page.drawText(line2, { x: 50, y: textY, size: 10, font });
       }
-      y = textY - 24;
+      y = textY - 24; // continue body below header
     } else {
+      // Fallback: no logo, keep text at top-right
       page.drawText(agencyName, { x: 400, y: 800, size: 14, font: fontBold });
       const addr = agencyAddress;
       const lines = addr.includes(",") ? addr.split(",") : [addr];
@@ -211,11 +193,11 @@ serve(async (req) => {
     draw(`${t.due}: ${dueDate}`, { size: 12 });
     draw("", { size: 12 });
 
-    draw(`${lang === "es" ? "Propiedad" : "Property"}: ${propertyName}`, { size: 12, bold: true });
+    draw(`${body.lang === "es" ? "Propiedad" : "Property"}: ${propertyName}`, { size: 12, bold: true });
     draw(`${t.tenant}: ${tenantName}`, { size: 12 });
     draw("", { size: 12 });
 
-    const amountText = new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency }).format(amount);
+    const amountText = new Intl.NumberFormat(body.lang === "es" ? "es-ES" : "en-US", { style: "currency", currency }).format(amount);
     draw(`${t.total}: ${amountText}`, { size: 14, bold: true });
     draw("", { size: 12 });
 
@@ -230,10 +212,10 @@ serve(async (req) => {
     const { data: bucketList } = await supabase.storage.listBuckets();
     const hasBucket = (bucketList ?? []).some((b: any) => b.name === bucketName);
     if (!hasBucket) {
-      // Private bucket
-      await supabase.storage.createBucket(bucketName, { public: false });
+      await supabase.storage.createBucket(bucketName, { public: true });
     }
 
+    // Use Blob to ensure correct content type and readable file
     const blob = new Blob([pdfBytes], { type: "application/pdf" });
     const { error: upErr } = await supabase.storage.from(bucketName).upload(path, blob, {
       contentType: "application/pdf",
@@ -243,22 +225,18 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: upErr.message }), { status: 500, headers: corsHeaders });
     }
 
-    // Store language only; avoid storing public URL
+    const { data: pub } = supabase.storage.from(bucketName).getPublicUrl(path);
+    const pdfUrl = pub.publicUrl;
+
     const { error: updErr } = await supabase
       .from("invoices")
-      .update({ pdf_lang: lang, pdf_url: null })
+      .update({ pdf_lang: body.lang === "es" ? "es" : "en", pdf_url: pdfUrl })
       .eq("id", body.invoiceId);
     if (updErr) {
       return new Response(JSON.stringify({ error: updErr.message }), { status: 500, headers: corsHeaders });
     }
 
-    // Create short-lived signed URL for immediate viewing
-    const { data: signed, error: signErr } = await supabase.storage.from(bucketName).createSignedUrl(path, 60 * 15);
-    if (signErr) {
-      return new Response(JSON.stringify({ error: signErr.message }), { status: 500, headers: corsHeaders });
-    }
-
-    if (body.sendEmail && RESEND_API_KEY && isAdmin) {
+    if (body.sendEmail && RESEND_API_KEY) {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -279,7 +257,7 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ ok: true, url: signed?.signedUrl, path }), { status: 200, headers: corsHeaders });
+    return new Response(JSON.stringify({ ok: true, url: pdfUrl }), { status: 200, headers: corsHeaders });
   } catch (e) {
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers: corsHeaders });
   }

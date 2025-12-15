@@ -10,13 +10,14 @@ import EditOwnerDialog from "@/components/owners/EditOwnerDialog";
 import DeleteOwnerDialog from "@/components/owners/DeleteOwnerDialog";
 
 const Owners = () => {
-  const { profile, loading } = useAuth();
-  const isAdminReady = !loading && profile?.role === "agency_admin" && !!profile?.agency_id;
+  const { role, profile } = useAuth();
+  const isAdmin = role === "agency_admin";
+  const agencyId = profile?.agency_id ?? null;
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["owners", profile?.agency_id, profile?.role],
-    enabled: isAdminReady,
-    queryFn: () => fetchOwnerProfilesInAgency(profile!.agency_id!),
+    queryKey: ["owners", agencyId],
+    enabled: isAdmin && !!agencyId,
+    queryFn: () => fetchOwnerProfilesInAgency(agencyId!),
   });
 
   return (
@@ -24,7 +25,7 @@ const Owners = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Owners</h1>
-          {isAdminReady ? <AddOwnerDialog onCreated={() => refetch()} /> : null}
+          {isAdmin && agencyId ? <AddOwnerDialog onCreated={() => refetch()} /> : null}
         </div>
         <Card>
           <CardHeader><CardTitle>All Owners</CardTitle></CardHeader>

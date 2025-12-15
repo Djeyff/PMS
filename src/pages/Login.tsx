@@ -5,12 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useTheme } from "@/contexts/ThemeProvider";
 
 const Login = () => {
   const { session } = useAuth();
   const navigate = useNavigate();
-  const { theme } = useTheme();
 
   useEffect(() => {
     if (session) {
@@ -31,7 +29,7 @@ const Login = () => {
             showLinks={true}
             appearance={{ theme: ThemeSupa }}
             localization={{ variables: { sign_in: { email_label: "Email" } } }}
-            theme={theme === "dark" ? "dark" : "light"}
+            theme="light"
           />
         </CardContent>
       </Card>

@@ -40,12 +40,11 @@ serve(async (req) => {
   }
 
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
   }
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-  const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 
@@ -54,26 +53,13 @@ serve(async (req) => {
   const force = new URL(req.url).searchParams.get("force") === "true";
   const today = new Date();
 
-  // Verify JWT and require admin
-  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
-  const { data: userRes, error: userErr } = await anon.auth.getUser();
-  if (userErr || !userRes?.user?.id) {
-    return new Response(JSON.stringify({ error: "Invalid token" }), { status: 401, headers: corsHeaders });
-  }
-  const userId = userRes.user.id;
-  const { data: prof } = await anon.from("profiles").select("role").eq("id", userId).single();
-  const isAdmin = prof?.role === "agency_admin";
-  if (!isAdmin) {
-    return new Response(JSON.stringify({ error: "Forbidden: admin only" }), { status: 403, headers: corsHeaders });
-  }
-
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   async function ensureBrandingBucket() {
     const { data: buckets } = await supabase.storage.listBuckets();
     const exists = (buckets ?? []).some((b: any) => b.name === "branding");
     if (!exists) {
-      await supabase.storage.createBucket("branding", { public: false });
+      await supabase.storage.createBucket("branding", { public: true });
     }
   }
 
@@ -86,6 +72,17 @@ serve(async (req) => {
         if (blob) {
           const ab = await blob.arrayBuffer();
           return new Uint8Array(ab);
+        }
+      } catch {}
+      try {
+        const { data: pub } = supabase.storage.from("branding").getPublicUrl(name);
+        const url = pub.publicUrl;
+        if (url) {
+          const res = await fetch(url);
+          if (res.ok) {
+            const ab = await res.arrayBuffer();
+            return new Uint8Array(ab);
+          }
         }
       } catch {}
     }
@@ -113,16 +110,12 @@ serve(async (req) => {
   const { data: bucketList } = await supabase.storage.listBuckets();
   const hasBucket = (bucketList ?? []).some((b: any) => b.name === bucketName);
   if (!hasBucket) {
-    await supabase.storage.createBucket(bucketName, { public: false });
+    await supabase.storage.createBucket(bucketName, { public: true });
   }
 
   let sentCount = 0;
   const errors: string[] = [];
   const emailAttachments: Array<{ filename: string; content: string }> = [];
-
-  // Agency name/address defaults
-  const agencyName = "Las Terrenas Properties";
-  const agencyAddress = "278 calle Duarte, LTI building, Las Terrenas";
 
   for (const l of leases ?? []) {
     const todayStrIso = today.toISOString().slice(0, 10);
@@ -169,14 +162,16 @@ serve(async (req) => {
       const font = await pdf.embedFont(StandardFonts.Helvetica);
       const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
+      // Branding header
       const logoBytes = await getLogoBytes();
       let y = 800;
       if (logoBytes) {
         const img = await pdf.embedPng(logoBytes);
-        const w = 495;
+        const w = 495; // span most of the page width
         const h = (img.height / img.width) * w;
         page.drawImage(img, { x: 50, y: 820 - h, width: w, height: h });
 
+        // Agency name/address beneath the logo
         let textY = 820 - h - 12;
         page.drawText(agencyName, { x: 50, y: textY, size: 14, font: fontBold });
         const lines = agencyAddress.includes(",") ? agencyAddress.split(",") : [agencyAddress];
@@ -190,6 +185,7 @@ serve(async (req) => {
         }
         y = textY - 24;
       } else {
+        // Fallback without logo
         page.drawText(agencyName, { x: 400, y: 800, size: 14, font: fontBold });
         const lines = agencyAddress.includes(",") ? agencyAddress.split(",") : [agencyAddress];
         const line1 = lines[0] ?? "";
@@ -207,6 +203,7 @@ serve(async (req) => {
         y -= size + 8;
       };
 
+      // Invoice meta (Spanish)
       draw("Factura", { size: 24, bold: true, y });
       draw(`Número: ${invoiceNumber}`, { size: 12 });
       draw(`Fecha de emisión: ${issueDate}`, { size: 12 });
@@ -235,25 +232,29 @@ serve(async (req) => {
         errors.push(`Upload PDF failed for invoice ${inv.id}: ${upErr.message}`);
       }
 
+      const { data: pub } = supabase.storage.from(bucketName).getPublicUrl(path);
+      const pdfUrl = pub.publicUrl;
+
       const { error: updErr } = await supabase
         .from("invoices")
-        .update({ pdf_lang: "es", pdf_url: null })
+        .update({ pdf_lang: "es", pdf_url: pdfUrl })
         .eq("id", inv.id);
       if (updErr) {
-        errors.push(`Update invoice meta failed for invoice ${inv.id}: ${updErr.message}`);
+        errors.push(`Update invoice URL/lang failed for invoice ${inv.id}: ${updErr.message}`);
       }
 
-      // For bulk email, collect attachments in memory
+      // Collect attachment for single email
       emailAttachments.push({ filename: fileName, content: toBase64(new Uint8Array(pdfBytes)) });
+
       sentCount++;
     } catch (e) {
       errors.push(`PDF error for lease ${l.id}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
-  // Send one email with all attachments (admin-only)
+  // Send one email with all attachments
   if (RESEND_API_KEY && emailAttachments.length > 0) {
-    const subject = `Facturas generadas automáticamente (${todayStr()})`;
+    const subject = `Facturas generadas automáticamente (${issueDate})`;
     const textBody =
       `Estimado equipo,\n\nSe han generado ${sentCount} factura(s) automáticamente.\n` +
       `Adjuntamos todos los PDF en este correo.\n\n` +
