@@ -39,7 +39,6 @@ serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // Helper: ensure branding bucket exists (public)
   async function ensureBrandingBucket() {
     const { data: buckets } = await supabase.storage.listBuckets();
     const exists = (buckets ?? []).some((b: any) => b.name === "branding");
@@ -48,7 +47,6 @@ serve(async (req) => {
     }
   }
 
-  // Helper: get logo bytes from branding/logo.png (download or via public URL)
   async function getLogoBytes(): Promise<Uint8Array | null> {
     const candidates = ["logo.png", "LTP_transp copy.png"];
     for (const name of candidates) {
@@ -81,7 +79,7 @@ serve(async (req) => {
       id, number, issue_date, due_date, currency, total_amount,
       lease:leases (
         id,
-        property:properties ( id, name )
+        property:properties ( id, name, agency_id )
       ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -92,39 +90,49 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: error?.message || "Invoice not found" }), { status: 404, headers: corsHeaders });
   }
 
-  const t = lang === "es"
-    ? {
-        title: "Factura",
-        number: "Número",
-        issue: "Fecha de emisión",
-        due: "Fecha de vencimiento",
-        property: "Propiedad",
-        tenant: "Inquilino",
-        total: "Importe total",
-        thanks: "Gracias por su pago puntual.",
-        signature: "Las Terrenas Properties",
-        emailSubject: (n: string) => `Factura ${n}`,
-        emailText: (prop: string, tenant: string, amountText: string) =>
-          `Estimado equipo,\n\nAdjuntamos la factura generada:\nPropiedad: ${prop}\nInquilino: ${tenant}\nImporte: ${amountText}\n\nGracias,\nLas Terrenas Properties`,
-      }
-    : {
-        title: "Invoice",
-        number: "Number",
-        issue: "Issue Date",
-        due: "Due Date",
-        property: "Property",
-        tenant: "Billed To",
-        total: "Total Amount",
-        thanks: "Thank you for your prompt payment.",
-        signature: "Las Terrenas Properties",
-        emailSubject: (n: string) => `Invoice ${n}`,
-        emailText: (prop: string, tenant: string, amountText: string) =>
-          `Dear team,\n\nAttached is the generated invoice:\nProperty: ${prop}\nTenant: ${tenant}\nAmount: ${amountText}\n\nRegards,\nLas Terrenas Properties`,
-      };
+  // Fetch agency for name/address (fallback if missing)
+  let agencyName = "Las Terrenas Properties";
+  let agencyAddress = "278 calle Duarte, LTI building, Las Terrenas";
+  try {
+    const agencyId = inv.lease?.property?.agency_id ?? null;
+    if (agencyId) {
+      const { data: ag } = await supabase.from("agencies").select("name, address").eq("id", agencyId).single();
+      if (ag?.name) agencyName = ag.name;
+      if (ag?.address) agencyAddress = ag.address;
+    }
+  } catch {}
 
-  const invoiceNumber = inv.number || (lang === "es" ? "SIN-NUMERO" : "NO-NUMBER");
+  const t = body.lang === "es" ? {
+    title: "Factura",
+    number: "Número",
+    issue: "Fecha de emisión",
+    due: "Fecha de vencimiento",
+    property: "Propiedad",
+    tenant: "Inquilino",
+    total: "Importe total",
+    thanks: "Gracias por su pago puntual.",
+    signature: agencyName,
+    emailSubject: (n: string) => `Factura ${n}`,
+    emailText: (prop: string, tenant: string, amountText: string) =>
+      `Estimado equipo,\n\nAdjuntamos la factura generada:\nPropiedad: ${prop}\nInquilino: ${tenant}\nImporte: ${amountText}\n\nGracias,\n${agencyName}`,
+  } : {
+    title: "Invoice",
+    number: "Number",
+    issue: "Issue Date",
+    due: "Due Date",
+    property: "Property",
+    tenant: "Billed To",
+    total: "Total Amount",
+    thanks: "Thank you for your prompt payment.",
+    signature: agencyName,
+    emailSubject: (n: string) => `Invoice ${n}`,
+    emailText: (prop: string, tenant: string, amountText: string) =>
+      `Dear team,\n\nAttached is the generated invoice:\nProperty: ${prop}\nTenant: ${tenant}\nAmount: ${amountText}\n\nRegards,\n${agencyName}`,
+  };
+
+  const invoiceNumber = inv.number || (body.lang === "es" ? "SIN-NUMERO" : "NO-NUMBER");
   const tenantName = [inv.tenant?.first_name ?? "", inv.tenant?.last_name ?? ""].filter(Boolean).join(" ") || "—";
-  const propertyName = inv.lease?.property?.name ?? (lang === "es" ? "Propiedad" : "Property");
+  const propertyName = inv.lease?.property?.name ?? (body.lang === "es" ? "Propiedad" : "Property");
   const amount = Number(inv.total_amount || 0);
   const currency = inv.currency;
   const issueDate = inv.issue_date;
@@ -143,16 +151,17 @@ serve(async (req) => {
       const img = await pdf.embedPng(logoBytes);
       const w = 110;
       const h = (img.height / img.width) * w;
-      // Draw logo on left
       page.drawImage(img, { x: 50, y: 800 - h, width: w, height: h });
     }
     // Company name and address on the right/top
-    const brandName = "Las Terrenas Properties";
-    const addr1 = "278 calle Duarte, LTI building,";
-    const addr2 = "Las Terrenas";
-    page.drawText(brandName, { x: 200, y: 800, size: 14, font: fontBold });
-    page.drawText(addr1, { x: 200, y: 784, size: 10, font });
-    page.drawText(addr2, { x: 200, y: 770, size: 10, font });
+    page.drawText(agencyName, { x: 200, y: 800, size: 14, font: fontBold });
+    // Split address to two lines if needed
+    const addr = agencyAddress;
+    const lines = addr.includes(",") ? addr.split(",") : [addr];
+    const line1 = lines[0] ?? "";
+    const line2 = lines.slice(1).join(", ").trim();
+    page.drawText(line1, { x: 200, y: 784, size: 10, font });
+    if (line2) page.drawText(line2, { x: 200, y: 770, size: 10, font });
     y = 740;
 
     const draw = (text: string, opts: { x?: number; y?: number; size?: number; bold?: boolean } = {}) => {
@@ -169,11 +178,11 @@ serve(async (req) => {
     draw(`${t.due}: ${dueDate}`, { size: 12 });
     draw("", { size: 12 });
 
-    draw(`${t.property}: ${propertyName}`, { size: 12, bold: true });
+    draw(`${body.lang === "es" ? "Propiedad" : "Property"}: ${propertyName}`, { size: 12, bold: true });
     draw(`${t.tenant}: ${tenantName}`, { size: 12 });
     draw("", { size: 12 });
 
-    const amountText = new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency }).format(amount);
+    const amountText = new Intl.NumberFormat(body.lang === "es" ? "es-ES" : "en-US", { style: "currency", currency }).format(amount);
     draw(`${t.total}: ${amountText}`, { size: 14, bold: true });
     draw("", { size: 12 });
 
@@ -204,7 +213,7 @@ serve(async (req) => {
 
     const { error: updErr } = await supabase
       .from("invoices")
-      .update({ pdf_lang: lang, pdf_url: pdfUrl })
+      .update({ pdf_lang: body.lang === "es" ? "es" : "en", pdf_url: pdfUrl })
       .eq("id", body.invoiceId);
     if (updErr) {
       return new Response(JSON.stringify({ error: updErr.message }), { status: 500, headers: corsHeaders });

@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAgencyById, updateAgencyTimezone } from "@/services/agencies";
 import { useTheme } from "@/contexts/ThemeProvider";
+import { uploadLogo, getLogoPublicUrl } from "@/services/branding";
 
 const Settings = () => {
   const { profile, refreshProfile } = useAuth();
@@ -22,7 +23,7 @@ const Settings = () => {
 
   const hasAgency = !!profile?.agency_id;
 
-  const { data: agency } = useQuery({
+  const { data: agency, refetch: refetchAgency } = useQuery({
     queryKey: ["agency", profile?.agency_id],
     enabled: hasAgency,
     queryFn: () => fetchAgencyById(profile!.agency_id!),
@@ -38,11 +39,19 @@ const Settings = () => {
     { value: "America/Los_Angeles", label: "GMT-8/7 — Los Angeles" },
   ];
   const [timezone, setTimezone] = useState<string>(agency?.timezone ?? "UTC");
+  const [address, setAddress] = useState<string>(agency?.address ?? ""); // address from agency
 
-  // Keep timezone in sync when agency loads
+  const [logoUrl, setLogoUrl] = useState<string>("");
+
   React.useEffect(() => {
     if (agency?.timezone != null) setTimezone(agency.timezone || "UTC");
-  }, [agency?.timezone]);
+    if (agency?.address != null) setAddress(agency.address || "");
+  }, [agency?.timezone, agency?.address]);
+
+  React.useEffect(() => {
+    // Try to load logo preview
+    getLogoPublicUrl().then((url) => setLogoUrl(url)).catch(() => setLogoUrl(""));
+  }, []);
 
   const onCreateAgency = async () => {
     if (!agencyName) {
@@ -69,8 +78,27 @@ const Settings = () => {
     try {
       await updateAgencyTimezone(profile.agency_id, timezone);
       toast.success("Timezone updated");
+      await refetchAgency();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to update timezone");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onUploadLogo = async (file?: File) => {
+    if (!file) {
+      toast.error("Please select a PNG file");
+      return;
+    }
+    setSaving(true);
+    try {
+      await uploadLogo(file);
+      const url = await getLogoPublicUrl();
+      setLogoUrl(url);
+      toast.success("Logo uploaded");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to upload logo");
     } finally {
       setSaving(false);
     }
@@ -123,6 +151,37 @@ const Settings = () => {
                     <Button variant="outline" onClick={onSaveTimezone} disabled={saving}>
                       {saving ? "Saving..." : "Save Timezone"}
                     </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Invoice Address (shown on PDF)</Label>
+                  <Input
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="278 calle Duarte, LTI building, Las Terrenas"
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    Set your agency address in the DB via admin tools if needed. The PDF header reads from agency.name and agency.address.
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Brand Logo (PNG)</Label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="file"
+                      accept="image/png"
+                      onChange={(e) => onUploadLogo(e.target.files?.[0])}
+                    />
+                    {logoUrl ? (
+                      <img src={logoUrl} alt="Logo" className="h-10 w-auto rounded border" />
+                    ) : (
+                      <div className="text-xs text-muted-foreground">No logo uploaded</div>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    The logo is stored as branding/logo.png and printed on invoice PDFs.
                   </div>
                 </div>
               </>

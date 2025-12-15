@@ -94,7 +94,7 @@ serve(async (req) => {
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, status,
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months,
-      property:properties ( id, name ),
+      property:properties ( id, name, agency_id ),
       tenant:profiles ( id, first_name, last_name )
     `)
     .eq("auto_invoice_enabled", true);
@@ -171,12 +171,22 @@ serve(async (req) => {
         const h = (img.height / img.width) * w;
         page.drawImage(img, { x: 50, y: 800 - h, width: w, height: h });
       }
-      const brandName = "Las Terrenas Properties";
-      const addr1 = "278 calle Duarte, LTI building,";
-      const addr2 = "Las Terrenas";
-      page.drawText(brandName, { x: 200, y: 800, size: 14, font: fontBold });
-      page.drawText(addr1, { x: 200, y: 784, size: 10, font });
-      page.drawText(addr2, { x: 200, y: 770, size: 10, font });
+      const agencyId = l.property?.agency_id ?? null;
+      let agencyName = "Las Terrenas Properties";
+      let agencyAddress = "278 calle Duarte, LTI building, Las Terrenas";
+      try {
+        if (agencyId) {
+          const { data: ag } = await supabase.from("agencies").select("name, address").eq("id", agencyId).single();
+          if (ag?.name) agencyName = ag.name;
+          if (ag?.address) agencyAddress = ag.address;
+        }
+      } catch {}
+      page.drawText(agencyName, { x: 200, y: 800, size: 14, font: fontBold });
+      const lines = agencyAddress.includes(",") ? agencyAddress.split(",") : [agencyAddress];
+      const line1 = lines[0] ?? "";
+      const line2 = lines.slice(1).join(", ").trim();
+      page.drawText(line1, { x: 200, y: 784, size: 10, font });
+      if (line2) page.drawText(line2, { x: 200, y: 770, size: 10, font });
       y = 740;
 
       const draw = (text: string, opts: { x?: number; y?: number; size?: number; bold?: boolean } = {}) => {
