@@ -46,6 +46,19 @@ serve(async (req) => {
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 
+  // Bind anon client to Authorization header, verify JWT, and enforce admin role
+  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: userRes } = await anon.auth.getUser();
+  if (!userRes?.user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+  }
+  const { data: isAdmin } = await anon.rpc("is_agency_admin", { u: userRes.user.id });
+  if (!isAdmin) {
+    return new Response(JSON.stringify({ error: "Forbidden: admin role required" }), { status: 403, headers: corsHeaders });
+  }
+
   if (!RESEND_API_KEY) {
     return new Response(JSON.stringify({ error: "Missing RESEND_API_KEY secret" }), { status: 500, headers: corsHeaders });
   }

@@ -35,6 +35,16 @@ serve(async (req) => {
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 
+  // ADDED: Bind anon client to Authorization header and verify JWT
+  const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: userRes } = await anon.auth.getUser();
+  if (!userRes?.user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+  }
+
   const EMAIL_TO = "contact@lasterrenas.properties";
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -73,7 +83,7 @@ serve(async (req) => {
     return null;
   }
 
-  const { data: inv, error } = await supabase
+  const { data: inv, error } = await anon
     .from("invoices")
     .select(`
       id, number, issue_date, due_date, currency, total_amount,
@@ -87,7 +97,7 @@ serve(async (req) => {
     .single();
 
   if (error || !inv) {
-    return new Response(JSON.stringify({ error: error?.message || "Invoice not found" }), { status: 404, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: "Invoice not found or access denied" }), { status: 403, headers: corsHeaders });
   }
 
   // Fetch agency for name/address (fallback if missing)

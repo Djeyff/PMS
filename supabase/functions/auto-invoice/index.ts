@@ -48,6 +48,20 @@ serve(async (req) => {
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 
+  // Bind anon client to Authorization header and verify JWT
+  const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: userRes } = await anon.auth.getUser();
+  if (!userRes?.user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+  }
+  const { data: isAdmin } = await anon.rpc("is_agency_admin", { u: userRes.user.id });
+  if (!isAdmin) {
+    return new Response(JSON.stringify({ error: "Forbidden: admin role required" }), { status: 403, headers: corsHeaders });
+  }
+
   const EMAIL_TO = "contact@lasterrenas.properties";
 
   const force = new URL(req.url).searchParams.get("force") === "true";
@@ -116,6 +130,10 @@ serve(async (req) => {
   let sentCount = 0;
   const errors: string[] = [];
   const emailAttachments: Array<{ filename: string; content: string }> = [];
+
+  // ADDED: Defaults for PDF header text used below
+  const agencyName = "Las Terrenas Properties";
+  const agencyAddress = "278 calle Duarte, LTI building, Las Terrenas";
 
   for (const l of leases ?? []) {
     const todayStrIso = today.toISOString().slice(0, 10);
