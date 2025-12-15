@@ -18,11 +18,12 @@ const data = [
 ];
 
 const Properties = () => {
-  const { role, user, profile } = useAuth();
+  const { role, user, profile, loading } = useAuth();
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["properties", role, user?.id, profile?.agency_id],
     queryFn: () => fetchProperties({ role: role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
+    enabled: !loading && !!role && !!user && (role === "agency_admin" ? !!profile?.agency_id : true),
   });
 
   const canCreate = role === "agency_admin";
