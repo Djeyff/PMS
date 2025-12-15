@@ -55,3 +55,17 @@ export async function updateUserRoleAndAgency(params: {
   if (error) throw error;
   return data;
 }
+
+export async function updateUserName(userId: string, names: { first_name: string | null; last_name: string | null }) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({
+      first_name: names.first_name,
+      last_name: names.last_name,
+    })
+    .eq("id", userId)
+    .select("id, first_name, last_name, updated_at")
+    .single();
+  if (error) throw error;
+  return data;
+}
