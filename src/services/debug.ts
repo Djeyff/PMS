@@ -98,9 +98,10 @@ export async function runDiagnostics(): Promise<DiagnosticsResult> {
   async function countRows(table: string, filter?: (q: any) => any) {
     let q = db.from(table).select("id", { count: "exact" });
     if (filter) q = filter(q);
-    const { data, count, error } = await q.limit(3);
-    if (error) throw error;
-    return typeof count === "number" ? count : (Array.isArray(data) ? data.length : 0);
+    const res = await q.limit(3);
+    if (res.error) throw res.error;
+    const rows = (res.data ?? []) as any[];
+    return typeof res.count === "number" ? res.count : rows.length;
   }
 
   try {
