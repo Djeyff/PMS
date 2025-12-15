@@ -10,13 +10,13 @@ import EditOwnerDialog from "@/components/owners/EditOwnerDialog";
 import DeleteOwnerDialog from "@/components/owners/DeleteOwnerDialog";
 
 const Owners = () => {
-  const { role, profile } = useAuth();
+  const { role, profile, loading } = useAuth();
   const isAdmin = role === "agency_admin";
   const agencyId = profile?.agency_id ?? null;
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["owners", agencyId],
-    enabled: isAdmin && !!agencyId,
+    queryKey: ["owners", agencyId, role],
+    enabled: !loading && isAdmin && !!agencyId,
     queryFn: () => fetchOwnerProfilesInAgency(agencyId!),
   });
 

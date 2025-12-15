@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { fetchAgencyById } from "@/services/agencies";
 
 const Maintenance = () => {
-  const { role, profile } = useAuth();
+  const { role, profile, loading } = useAuth();
   const isAdmin = role === "agency_admin";
   const agencyId = profile?.agency_id ?? null;
 
@@ -22,14 +22,14 @@ const Maintenance = () => {
 
   const { data: agency } = useQuery({
     queryKey: ["agency-for-maint", agencyId],
-    enabled: !!agencyId,
+    enabled: !loading && !!agencyId,
     queryFn: () => fetchAgencyById(agencyId!),
   });
   const tz = agency?.timezone ?? "UTC";
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["maintenance", agencyId, statusFilter],
-    enabled: !!agencyId,
+    queryKey: ["maintenance", agencyId, statusFilter, role],
+    enabled: !loading && !!agencyId,
     queryFn: () => fetchMaintenanceRequests({ agencyId: agencyId!, status: statuses as any }),
   });
 

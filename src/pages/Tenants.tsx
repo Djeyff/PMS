@@ -15,13 +15,13 @@ const data = [
 ];
 
 const Tenants = () => {
-  const { role, profile } = useAuth();
+  const { role, profile, loading } = useAuth();
   const agencyId = profile?.agency_id ?? null;
   const isAdmin = role === "agency_admin";
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["tenants", agencyId],
-    enabled: !!agencyId,
+    queryKey: ["tenants", agencyId, role],
+    enabled: !loading && isAdmin && !!agencyId,
     queryFn: () => fetchTenantProfilesInAgency(agencyId!),
   });
 

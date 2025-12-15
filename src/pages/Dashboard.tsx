@@ -32,7 +32,7 @@ const Dashboard = () => {
     return <Loader />;
   }
 
-  // If role hasn't loaded yet and user is not the master admin, show a loader instead of rendering nothing
+  // Show loader while role is still resolving to avoid blank page on hard refresh
   if (!role && (user?.email ?? "").toLowerCase() !== MASTER_ADMIN_EMAIL) {
     return <Loader />;
   }

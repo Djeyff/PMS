@@ -81,58 +81,37 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (updated) setProfile(updated);
   };
 
-  const loadSessionAndProfile = async () => {
-    // Revert: do not set loading here; effect controls it.
-    const { data } = await supabase.auth.getSession();
-    const sess = data.session ?? null;
-    setSession(sess);
-    setUser(sess?.user ?? null);
-    if (sess?.user?.id) {
-      const p = await fetchProfile(sess.user.id).catch(() => null);
-      setProfile(p);
-      // Run admin bootstrap in background so loading doesn't block
-      ensureMasterAdmin(sess.user, p ?? null).then(() => {
-        // after background bootstrap, try to refresh profile once
-        refreshProfile().catch(() => {});
-      });
-    } else {
-      setProfile(null);
-    }
-  };
-
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      // Control loading here; finish after initial profile load without waiting bootstrap
-      setLoading(true);
-      await loadSessionAndProfile();
-      if (mounted) setLoading(false);
-    })();
+    setLoading(true);
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-      // Revert: do not toggle loading here; make changes non-blocking
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, sess) => {
       setSession(sess ?? null);
       setUser(sess?.user ?? null);
+
       if (sess?.user?.id) {
         const p = await fetchProfile(sess.user.id).catch(() => null);
         setProfile(p);
-        // Run bootstrap without awaiting to avoid UI stalls
         ensureMasterAdmin(sess.user, p ?? null).then(() => {
           refreshProfile().catch(() => {});
         });
       } else {
         setProfile(null);
       }
+
+      // Only end loading after Supabase signals the initial session restoration,
+      // or after any auth state change events.
+      if (
+        event === 'INITIAL_SESSION' ||
+        event === 'SIGNED_IN' ||
+        event === 'SIGNED_OUT' ||
+        event === 'TOKEN_REFRESHED' ||
+        event === 'USER_UPDATED'
+      ) {
+        setLoading(false);
+      }
     });
 
-    // Restore loading fallback to avoid indefinite spinner in edge cases
-    const loadingFallback = setTimeout(() => {
-      if (mounted) setLoading(false);
-    }, 4000);
-
     return () => {
-      mounted = false;
-      clearTimeout(loadingFallback);
       sub?.subscription?.unsubscribe();
     };
   }, []);

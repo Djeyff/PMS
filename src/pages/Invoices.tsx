@@ -27,7 +27,7 @@ const Invoices = () => {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["invoices", role, user?.id, profile?.agency_id],
     queryFn: fetchInvoices,
-    enabled: !loading && !!role && (!!user) && (isAdmin ? !!profile?.agency_id : true),
+    enabled: !loading && !!role && !!user && (isAdmin ? !!profile?.agency_id : true),
   });
 
   const rows = useMemo(() => {
