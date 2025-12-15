@@ -18,7 +18,7 @@ const Maintenance = () => {
   const agencyId = profile?.agency_id ?? null;
 
   const [noteById, setNoteById] = useState<Record<string, string>>({});
-  const [localNotesById, setLocalNotesById] = useState<Record<string, Array<{ id: string; note: string; created_at: string }>>>({});
+  const [localNotesById, setLocalNotesById] = useState<Record<string, Array<{ id: string; note: string; created_at: string; user?: { first_name: string | null; last_name: string | null } | null }>>>({});
 
   const { data: agency } = useQuery({
     queryKey: ["agency", agencyId],
@@ -84,7 +84,7 @@ const Maintenance = () => {
     const createdAt = new Date().toISOString();
     setLocalNotesById((prev) => {
       const arr = prev[id] ? [...prev[id]] : [];
-      arr.push({ id: tempId, note, created_at: createdAt });
+      arr.push({ id: tempId, note, created_at: createdAt, user: null });
       const next = { ...prev, [id]: arr };
       setCache(next);
       return next;
@@ -95,7 +95,11 @@ const Maintenance = () => {
       const created = await addMaintenanceLog(id, note);
       // Replace temp note with server note
       setLocalNotesById((prev) => {
-        const arr = (prev[id] ?? []).map((ln) => (ln.id === tempId ? { id: created.id, note: created.note, created_at: created.created_at } : ln));
+        const arr = (prev[id] ?? []).map((ln) =>
+          ln.id === tempId
+            ? { id: created.id, note: created.note, created_at: created.created_at, user: ln.user ?? null }
+            : ln
+        );
         const next = { ...prev, [id]: arr };
         setCache(next);
         return next;
