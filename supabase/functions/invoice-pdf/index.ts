@@ -23,7 +23,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
   }
 
-  let body: { invoiceId: string; sendEmail?: boolean; sendWhatsApp?: boolean; lang?: "en" | "es" };
+  let body: { invoiceId: string; sendEmail?: boolean; lang?: "en" | "es" };
   try {
     body = await req.json();
   } catch {
@@ -34,12 +34,8 @@ serve(async (req) => {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-  const TWILIO_ACCOUNT_SID = Deno.env.get("TWILIO_ACCOUNT_SID");
-  const TWILIO_AUTH_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN");
-  const TWILIO_WHATSAPP_FROM = Deno.env.get("TWILIO_WHATSAPP_FROM");
 
   const EMAIL_TO = "contact@lasterrenas.properties";
-  const WHATSAPP_TO = "whatsapp:+18092044903";
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -60,7 +56,6 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: error?.message || "Invoice not found" }), { status: 404, headers: corsHeaders });
   }
 
-  // Labels by language
   const t = lang === "es"
     ? {
         title: "Factura",
@@ -153,7 +148,6 @@ serve(async (req) => {
     const { data: pub } = supabase.storage.from(bucketName).getPublicUrl(path);
     const pdfUrl = pub.publicUrl;
 
-    // Persist language + URL on invoice
     const { error: updErr } = await supabase
       .from("invoices")
       .update({ pdf_lang: lang, pdf_url: pdfUrl })
@@ -162,7 +156,6 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: updErr.message }), { status: 500, headers: corsHeaders });
     }
 
-    // Optional email
     if (body.sendEmail && RESEND_API_KEY) {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -172,7 +165,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           from: "invoices@lasterrenas.properties",
-          to: "contact@lasterrenas.properties",
+          to: EMAIL_TO,
           subject: t.emailSubject(invoiceNumber),
           text: t.emailText(propertyName, tenantName, amountText),
           attachments: [{ filename: fileName, content: toBase64(new Uint8Array(pdfBytes)) }],
@@ -180,33 +173,6 @@ serve(async (req) => {
       });
       if (!res.ok) {
         const msg = await res.text().catch(() => "Resend failed");
-        return new Response(JSON.stringify({ error: msg }), { status: 500, headers: corsHeaders });
-      }
-    }
-
-    // Optional WhatsApp (kept Spanish/English based on lang)
-    if (body.sendWhatsApp && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_WHATSAPP_FROM) {
-      const bodyText =
-        `${t.title} ${invoiceNumber}\n` +
-        `${t.property}: ${propertyName}\n` +
-        `${t.tenant}: ${tenantName}\n` +
-        `${t.total}: ${amountText}\n` +
-        `PDF: ${pdfUrl}`;
-      const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
-      const auth = btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`);
-      const form = new URLSearchParams({
-        From: TWILIO_WHATSAPP_FROM,
-        To: "whatsapp:+18092044903",
-        Body: bodyText,
-        MediaUrl: pdfUrl,
-      });
-      const tw = await fetch(url, {
-        method: "POST",
-        headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" },
-        body: form.toString(),
-      });
-      if (!tw.ok) {
-        const msg = await tw.text().catch(() => "Twilio failed");
         return new Response(JSON.stringify({ error: msg }), { status: 500, headers: corsHeaders });
       }
     }

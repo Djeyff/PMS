@@ -47,12 +47,8 @@ serve(async (req) => {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-  const TWILIO_ACCOUNT_SID = Deno.env.get("TWILIO_ACCOUNT_SID");
-  const TWILIO_AUTH_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN");
-  const TWILIO_WHATSAPP_FROM = Deno.env.get("TWILIO_WHATSAPP_FROM");
 
   const EMAIL_TO = "contact@lasterrenas.properties";
-  const WHATSAPP_TO = "whatsapp:+18092044903";
 
   const force = new URL(req.url).searchParams.get("force") === "true";
   const today = new Date();
@@ -85,9 +81,9 @@ serve(async (req) => {
 
   let sentCount = 0;
   const errors: string[] = [];
+  const emailAttachments: Array<{ filename: string; content: string }> = [];
 
   for (const l of leases ?? []) {
-    // Only active leases within date range
     const todayStrIso = today.toISOString().slice(0, 10);
     if (l.status !== "active" || l.start_date > todayStrIso || l.end_date < todayStrIso) continue;
 
@@ -172,7 +168,6 @@ serve(async (req) => {
       const { data: pub } = supabase.storage.from(bucketName).getPublicUrl(path);
       const pdfUrl = pub.publicUrl;
 
-      // Update invoice with language and URL
       const { error: updErr } = await supabase
         .from("invoices")
         .update({ pdf_lang: "es", pdf_url: pdfUrl })
@@ -181,63 +176,41 @@ serve(async (req) => {
         errors.push(`Update invoice URL/lang failed for invoice ${inv.id}: ${updErr.message}`);
       }
 
-      if (RESEND_API_KEY) {
-        const res = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${RESEND_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: "invoices@lasterrenas.properties",
-            to: EMAIL_TO,
-            subject: `Factura ${invoiceNumber}`,
-            text:
-              `Estimado equipo,\n\n` +
-              `Adjuntamos la factura generada para el contrato:\n` +
-              `Propiedad: ${propertyName}\n` +
-              `Inquilino: ${tenantName}\n` +
-              `Importe: ${new Intl.NumberFormat("es-ES", { style: "currency", currency }).format(amount)}\n\n` +
-              `Gracias,\nLas Terrenas Properties`,
-            attachments: [
-              { filename: fileName, content: toBase64(new Uint8Array(pdfBytes)) },
-            ],
-          }),
-        });
-        if (!res.ok) {
-          const msg = await res.text().catch(() => "Resend failed");
-          errors.push(`Email failed for invoice ${inv.id}: ${msg}`);
-        }
-      } else {
-        errors.push("RESEND_API_KEY not set — email skipped");
-      }
-
-      if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_WHATSAPP_FROM) {
-        const bodyText = `Factura ${invoiceNumber}\nPropiedad: ${propertyName}\nInquilino: ${tenantName}\nImporte: ${new Intl.NumberFormat("es-ES", { style: "currency", currency }).format(amount)}\nPDF: ${pdfUrl}`;
-        const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
-        const auth = btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`);
-        const form = new URLSearchParams({
-          From: TWILIO_WHATSAPP_FROM,
-          To: "whatsapp:+18092044903",
-          Body: bodyText,
-          MediaUrl: pdfUrl,
-        });
-        const tw = await fetch(url, {
-          method: "POST",
-          headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" },
-          body: form.toString(),
-        });
-        if (!tw.ok) {
-          const msg = await tw.text().catch(() => "Twilio failed");
-          errors.push(`WhatsApp failed for invoice ${inv.id}: ${msg}`);
-        }
-      } else {
-        errors.push("Twilio secrets not set — WhatsApp skipped");
-      }
+      // Collect attachment for single email
+      emailAttachments.push({ filename: fileName, content: toBase64(new Uint8Array(pdfBytes)) });
 
       sentCount++;
     } catch (e) {
-      errors.push(`PDF/Send error for lease ${l.id}: ${e instanceof Error ? e.message : String(e)}`);
+      errors.push(`PDF error for lease ${l.id}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  // Send one email with all attachments
+  if (RESEND_API_KEY && emailAttachments.length > 0) {
+    const subject = `Facturas generadas automáticamente (${issueDate})`;
+    const textBody =
+      `Estimado equipo,\n\nSe han generado ${sentCount} factura(s) automáticamente.\n` +
+      `Adjuntamos todos los PDF en este correo.\n\n` +
+      `Gracias,\nLas Terrenas Properties`;
+
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "invoices@lasterrenas.properties",
+        to: EMAIL_TO,
+        subject,
+        text: textBody,
+        attachments: emailAttachments,
+      }),
+    });
+
+    if (!res.ok) {
+      const msg = await res.text().catch(() => "Resend failed");
+      errors.push(`Bulk email failed: ${msg}`);
     }
   }
 
