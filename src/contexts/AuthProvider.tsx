@@ -82,54 +82,51 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const loadSessionAndProfile = async () => {
+    // Move loading handling inside to ensure we wait for bootstrap
+    setLoading(true);
     const { data } = await supabase.auth.getSession();
     const sess = data.session ?? null;
     setSession(sess);
     setUser(sess?.user ?? null);
+
     if (sess?.user?.id) {
       const p = await fetchProfile(sess.user.id).catch(() => null);
       setProfile(p);
-      // Run admin bootstrap in background so loading doesn't block
-      ensureMasterAdmin(sess.user, p ?? null).then(() => {
-        // after background bootstrap, try to refresh profile once
-        refreshProfile().catch(() => {});
-      });
+      // Await admin/bootstrap and then refresh the profile before allowing UI to proceed
+      await ensureMasterAdmin(sess.user, p ?? null);
+      await refreshProfile();
     } else {
       setProfile(null);
     }
+
+    setLoading(false);
   };
 
   useEffect(() => {
     let mounted = true;
     (async () => {
-      setLoading(true);
+      // Call loader; it sets loading internally and will only flip to false after bootstrap
       await loadSessionAndProfile();
-      if (mounted) setLoading(false);
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, sess) => {
+      // Keep loading true while we process state change and bootstrap profile
+      setLoading(true);
       setSession(sess ?? null);
       setUser(sess?.user ?? null);
       if (sess?.user?.id) {
         const p = await fetchProfile(sess.user.id).catch(() => null);
         setProfile(p);
-        // Run bootstrap without awaiting to avoid UI stalls
-        ensureMasterAdmin(sess.user, p ?? null).then(() => {
-          refreshProfile().catch(() => {});
-        });
+        await ensureMasterAdmin(sess.user, p ?? null);
+        await refreshProfile();
       } else {
         setProfile(null);
       }
+      setLoading(false);
     });
-
-    // Fallback: ensure loading doesn't remain true due to unexpected delays
-    const loadingFallback = setTimeout(() => {
-      if (mounted) setLoading(false);
-    }, 4000);
 
     return () => {
       mounted = false;
-      clearTimeout(loadingFallback);
       sub?.subscription?.unsubscribe();
     };
   }, []);
