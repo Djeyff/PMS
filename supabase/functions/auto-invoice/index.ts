@@ -55,6 +55,37 @@ serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+  async function ensureBrandingBucket() {
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const exists = (buckets ?? []).some((b: any) => b.name === "branding");
+    if (!exists) {
+      await supabase.storage.createBucket("branding", { public: true });
+    }
+  }
+
+  async function getLogoBytes(): Promise<Uint8Array | null> {
+    try {
+      await ensureBrandingBucket();
+      const { data: blob } = await supabase.storage.from("branding").download("logo.png");
+      if (blob) {
+        const ab = await blob.arrayBuffer();
+        return new Uint8Array(ab);
+      }
+    } catch {}
+    try {
+      const { data: pub } = supabase.storage.from("branding").getPublicUrl("logo.png");
+      const url = pub.publicUrl;
+      if (url) {
+        const res = await fetch(url);
+        if (res.ok) {
+          const ab = await res.arrayBuffer();
+          return new Uint8Array(ab);
+        }
+      }
+    } catch {}
+    return null;
+  }
+
   const { data: leases, error: leaseErr } = await supabase
     .from("leases")
     .select(`
@@ -128,7 +159,23 @@ serve(async (req) => {
       const font = await pdf.embedFont(StandardFonts.Helvetica);
       const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
+      // Branding header
+      const logoBytes = await getLogoBytes();
       let y = 800;
+      if (logoBytes) {
+        const img = await pdf.embedPng(logoBytes);
+        const w = 110;
+        const h = (img.height / img.width) * w;
+        page.drawImage(img, { x: 50, y: 800 - h, width: w, height: h });
+      }
+      const brandName = "Las Terrenas Properties";
+      const addr1 = "278 calle Duarte, LTI building,";
+      const addr2 = "Las Terrenas";
+      page.drawText(brandName, { x: 200, y: 800, size: 14, font: fontBold });
+      page.drawText(addr1, { x: 200, y: 784, size: 10, font });
+      page.drawText(addr2, { x: 200, y: 770, size: 10, font });
+      y = 740;
+
       const draw = (text: string, opts: { x?: number; y?: number; size?: number; bold?: boolean } = {}) => {
         const size = opts.size ?? 12;
         const x = opts.x ?? 50;
@@ -137,6 +184,7 @@ serve(async (req) => {
         y -= size + 8;
       };
 
+      // Invoice meta (Spanish)
       draw("Factura", { size: 24, bold: true, y });
       draw(`Número: ${invoiceNumber}`, { size: 12 });
       draw(`Fecha de emisión: ${issueDate}`, { size: 12 });
