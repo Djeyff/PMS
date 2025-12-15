@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthedClient } from "@/integrations/supabase/client";
 import { createAgency as createAgencyService } from "@/services/agencies";
 
 export type Role = "agency_admin" | "owner" | "tenant";
@@ -27,7 +28,9 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const fetchProfile = async (userId: string): Promise<Profile | null> => {
-  const { data, error } = await supabase
+  const { data: sess } = await supabase.auth.getSession();
+  const db = getAuthedClient(sess.session?.access_token);
+  const { data, error } = await db
     .from("profiles")
     .select("id, role, agency_id, first_name, last_name, avatar_url")
     .eq("id", userId)
@@ -59,25 +62,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const email = u.email?.toLowerCase() ?? "";
     if (email !== MASTER_ADMIN_EMAIL) return;
 
-    // Upsert profile with admin role
-    const { error: upsertErr } = await supabase
-      .from("profiles")
-      .upsert({ id: u.id, role: "agency_admin" }, { onConflict: "id" });
-    if (upsertErr) {
-      console.warn("ensureMasterAdmin: upsert profile failed", upsertErr);
-      return;
+    const { data: sess } = await supabase.auth.getSession();
+    const token = sess.session?.access_token;
+    if (!token) return;
+
+    try {
+      const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/bootstrap-admin";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      // proceed regardless; profile will be refreshed below
+      console.log("[AuthProvider] bootstrap-admin status:", res.status);
+    } catch (e) {
+      console.warn("ensureMasterAdmin: bootstrap-admin failed", e);
     }
 
-    const latest = await fetchProfile(u.id).catch(() => null);
-    if (!latest?.agency_id) {
-      // Use service that tries edge function, then DB fallback
-      try {
-        await createAgencyService({ name: "Master Agency", default_currency: "USD" });
-      } catch (e) {
-        console.warn("ensureMasterAdmin: createAgency fallback path failed", e);
-      }
-    }
-
+    // Refresh profile after bootstrap attempt
     const updated = await fetchProfile(u.id).catch(() => null);
     if (updated) setProfile(updated);
   };
@@ -93,7 +95,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       let p = await fetchProfile(sess.user.id).catch(() => null);
       console.log("[AuthProvider] initial profile:", p);
       if (!p) {
-        // Ensure profile row exists
+        // Ensure profile row exists (authed client not required to create the row)
         const { error: upsertErr } = await supabase
           .from("profiles")
           .upsert({ id: sess.user.id }, { onConflict: "id" });
@@ -103,16 +105,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       setProfile(p);
 
-      // If admin but no agency, bootstrap agency
-      if (p?.role === "agency_admin" && !p.agency_id) {
-        console.log("[AuthProvider] admin without agency, bootstrapping agency");
-        try {
-          await createAgencyService({ name: "Master Agency", default_currency: "USD" });
-        } catch (e) {
-          console.warn("createAgency fallback failed", e);
-        }
+      // If master admin and missing role or missing agency, run server-side bootstrap, then refresh profile
+      const needBootstrap = (sess.user.email?.toLowerCase() === MASTER_ADMIN_EMAIL) && (!p?.role || (p?.role === "agency_admin" && !p.agency_id));
+      if (needBootstrap) {
+        console.log("[AuthProvider] needBootstrap -> calling bootstrap-admin");
+        await ensureMasterAdmin(sess.user, p ?? null);
         const updated = await fetchProfile(sess.user.id).catch(() => null);
-        console.log("[AuthProvider] profile after agency bootstrap:", updated);
+        console.log("[AuthProvider] profile after bootstrap-admin:", updated);
         if (updated) setProfile(updated);
       }
     } else {
