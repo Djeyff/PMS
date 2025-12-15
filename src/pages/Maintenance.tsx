@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthProvider";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchMaintenanceRequests, updateMaintenanceStatus, addMaintenanceLog } from "@/services/maintenance";
 import NewRequestDialog from "@/components/maintenance/NewRequestDialog";
 import { toast } from "sonner";
@@ -16,9 +16,9 @@ const Maintenance = () => {
   const { role, profile } = useAuth();
   const isAdmin = role === "agency_admin";
   const agencyId = profile?.agency_id ?? null;
+  const queryClient = useQueryClient();
 
   const [noteById, setNoteById] = useState<Record<string, string>>({});
-  const [localNotesById, setLocalNotesById] = useState<Record<string, Array<{ id: string; note: string; created_at: string; user?: { first_name: string | null; last_name: string | null } | null }>>>({});
 
   const { data: agency } = useQuery({
     queryKey: ["agency", agencyId],
@@ -33,35 +33,6 @@ const Maintenance = () => {
     enabled: !!agencyId,
     queryFn: () => fetchMaintenanceRequests({ agencyId: agencyId!, status: ["open", "in_progress", "closed"] }),
   });
-
-  // Cache notes in localStorage so they show instantly and persist across refresh/restart
-  const cacheKey = "maint_notes_cache";
-  const getCache = (): Record<string, Array<{ id: string; note: string; created_at: string }>> => {
-    try {
-      const raw = localStorage.getItem(cacheKey);
-      return raw ? JSON.parse(raw) : {};
-    } catch {
-      return {};
-    }
-  };
-  const setCache = (map: Record<string, Array<{ id: string; note: string; created_at: string }>>) => {
-    try {
-      localStorage.setItem(cacheKey, JSON.stringify(map));
-    } catch {
-      // ignore storage errors
-    }
-  };
-
-  // Load cached notes for visible requests when list changes
-  const requestIds = (data ?? []).map((m) => m.id);
-  useEffect(() => {
-    const cache = getCache();
-    const next: Record<string, Array<{ id: string; note: string; created_at: string }>> = {};
-    requestIds.forEach((rid) => {
-      if (cache[rid]?.length) next[rid] = cache[rid];
-    });
-    setLocalNotesById(next);
-  }, [requestIds.length]);
 
   const onUpdateStatus = async (id: string, status: "open" | "in_progress" | "closed") => {
     try {
@@ -79,41 +50,54 @@ const Maintenance = () => {
       toast.error("Please write a note");
       return;
     }
-    // Optimistic local add and cache
-    const tempId = `local-${Date.now()}`;
-    const createdAt = new Date().toISOString();
-    setLocalNotesById((prev) => {
-      const arr = prev[id] ? [...prev[id]] : [];
-      arr.push({ id: tempId, note, created_at: createdAt, user: null });
-      const next = { ...prev, [id]: arr };
-      setCache(next);
-      return next;
-    });
     setNoteById((prev) => ({ ...prev, [id]: "" }));
+
+    // Optimistic update: append a temp note to the request logs
+    const tempId = `temp-${Date.now()}`;
+    const createdAt = new Date().toISOString();
+    queryClient.setQueryData(["maintenance", agencyId], (old: any) => {
+      const list = Array.isArray(old) ? [...old] : [];
+      return list.map((req: any) =>
+        req.id === id
+          ? {
+              ...req,
+              logs: [
+                ...(req.logs ?? []),
+                { id: tempId, note, created_at: createdAt, user: { first_name: null, last_name: null } },
+              ],
+            }
+          : req
+      );
+    });
 
     try {
       const created = await addMaintenanceLog(id, note);
-      // Replace temp note with server note
-      setLocalNotesById((prev) => {
-        const arr = (prev[id] ?? []).map((ln) =>
-          ln.id === tempId
-            ? { id: created.id, note: created.note, created_at: created.created_at, user: ln.user ?? null }
-            : ln
+      // Replace temp note with the server note
+      queryClient.setQueryData(["maintenance", agencyId], (old: any) => {
+        const list = Array.isArray(old) ? [...old] : [];
+        return list.map((req: any) =>
+          req.id === id
+            ? {
+                ...req,
+                logs: (req.logs ?? []).map((ln: any) =>
+                  ln.id === tempId
+                    ? { id: created.id, note: created.note, created_at: created.created_at, user: { first_name: null, last_name: null } }
+                    : ln
+                ),
+              }
+            : req
         );
-        const next = { ...prev, [id]: arr };
-        setCache(next);
-        return next;
       });
-      // Refresh requests to pull persistent logs
-      refetch();
       toast.success("Note saved");
     } catch (e: any) {
-      // Roll back optimistic insertion on error
-      setLocalNotesById((prev) => {
-        const arr = (prev[id] ?? []).filter((ln) => ln.id !== tempId);
-        const next = { ...prev, [id]: arr };
-        setCache(next);
-        return next;
+      // Rollback: remove the temp note
+      queryClient.setQueryData(["maintenance", agencyId], (old: any) => {
+        const list = Array.isArray(old) ? [...old] : [];
+        return list.map((req: any) =>
+          req.id === id
+            ? { ...req, logs: (req.logs ?? []).filter((ln: any) => ln.id !== tempId) }
+            : req
+        );
       });
       toast.error(e?.message ?? "Failed to save note");
     }
@@ -180,20 +164,17 @@ const Maintenance = () => {
                           </div>
                           <div className="mt-2">
                             <div className="text-xs text-muted-foreground">Recent notes</div>
-                            {((m.logs?.length ?? 0) > 0) || ((localNotesById[m.id]?.length ?? 0) > 0) ? (
+                            {((m.logs?.length ?? 0) > 0) ? (
                               <ul className="mt-1 space-y-1">
-                                {[...(m.logs ?? []).map((ln) => ({ ...ln })), ...(localNotesById[m.id] ?? [])]
-                                  .slice(-3)
-                                  .reverse()
-                                  .map((ln: any) => (
-                                    <li key={ln.id} className="text-sm">
-                                      <div className="flex justify-between text-xs text-muted-foreground">
-                                        <span>{[ln.user?.first_name ?? "", ln.user?.last_name ?? ""].filter(Boolean).join(" ") || "—"}</span>
-                                        <span>{formatDateTimeInTZ(ln.created_at, tz)}</span>
-                                      </div>
-                                      <div>{ln.note}</div>
-                                    </li>
-                                  ))}
+                                {(m.logs ?? []).slice(-3).reverse().map((ln: any) => (
+                                  <li key={ln.id} className="text-sm">
+                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                      <span>{[ln.user?.first_name ?? "", ln.user?.last_name ?? ""].filter(Boolean).join(" ") || "—"}</span>
+                                      <span>{formatDateTimeInTZ(ln.created_at, tz)}</span>
+                                    </div>
+                                    <div>{ln.note}</div>
+                                  </li>
+                                ))}
                               </ul>
                             ) : (
                               <div className="text-xs text-muted-foreground mt-1">No notes yet.</div>
