@@ -50,25 +50,28 @@ serve(async (req) => {
 
   // Helper: get logo bytes from branding/logo.png (download or via public URL)
   async function getLogoBytes(): Promise<Uint8Array | null> {
-    try {
-      await ensureBrandingBucket();
-      const { data: blob } = await supabase.storage.from("branding").download("logo.png");
-      if (blob) {
-        const ab = await blob.arrayBuffer();
-        return new Uint8Array(ab);
-      }
-    } catch {}
-    try {
-      const { data: pub } = supabase.storage.from("branding").getPublicUrl("logo.png");
-      const url = pub.publicUrl;
-      if (url) {
-        const res = await fetch(url);
-        if (res.ok) {
-          const ab = await res.arrayBuffer();
+    const candidates = ["logo.png", "LTP_transp copy.png"];
+    for (const name of candidates) {
+      try {
+        await ensureBrandingBucket();
+        const { data: blob } = await supabase.storage.from("branding").download(name);
+        if (blob) {
+          const ab = await blob.arrayBuffer();
           return new Uint8Array(ab);
         }
-      }
-    } catch {}
+      } catch {}
+      try {
+        const { data: pub } = supabase.storage.from("branding").getPublicUrl(name);
+        const url = pub.publicUrl;
+        if (url) {
+          const res = await fetch(url);
+          if (res.ok) {
+            const ab = await res.arrayBuffer();
+            return new Uint8Array(ab);
+          }
+        }
+      } catch {}
+    }
     return null;
   }
 

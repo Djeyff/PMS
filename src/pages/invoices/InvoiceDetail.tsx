@@ -36,6 +36,7 @@ const InvoiceDetail = () => {
         back: "Volver",
         print: "Imprimir",
         openPdf: "Abrir PDF",
+        amount: "Importe",
       }
     : {
         title: "Invoice",
@@ -53,6 +54,7 @@ const InvoiceDetail = () => {
         back: "Back",
         print: "Print",
         openPdf: "Open PDF",
+        amount: "Amount",
       };
 
   const fmtLocale = lang === "es" ? "es-ES" : "en-US";
@@ -104,7 +106,7 @@ const InvoiceDetail = () => {
       <div className="border rounded">
         <div className="flex justify-between p-3 border-b">
           <div>{t.description}</div>
-          <div>Amount</div>
+          <div>{t.amount}</div>
         </div>
         <div className="flex justify-between p-3">
           <div>{t.leaseInvoice}</div>
