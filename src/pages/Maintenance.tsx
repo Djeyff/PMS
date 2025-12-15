@@ -16,6 +16,7 @@ const Maintenance = () => {
   const agencyId = profile?.agency_id ?? null;
 
   const [noteById, setNoteById] = useState<Record<string, string>>({});
+  const [savedNotesById, setSavedNotesById] = useState<Record<string, Array<{ id: string; note: string; created_at: string }>>>({});
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["maintenance", agencyId],
@@ -40,9 +41,14 @@ const Maintenance = () => {
       return;
     }
     try {
-      await addMaintenanceLog(id, note);
+      const created = await addMaintenanceLog(id, note);
       toast.success("Note saved");
       setNoteById((prev) => ({ ...prev, [id]: "" }));
+      setSavedNotesById((prev) => {
+        const arr = prev[id] ? [...prev[id]] : [];
+        arr.push({ id: created.id, note: created.note, created_at: created.created_at });
+        return { ...prev, [id]: arr };
+      });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to save note");
     }
@@ -107,6 +113,22 @@ const Maintenance = () => {
                           <div className="flex justify-end">
                             <Button size="sm" onClick={() => onSaveNote(m.id)}>Save note</Button>
                           </div>
+                          {(savedNotesById[m.id]?.length ?? 0) > 0 && (
+                            <div className="mt-2">
+                              <div className="text-xs text-muted-foreground">Recent notes</div>
+                              <ul className="mt-1 space-y-1">
+                                {(savedNotesById[m.id] ?? []).slice(-3).reverse().map((ln) => (
+                                  <li key={ln.id} className="text-sm">
+                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                      <span>—</span>
+                                      <span>{new Date(ln.created_at).toISOString().slice(0, 16).replace("T", " ")}</span>
+                                    </div>
+                                    <div>{ln.note}</div>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

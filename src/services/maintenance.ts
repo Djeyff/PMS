@@ -128,8 +128,8 @@ export async function addMaintenanceLog(requestId: string, note: string) {
   const { data, error } = await supabase
     .from("maintenance_logs")
     .insert({ request_id: requestId, user_id: uid, note })
-    .select(`id`)
+    .select(`id, note, created_at, user_id`)
     .single();
   if (error) throw error;
-  return data;
+  return data as { id: string; note: string; created_at: string; user_id: string | null };
 }
