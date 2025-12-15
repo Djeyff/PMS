@@ -218,7 +218,7 @@ serve(async (req) => {
       const fileName = `invoice_${inv.id}.pdf`;
       const path = `${inv.id}/${fileName}`;
 
-      const { error: upErr } = await supabase.storage.from(bucketName).upload(path, pdfBytes, {
+      const { error: upErr } = await supabase.storage.from(bucketName).upload(path, new Blob([pdfBytes], { type: "application/pdf" }), {
         contentType: "application/pdf",
         upsert: true,
       });

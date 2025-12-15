@@ -200,7 +200,9 @@ serve(async (req) => {
       await supabase.storage.createBucket(bucketName, { public: true });
     }
 
-    const { error: upErr } = await supabase.storage.from(bucketName).upload(path, pdfBytes, {
+    // Use Blob to ensure correct content type and readable file
+    const blob = new Blob([pdfBytes], { type: "application/pdf" });
+    const { error: upErr } = await supabase.storage.from(bucketName).upload(path, blob, {
       contentType: "application/pdf",
       upsert: true,
     });

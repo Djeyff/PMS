@@ -77,3 +77,18 @@ export async function updateAgencyTimezone(id: string, timezone: string) {
   if (error) throw error;
   return data as { id: string };
 }
+
+export async function updateAgencyProfile(id: string, fields: { name?: string | null; address?: string | null }) {
+  const payload: any = {};
+  if (typeof fields.name !== "undefined") payload.name = fields.name ?? null;
+  if (typeof fields.address !== "undefined") payload.address = fields.address ?? null;
+
+  const { data, error } = await supabase
+    .from("agencies")
+    .update(payload)
+    .eq("id", id)
+    .select("id")
+    .single();
+  if (error) throw error;
+  return data as { id: string };
+}

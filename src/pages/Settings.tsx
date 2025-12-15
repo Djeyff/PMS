@@ -10,7 +10,7 @@ import { createAgency } from "@/services/agencies";
 import { useAuth } from "@/contexts/AuthProvider";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
-import { fetchAgencyById, updateAgencyTimezone } from "@/services/agencies";
+import { fetchAgencyById, updateAgencyTimezone, updateAgencyProfile } from "@/services/agencies";
 import { useTheme } from "@/contexts/ThemeProvider";
 import { uploadLogo, getLogoPublicUrl } from "@/services/branding";
 
@@ -29,6 +29,15 @@ const Settings = () => {
     queryFn: () => fetchAgencyById(profile!.agency_id!),
   });
 
+  // Branding states
+  const [agencyDisplayName, setAgencyDisplayName] = useState<string>(agency?.name ?? "");
+  const [address, setAddress] = useState<string>(agency?.address ?? "");
+
+  React.useEffect(() => {
+    if (agency?.name != null) setAgencyDisplayName(agency.name || "");
+    if (agency?.address != null) setAddress(agency.address || "");
+  }, [agency?.name, agency?.address]);
+
   // Curated timezone list (values are IANA tz names)
   const TIMEZONES = [
     { value: "UTC", label: "UTC (GMT+0)" },
@@ -39,7 +48,6 @@ const Settings = () => {
     { value: "America/Los_Angeles", label: "GMT-8/7 — Los Angeles" },
   ];
   const [timezone, setTimezone] = useState<string>(agency?.timezone ?? "UTC");
-  const [address, setAddress] = useState<string>(agency?.address ?? ""); // address from agency
 
   const [logoUrl, setLogoUrl] = useState<string>("");
 
@@ -81,6 +89,23 @@ const Settings = () => {
       await refetchAgency();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to update timezone");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onSaveAgencyInfo = async () => {
+    if (!hasAgency || !profile?.agency_id) return;
+    setSaving(true);
+    try {
+      await updateAgencyProfile(profile.agency_id, {
+        name: agencyDisplayName,
+        address: address,
+      });
+      toast.success("Agency info updated");
+      await refetchAgency();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to update agency info");
     } finally {
       setSaving(false);
     }
@@ -155,15 +180,27 @@ const Settings = () => {
                 </div>
 
                 <div className="space-y-2">
+                  <Label>Agency Name</Label>
+                  <Input
+                    value={agencyDisplayName}
+                    onChange={(e) => setAgencyDisplayName(e.target.value)}
+                    placeholder="Las Terrenas Properties"
+                  />
+                </div>
+
+                <div className="space-y-2">
                   <Label>Invoice Address (shown on PDF)</Label>
                   <Input
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                     placeholder="278 calle Duarte, LTI building, Las Terrenas"
                   />
-                  <div className="text-xs text-muted-foreground">
-                    Set your agency address in the DB via admin tools if needed. The PDF header reads from agency.name and agency.address.
-                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <Button onClick={onSaveAgencyInfo} disabled={saving}>
+                    {saving ? "Saving..." : "Save Agency Info"}
+                  </Button>
                 </div>
 
                 <div className="space-y-2">
