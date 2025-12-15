@@ -28,7 +28,6 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const fetchProfile = async (userId: string): Promise<Profile | null> => {
-  // Always use an authed client so the Authorization header is present
   const { data: sess } = await supabase.auth.getSession();
   const db = getAuthedClient(sess.session?.access_token);
 
@@ -50,41 +49,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const MASTER_ADMIN_EMAIL = "djeyff06@gmail.com";
-
-  // Immediate role fallback for master email so UI doesn't bounce to Pending
+  // Role resolves only from profile
   const role: Role | null = useMemo(() => {
-    if (profile?.role) return profile.role;
-    if ((user?.email?.toLowerCase() ?? "") === MASTER_ADMIN_EMAIL) return "agency_admin";
-    return null;
-  }, [profile?.role, user?.email]);
-
-  const ensureMasterAdmin = async (u: User, current: Profile | null) => {
-    const email = u.email?.toLowerCase() ?? "";
-    if (email !== MASTER_ADMIN_EMAIL) return;
-
-    // Invoke edge function to perform atomic server-side bootstrap (bypasses RLS)
-    const { data: sess } = await supabase.auth.getSession();
-    const token = sess.session?.access_token;
-    if (!token) return;
-
-    const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/bootstrap-admin";
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-
-    // If function failed, log and continue (UI should still work)
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.warn("bootstrap-admin failed:", err);
-    }
-
-    // Always refresh profile after attempting bootstrap
-    const updated = await fetchProfile(u.id).catch(() => null);
-    if (updated) setProfile(updated);
-  };
+    return profile?.role ?? null;
+  }, [profile?.role]);
 
   const ensureProfileRow = async (uid: string) => {
     const { data: sess } = await supabase.auth.getSession();
@@ -103,12 +71,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     let active = true;
     setLoading(true);
 
-    // Hard fallback to prevent endless spinner after refresh
     const hardStop = setTimeout(() => {
       if (active) setLoading(false);
     }, 2500);
 
-    // Fetch initial session immediately
     (async () => {
       const { data } = await supabase.auth.getSession();
       const sess = data.session ?? null;
@@ -121,27 +87,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         let p = await fetchProfile(sess.user.id).catch(() => null);
 
         if (!p) {
-          // Create missing profile and re-fetch using authed client
           await ensureProfileRow(sess.user.id);
           p = await fetchProfile(sess.user.id).catch(() => null);
         }
 
         if (!active) return;
         setProfile(p);
-
-        // Bootstrap admin in background and refresh profile once
-        ensureMasterAdmin(sess.user, p ?? null).then(() => {
-          if (active) refreshProfile().catch(() => {});
-        });
       } else {
         setProfile(null);
       }
 
-      // Initial session resolved → stop loading
       if (active) setLoading(false);
     })();
 
-    // Subscribe to further auth state changes
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, sess) => {
       if (!active) return;
 
@@ -158,15 +116,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         if (!active) return;
         setProfile(p);
-
-        ensureMasterAdmin(sess.user, p ?? null).then(() => {
-          if (active) refreshProfile().catch(() => {});
-        });
       } else {
         setProfile(null);
       }
 
-      // Any auth event should clear loading
       setLoading(false);
     });
 
