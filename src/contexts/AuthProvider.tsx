@@ -84,7 +84,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(sess?.user ?? null);
 
       if (sess?.user?.id) {
-        // Step 1: ensure profile row exists
+        // Ensure profile row exists and fetch it
         let p = await fetchProfile(sess.user.id).catch(() => null);
         if (!p) {
           await ensureProfileRow(sess.user.id);
@@ -93,8 +93,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (!active) return;
         setProfile(p);
 
-        // Step 2: if role missing, try secure server-side bootstrap once
-        if (!p?.role && sess.access_token) {
+        // Secure bootstrap:
+        // 1) If role missing OR 2) If admin role but agency missing, call bootstrap-admin
+        if (sess.access_token && (!p?.role || (p.role === "agency_admin" && !p.agency_id))) {
           try {
             const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/bootstrap-admin";
             await fetch(url, {
@@ -103,8 +104,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               body: JSON.stringify({}),
             });
           } catch {}
-
-          // Re-fetch profile after bootstrap attempt
           const refreshed = await fetchProfile(sess.user.id).catch(() => null);
           if (active) setProfile(refreshed);
         }
@@ -116,22 +115,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-      // Do not set loading true here; avoid flicker on token refresh events
+      // Don't toggle loading here; avoid flicker loops
       setSession(sess ?? null);
       setUser(sess?.user ?? null);
 
       if (sess?.user?.id) {
         let p = await fetchProfile(sess.user.id).catch(() => null);
-
         if (!p) {
           await ensureProfileRow(sess.user.id);
           p = await fetchProfile(sess.user.id).catch(() => null);
         }
-
         setProfile(p);
 
-        // Try server-side bootstrap once if role is still missing
-        if (!p?.role && sess.access_token) {
+        if (sess.access_token && (!p?.role || (p.role === "agency_admin" && !p.agency_id))) {
           try {
             const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/bootstrap-admin";
             await fetch(url, {
@@ -146,8 +142,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else {
         setProfile(null);
       }
-
-      // Do not modify loading here; initial load controls it.
     });
 
     return () => {

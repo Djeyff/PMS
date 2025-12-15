@@ -8,7 +8,9 @@ const AuthQuerySync = () => {
   const { loading, session, profile } = useAuth();
 
   useEffect(() => {
-    const ready = !loading && !!session && !!profile?.role;
+    const role = profile?.role;
+    const agencyReady = role !== "agency_admin" || !!profile?.agency_id;
+    const ready = !loading && !!session && !!role && agencyReady;
     if (!ready) return;
 
     qc.invalidateQueries();
