@@ -82,36 +82,60 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
+    let active = true;
     setLoading(true);
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event, sess) => {
-      setSession(sess ?? null);
+    // Fetch initial session immediately (do not rely only on onAuthStateChange)
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      const sess = data.session ?? null;
+
+      if (!active) return;
+      setSession(sess);
       setUser(sess?.user ?? null);
 
       if (sess?.user?.id) {
         const p = await fetchProfile(sess.user.id).catch(() => null);
+        if (!active) return;
         setProfile(p);
+
+        // Bootstrap admin in background, then refresh profile once
         ensureMasterAdmin(sess.user, p ?? null).then(() => {
-          refreshProfile().catch(() => {});
+          if (active) refreshProfile().catch(() => {});
         });
       } else {
         setProfile(null);
       }
 
-      // Only end loading after Supabase signals the initial session restoration,
-      // or after any auth state change events.
-      if (
-        event === 'INITIAL_SESSION' ||
-        event === 'SIGNED_IN' ||
-        event === 'SIGNED_OUT' ||
-        event === 'TOKEN_REFRESHED' ||
-        event === 'USER_UPDATED'
-      ) {
-        setLoading(false);
+      // Initial session resolved → stop loading
+      if (active) setLoading(false);
+    })();
+
+    // Subscribe to further auth state changes
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, sess) => {
+      if (!active) return;
+
+      setSession(sess ?? null);
+      setUser(sess?.user ?? null);
+
+      if (sess?.user?.id) {
+        const p = await fetchProfile(sess.user.id).catch(() => null);
+        if (!active) return;
+        setProfile(p);
+
+        ensureMasterAdmin(sess.user, p ?? null).then(() => {
+          if (active) refreshProfile().catch(() => {});
+        });
+      } else {
+        setProfile(null);
       }
+
+      // Any auth event should clear loading
+      setLoading(false);
     });
 
     return () => {
+      active = false;
       sub?.subscription?.unsubscribe();
     };
   }, []);
