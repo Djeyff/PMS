@@ -20,36 +20,38 @@ const Stat = ({ title, value, children }: { title: string; value?: string; child
 );
 
 const AgencyDashboard = () => {
-  const { role, user, profile, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
+
+  const isReady = !loading && !!user && profile?.role === "agency_admin" && !!profile?.agency_id;
 
   const { data: properties } = useQuery({
-    queryKey: ["dashboard-properties", role, user?.id, profile?.agency_id],
-    queryFn: () => fetchProperties({ role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
-    enabled: !loading && !!role && !!user && !!profile?.agency_id,
+    queryKey: ["dashboard-properties", user?.id, profile?.role, profile?.agency_id],
+    queryFn: () => fetchProperties({ role: profile?.role ?? null, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
+    enabled: isReady,
   });
 
   const { data: leases } = useQuery({
-    queryKey: ["dashboard-leases", role, user?.id, profile?.agency_id],
-    queryFn: () => fetchLeases({ role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
-    enabled: !loading && !!role && !!user && !!profile?.agency_id,
+    queryKey: ["dashboard-leases", user?.id, profile?.role, profile?.agency_id],
+    queryFn: () => fetchLeases({ role: profile?.role ?? null, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
+    enabled: isReady,
   });
 
   const { data: payments } = useQuery({
-    queryKey: ["dashboard-payments", role, user?.id, profile?.agency_id],
-    queryFn: () => fetchPayments({ role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
-    enabled: !loading && !!role && !!user && !!profile?.agency_id,
+    queryKey: ["dashboard-payments", user?.id, profile?.role, profile?.agency_id],
+    queryFn: () => fetchPayments({ role: profile?.role ?? null, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
+    enabled: isReady,
   });
 
   const { data: invoices } = useQuery({
-    queryKey: ["dashboard-invoices", role, user?.id, profile?.agency_id],
+    queryKey: ["dashboard-invoices", user?.id, profile?.role, profile?.agency_id],
     queryFn: fetchInvoices,
-    enabled: !loading && !!role && !!user && !!profile?.agency_id,
+    enabled: isReady,
   });
 
   const { data: maintenance } = useQuery({
-    queryKey: ["dashboard-maintenance", role, user?.id, profile?.agency_id],
+    queryKey: ["dashboard-maintenance", user?.id, profile?.role, profile?.agency_id],
     queryFn: () => fetchMaintenanceRequests({ agencyId: profile!.agency_id!, status: ["open", "in_progress"] }),
-    enabled: !loading && !!role && !!user && !!profile?.agency_id,
+    enabled: isReady,
   });
 
   const occupancyPercent = (() => {

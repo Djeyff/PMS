@@ -15,13 +15,13 @@ const data = [
 ];
 
 const Tenants = () => {
-  const { role, profile, loading } = useAuth();
+  const { profile, loading } = useAuth();
   const agencyId = profile?.agency_id ?? null;
-  const isAdmin = role === "agency_admin";
+  const isAdminReady = !loading && profile?.role === "agency_admin" && !!agencyId;
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["tenants", agencyId, role],
-    enabled: !loading && isAdmin && !!agencyId,
+    queryKey: ["tenants", agencyId, profile?.role],
+    enabled: isAdminReady,
     queryFn: () => fetchTenantProfilesInAgency(agencyId!),
   });
 
@@ -30,7 +30,7 @@ const Tenants = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Tenants</h1>
-          {isAdmin && agencyId ? <AddTenantDialog onCreated={() => refetch()} /> : null}
+          {isAdminReady && agencyId ? <AddTenantDialog onCreated={() => refetch()} /> : null}
         </div>
         <Card>
           <CardHeader>
@@ -47,7 +47,7 @@ const Tenants = () => {
                   <TableRow>
                     <TableHead>Tenant</TableHead>
                     <TableHead>Agency</TableHead>
-                    {isAdmin && <TableHead>Actions</TableHead>}
+                    {isAdminReady && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -57,7 +57,7 @@ const Tenants = () => {
                       <TableRow key={t.id}>
                         <TableCell>{displayName}</TableCell>
                         <TableCell>{t.agency_id ? "Assigned" : "Unassigned"}</TableCell>
-                        {isAdmin && (
+                        {isAdminReady && (
                           <TableCell>
                             <div className="flex gap-2">
                               <EditTenantDialog tenant={{ id: t.id, first_name: t.first_name, last_name: t.last_name }} onUpdated={() => refetch()} />

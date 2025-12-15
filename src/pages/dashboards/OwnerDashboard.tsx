@@ -17,30 +17,32 @@ const Stat = ({ title, value, children }: { title: string; value?: string; child
 );
 
 const OwnerDashboard = () => {
-  const { role, user, profile, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
+
+  const isReady = !loading && !!user && profile?.role === "owner";
 
   const { data: props } = useQuery({
-    queryKey: ["owner-props", role, user?.id, profile?.agency_id],
-    queryFn: () => fetchProperties({ role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
-    enabled: !loading && role === "owner" && !!user,
+    queryKey: ["owner-props", user?.id, profile?.role],
+    queryFn: () => fetchProperties({ role: profile?.role ?? null, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
+    enabled: isReady,
   });
 
   const { data: leases } = useQuery({
-    queryKey: ["owner-leases", role, user?.id, profile?.agency_id],
-    queryFn: () => fetchLeases({ role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
-    enabled: !loading && role === "owner" && !!user,
+    queryKey: ["owner-leases", user?.id, profile?.role],
+    queryFn: () => fetchLeases({ role: profile?.role ?? null, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
+    enabled: isReady,
   });
 
   const { data: payments } = useQuery({
-    queryKey: ["owner-payments", role, user?.id, profile?.agency_id],
-    queryFn: () => fetchPayments({ role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
-    enabled: !loading && role === "owner" && !!user,
+    queryKey: ["owner-payments", user?.id, profile?.role],
+    queryFn: () => fetchPayments({ role: profile?.role ?? null, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
+    enabled: isReady,
   });
 
   const { data: myShares } = useQuery({
-    queryKey: ["owner-shares", role, user?.id],
+    queryKey: ["owner-shares", user?.id, profile?.role],
     queryFn: () => fetchMyOwnerships(user!.id),
-    enabled: !loading && role === "owner" && !!user,
+    enabled: isReady,
   });
 
   const occupancy = (() => {

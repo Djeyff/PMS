@@ -13,24 +13,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { fetchAgencyById } from "@/services/agencies";
 
 const Maintenance = () => {
-  const { role, profile, loading } = useAuth();
-  const isAdmin = role === "agency_admin";
-  const agencyId = profile?.agency_id ?? null;
+  const { profile, loading } = useAuth();
+  const isAdminReady = !loading && profile?.role === "agency_admin" && !!profile?.agency_id;
 
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "in_progress" | "closed">("all");
   const statuses = statusFilter === "all" ? ["open", "in_progress", "closed"] as const : [statusFilter];
 
   const { data: agency } = useQuery({
-    queryKey: ["agency-for-maint", agencyId],
-    enabled: !loading && !!agencyId,
-    queryFn: () => fetchAgencyById(agencyId!),
+    queryKey: ["agency-for-maint", profile?.agency_id],
+    enabled: isAdminReady,
+    queryFn: () => fetchAgencyById(profile!.agency_id!),
   });
   const tz = agency?.timezone ?? "UTC";
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["maintenance", agencyId, statusFilter, role],
-    enabled: !loading && !!agencyId,
-    queryFn: () => fetchMaintenanceRequests({ agencyId: agencyId!, status: statuses as any }),
+    queryKey: ["maintenance", profile?.agency_id, statusFilter, profile?.role],
+    enabled: isAdminReady,
+    queryFn: () => fetchMaintenanceRequests({ agencyId: profile!.agency_id!, status: statuses as any }),
   });
 
   const onUpdateStatus = async (id: string, status: "open" | "in_progress" | "closed") => {
@@ -61,7 +60,7 @@ const Maintenance = () => {
               </SelectContent>
             </Select>
             <Button variant="outline" onClick={() => refetch()}>Refresh</Button>
-            {isAdmin && agencyId ? <NewRequestDialog onCreated={() => refetch()} /> : null}
+            {isAdminReady && profile?.agency_id ? <NewRequestDialog onCreated={() => refetch()} /> : null}
           </div>
         </div>
         <Card>
@@ -96,7 +95,7 @@ const Maintenance = () => {
                       <TableCell className="capitalize">{m.status.replace("_", " ")}</TableCell>
                       <TableCell>{m.due_date ?? "—"}</TableCell>
                       <TableCell className="space-x-2">
-                        {isAdmin ? (
+                        {isAdminReady ? (
                           <>
                             {m.status !== "in_progress" && (
                               <Button size="sm" variant="outline" onClick={() => onUpdateStatus(m.id, "in_progress")}>Start</Button>

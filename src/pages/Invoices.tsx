@@ -21,13 +21,14 @@ const data = [
 ];
 
 const Invoices = () => {
-  const { role, user, profile, loading } = useAuth();
-  const isAdmin = role === "agency_admin";
+  const { user, profile, loading } = useAuth();
+  const isAdminReady = !loading && !!user && profile?.role === "agency_admin" && !!profile?.agency_id;
+  const isOwnerOrTenantReady = !loading && !!user && (profile?.role === "owner" || profile?.role === "tenant");
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["invoices", role, user?.id, profile?.agency_id],
+    queryKey: ["invoices", user?.id, profile?.role, profile?.agency_id],
     queryFn: fetchInvoices,
-    enabled: !loading && !!role && !!user && (isAdmin ? !!profile?.agency_id : true),
+    enabled: isAdminReady || isOwnerOrTenantReady,
   });
 
   const rows = useMemo(() => {
@@ -51,7 +52,7 @@ const Invoices = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Invoices</h1>
-          {isAdmin ? <InvoiceForm onCreated={() => refetch()} /> : null}
+          {isAdminReady ? <InvoiceForm onCreated={() => refetch()} /> : null}
         </div>
         <Card>
           <CardHeader>
@@ -75,7 +76,7 @@ const Invoices = () => {
                     <TableHead>Paid</TableHead>
                     <TableHead>Balance</TableHead>
                     <TableHead>Status</TableHead>
-                    {isAdmin && <TableHead>Actions</TableHead>}
+                    {isAdminReady && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -95,7 +96,7 @@ const Invoices = () => {
                         <TableCell>{fmt(inv.paid, inv.currency)}</TableCell>
                         <TableCell>{fmt(inv.balance, inv.currency)}</TableCell>
                         <TableCell className="capitalize">{String(inv.displayStatus).replace("_", " ")}</TableCell>
-                        {isAdmin && (
+                        {isAdminReady && (
                           <TableCell>
                             <div className="flex gap-2">
                               <Button asChild size="sm" variant="outline"><Link to={`/invoices/${inv.id}`}>View</Link></Button>

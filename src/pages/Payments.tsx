@@ -8,15 +8,18 @@ import { fetchPayments } from "@/services/payments";
 import PaymentForm from "@/components/payments/PaymentForm";
 
 const Payments = () => {
-  const { role, user, profile, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
+
+  const isAdminReady = !loading && !!user && profile?.role === "agency_admin" && !!profile?.agency_id;
+  const isOwnerOrTenantReady = !loading && !!user && (profile?.role === "owner" || profile?.role === "tenant");
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["payments", role, user?.id, profile?.agency_id],
-    queryFn: () => fetchPayments({ role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
-    enabled: !loading && !!role && !!user && (role === "agency_admin" ? !!profile?.agency_id : true),
+    queryKey: ["payments", user?.id, profile?.role, profile?.agency_id],
+    queryFn: () => fetchPayments({ role: profile?.role ?? null, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
+    enabled: isAdminReady || isOwnerOrTenantReady,
   });
 
-  const canCreate = role === "agency_admin";
+  const canCreate = profile?.role === "agency_admin";
 
   const totals = useMemo(() => {
     const usd = (data ?? []).filter(p => p.currency === "USD").reduce((s, p) => s + Number(p.amount || 0), 0);

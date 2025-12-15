@@ -10,15 +10,17 @@ import EditLeaseDialog from "@/components/leases/EditLeaseDialog";
 import DeleteLeaseDialog from "@/components/leases/DeleteLeaseDialog";
 
 const Leases = () => {
-  const { role, user, profile, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
+
+  const isReady = !loading && !!user && profile?.role === "agency_admin" && !!profile?.agency_id;
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["leases", role, user?.id, profile?.agency_id],
-    queryFn: () => fetchLeases({ role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
-    enabled: !loading && role === "agency_admin" && !!user && !!profile?.agency_id,
+    queryKey: ["leases", user?.id, profile?.role, profile?.agency_id],
+    queryFn: () => fetchLeases({ role: profile?.role ?? null, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
+    enabled: isReady,
   });
 
-  const canCreate = role === "agency_admin";
+  const canCreate = profile?.role === "agency_admin";
 
   const fullName = (t?: { first_name: string | null; last_name: string | null } | null) => {
     if (!t) return "—";
