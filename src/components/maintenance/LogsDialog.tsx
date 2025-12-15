@@ -5,8 +5,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useQuery } from "@tanstack/react-query";
 import { fetchMaintenanceLogs, addMaintenanceLog, MaintenanceRow } from "@/services/maintenance";
 import { toast } from "sonner";
+import { formatDateTimeInTZ } from "@/utils/datetime";
 
-const LogsDialog = ({ request, onUpdated }: { request: MaintenanceRow; onUpdated?: () => void }) => {
+const LogsDialog = ({ request, tz, onUpdated }: { request: MaintenanceRow; tz?: string; onUpdated?: () => void }) => {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -55,11 +56,12 @@ const LogsDialog = ({ request, onUpdated }: { request: MaintenanceRow; onUpdated
               <ul className="divide-y">
                 {(data ?? []).map((l) => {
                   const author = [l.user?.first_name ?? "", l.user?.last_name ?? ""].filter(Boolean).join(" ") || "—";
+                  const when = tz ? formatDateTimeInTZ(l.created_at, tz) : new Date(l.created_at).toISOString().slice(0, 16).replace("T", " ");
                   return (
                     <li key={l.id} className="p-3 text-sm">
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>{author}</span>
-                        <span>{new Date(l.created_at).toISOString().slice(0, 16).replace("T", " ")}</span>
+                        <span>{when}</span>
                       </div>
                       <div className="mt-1">{l.note}</div>
                     </li>
