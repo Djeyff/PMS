@@ -17,6 +17,8 @@ import { uploadLogo, getLogoPublicUrl } from "@/services/branding";
 const Settings = () => {
   const { profile, refreshProfile } = useAuth();
   const { theme, setTheme } = useTheme();
+  const [pendingTheme, setPendingTheme] = useState<"light" | "dark">(theme);
+  const [savingTheme, setSavingTheme] = useState(false);
   const [agencyName, setAgencyName] = useState("");
   const [currency, setCurrency] = useState<"USD" | "DOP">("USD");
   const [saving, setSaving] = useState(false);
@@ -149,15 +151,29 @@ const Settings = () => {
 
                 <div className="space-y-2">
                   <Label>Theme</Label>
-                  <Select value={theme} onValueChange={(v) => setTheme((v as "light" | "dark"))}>
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue placeholder="Select theme" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="light">Light</SelectItem>
-                      <SelectItem value="dark">Dark</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center gap-2">
+                    <Select value={pendingTheme} onValueChange={(v) => setPendingTheme(v as "light" | "dark")}>
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Select theme" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="light">Light</SelectItem>
+                        <SelectItem value="dark">Dark</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        setSavingTheme(true);
+                        setTheme(pendingTheme);
+                        toast.success("Theme saved");
+                        setSavingTheme(false);
+                      }}
+                      disabled={savingTheme}
+                    >
+                      {savingTheme ? "Saving..." : "Save Theme"}
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
