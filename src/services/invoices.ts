@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, getAuthedClient } from "@/integrations/supabase/client";
 
 export type InvoiceRow = {
   id: string;
@@ -55,7 +55,9 @@ function normalizeInvoiceRow(row: any): InvoiceWithMeta {
 }
 
 export async function fetchInvoices() {
-  const { data, error } = await supabase
+  const { data: sess } = await supabase.auth.getSession();
+  const db = getAuthedClient(sess.session?.access_token);
+  const { data, error } = await db
     .from("invoices")
     .select(`
       id, lease_id, tenant_id, number, issue_date, due_date, currency, total_amount, status, created_at, pdf_lang, pdf_url,
@@ -104,7 +106,9 @@ export async function createInvoice(input: {
     pdf_url: null,
   };
 
-  const { data, error } = await supabase
+  const { data: sess } = await supabase.auth.getSession();
+  const db = getAuthedClient(sess.session?.access_token);
+  const { data, error } = await db
     .from("invoices")
     .insert(payload)
     .select(`
@@ -145,7 +149,9 @@ export async function updateInvoice(
   if (typeof input.pdf_lang !== "undefined") payload.pdf_lang = input.pdf_lang;
   if (typeof input.pdf_url !== "undefined") payload.pdf_url = input.pdf_url;
 
-  const { data, error } = await supabase
+  const { data: sess } = await supabase.auth.getSession();
+  const db = getAuthedClient(sess.session?.access_token);
+  const { data, error } = await db
     .from("invoices")
     .update(payload)
     .eq("id", id)
@@ -165,13 +171,17 @@ export async function updateInvoice(
 }
 
 export async function deleteInvoice(id: string) {
-  const { error } = await supabase.from("invoices").delete().eq("id", id);
+  const { data: sess } = await supabase.auth.getSession();
+  const db = getAuthedClient(sess.session?.access_token);
+  const { error } = await db.from("invoices").delete().eq("id", id);
   if (error) throw error;
   return true;
 }
 
 export async function fetchPendingInvoicesByLease(leaseId: string) {
-  const { data, error } = await supabase
+  const { data: sess } = await supabase.auth.getSession();
+  const db = getAuthedClient(sess.session?.access_token);
+  const { data, error } = await db
     .from("invoices")
     .select(`
       id, number, lease_id, tenant_id, due_date, currency, total_amount, status,

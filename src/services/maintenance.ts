@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, getAuthedClient } from "@/integrations/supabase/client";
 
 export type MaintenanceRow = {
   id: string;
@@ -49,7 +49,9 @@ function normalize(row: any): MaintenanceRow {
 }
 
 export async function fetchMaintenanceRequests(params: { agencyId: string; status?: ("open" | "in_progress" | "closed")[] }) {
-  let query = supabase
+  const { data: sess } = await supabase.auth.getSession();
+  const db = getAuthedClient(sess.session?.access_token);
+  let query = db
     .from("maintenance_requests")
     .select(`
       id, property_id, title, description, priority, status, due_date, created_at,
@@ -81,7 +83,9 @@ export async function fetchMaintenanceRequests(params: { agencyId: string; statu
 }
 
 export async function createMaintenanceRequest(input: { property_id: string; title: string; description?: string; priority: "low" | "medium" | "high"; due_date?: string }) {
-  const { data, error } = await supabase
+  const { data: sess } = await supabase.auth.getSession();
+  const db = getAuthedClient(sess.session?.access_token);
+  const { data, error } = await db
     .from("maintenance_requests")
     .insert({
       property_id: input.property_id,
@@ -98,7 +102,9 @@ export async function createMaintenanceRequest(input: { property_id: string; tit
 }
 
 export async function updateMaintenanceStatus(id: string, status: "open" | "in_progress" | "closed") {
-  const { data, error } = await supabase
+  const { data: sess } = await supabase.auth.getSession();
+  const db = getAuthedClient(sess.session?.access_token);
+  const { data, error } = await db
     .from("maintenance_requests")
     .update({ status })
     .eq("id", id)
@@ -119,7 +125,9 @@ export async function updateMaintenanceRequest(
   if (typeof input.status !== "undefined") payload.status = input.status;
   if (typeof input.due_date !== "undefined") payload.due_date = input.due_date;
 
-  const { data, error } = await supabase
+  const { data: sess } = await supabase.auth.getSession();
+  const db = getAuthedClient(sess.session?.access_token);
+  const { data, error } = await db
     .from("maintenance_requests")
     .update(payload)
     .eq("id", id)
@@ -130,7 +138,9 @@ export async function updateMaintenanceRequest(
 }
 
 export async function fetchMaintenanceLogs(requestId: string) {
-  const { data, error } = await supabase
+  const { data: sess } = await supabase.auth.getSession();
+  const db = getAuthedClient(sess.session?.access_token);
+  const { data, error } = await db
     .from("maintenance_logs")
     .select(`id, request_id, user_id, note, created_at, user:profiles ( first_name, last_name )`)
     .eq("request_id", requestId)
@@ -150,12 +160,12 @@ export async function fetchMaintenanceLogs(requestId: string) {
 }
 
 export async function addMaintenanceLog(requestId: string, note: string) {
-  const { data: userRes } = await supabase.auth.getUser();
-  const uid = userRes.user?.id ?? null;
+  const { data: sess } = await supabase.auth.getSession();
+  const db = getAuthedClient(sess.session?.access_token);
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("maintenance_logs")
-    .insert({ request_id: requestId, user_id: uid, note })
+    .insert({ request_id: requestId, user_id: sess.session?.user?.id ?? null, note })
     .select(`id, note, created_at, user_id, user:profiles ( first_name, last_name )`)
     .single();
 
