@@ -97,6 +97,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     let active = true;
     setLoading(true);
 
+    // Hard fallback to prevent endless spinner after refresh
+    const hardStop = setTimeout(() => {
+      if (active) setLoading(false);
+    }, 2500);
+
     // Fetch initial session immediately
     (async () => {
       const { data } = await supabase.auth.getSession();
@@ -108,17 +113,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (sess?.user?.id) {
         let p = await fetchProfile(sess.user.id).catch(() => null);
-        if (!active) return;
 
         if (!p) {
           // Create missing profile and re-fetch
-          await ensureProfileRow(sess.user.id);
+          await supabase.from("profiles").upsert({ id: sess.user.id }, { onConflict: "id" }).catch(() => {});
           p = await fetchProfile(sess.user.id).catch(() => null);
         }
 
+        if (!active) return;
         setProfile(p);
 
-        // Bootstrap admin in background and refresh profile once
         ensureMasterAdmin(sess.user, p ?? null).then(() => {
           if (active) refreshProfile().catch(() => {});
         });
@@ -139,14 +143,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (sess?.user?.id) {
         let p = await fetchProfile(sess.user.id).catch(() => null);
-        if (!active) return;
 
         if (!p) {
-          // Create missing profile and re-fetch
-          await ensureProfileRow(sess.user.id);
+          await supabase.from("profiles").upsert({ id: sess.user.id }, { onConflict: "id" }).catch(() => {});
           p = await fetchProfile(sess.user.id).catch(() => null);
         }
 
+        if (!active) return;
         setProfile(p);
 
         ensureMasterAdmin(sess.user, p ?? null).then(() => {
@@ -162,6 +165,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     return () => {
       active = false;
+      clearTimeout(hardStop);
       sub?.subscription?.unsubscribe();
     };
   }, []);
