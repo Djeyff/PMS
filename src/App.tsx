@@ -25,6 +25,7 @@ import Pending from "./pages/Pending";
 import Users from "./pages/Users";
 import InvoiceDetail from "./pages/invoices/InvoiceDetail";
 import Owners from "./pages/Owners";
+import { ThemeProvider } from "./contexts/ThemeProvider";
 
 const queryClient = new QueryClient();
 
@@ -33,160 +34,162 @@ const App = () => (
     <TooltipProvider>
       <CurrencyProvider>
         <AuthProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/login" element={<Login />} />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/onboarding"
-                element={
-                  <ProtectedRoute>
-                    <Onboarding />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/properties"
-                element={
-                  <ProtectedRoute>
-                    <RoleGate allow={["agency_admin", "owner"]}>
-                      <Properties />
-                    </RoleGate>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/tenants"
-                element={
-                  <ProtectedRoute>
-                    <RoleGate allow={["agency_admin"]}>
-                      <Tenants />
-                    </RoleGate>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/leases"
-                element={
-                  <ProtectedRoute>
-                    <RoleGate allow={["agency_admin"]}>
-                      <Leases />
-                    </RoleGate>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/invoices"
-                element={
-                  <ProtectedRoute>
-                    <RoleGate allow={["agency_admin", "owner", "tenant"]}>
-                      <Invoices />
-                    </RoleGate>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/invoices/:id"
-                element={
-                  <ProtectedRoute>
-                    <RoleGate allow={["agency_admin", "owner", "tenant"]}>
-                      <InvoiceDetail />
-                    </RoleGate>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/payments"
-                element={
-                  <ProtectedRoute>
-                    <RoleGate allow={["agency_admin", "owner", "tenant"]}>
-                      <Payments />
-                    </RoleGate>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/maintenance"
-                element={
-                  <ProtectedRoute>
-                    <RoleGate allow={["agency_admin", "owner", "tenant"]}>
-                      <Maintenance />
-                    </RoleGate>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/expenses"
-                element={
-                  <ProtectedRoute>
-                    <RoleGate allow={["agency_admin"]}>
-                      <Expenses />
-                    </RoleGate>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/reports"
-                element={
-                  <ProtectedRoute>
-                    <RoleGate allow={["agency_admin", "owner"]}>
-                      <Reports />
-                    </RoleGate>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <ProtectedRoute>
-                    <RoleGate allow={["agency_admin"]}>
-                      <Settings />
-                    </RoleGate>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/users"
-                element={
-                  <ProtectedRoute>
-                    <RoleGate allow={["agency_admin"]}>
-                      <Users />
-                    </RoleGate>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/owners"
-                element={
-                  <ProtectedRoute>
-                    <RoleGate allow={["agency_admin"]}>
-                      <Owners />
-                    </RoleGate>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/pending"
-                element={
-                  <ProtectedRoute>
-                    <Pending />
-                  </ProtectedRoute>
-                }
-              />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
+          <ThemeProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/login" element={<Login />} />
+                <Route
+                  path="/dashboard"
+                  element={
+                    <ProtectedRoute>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/onboarding"
+                  element={
+                    <ProtectedRoute>
+                      <Onboarding />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/properties"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin", "owner"]}>
+                        <Properties />
+                      </RoleGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/tenants"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin"]}>
+                        <Tenants />
+                      </RoleGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/leases"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin"]}>
+                        <Leases />
+                      </RoleGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/invoices"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin", "owner", "tenant"]}>
+                        <Invoices />
+                      </RoleGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/invoices/:id"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin", "owner", "tenant"]}>
+                        <InvoiceDetail />
+                      </RoleGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/payments"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin", "owner", "tenant"]}>
+                        <Payments />
+                      </RoleGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/maintenance"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin", "owner", "tenant"]}>
+                        <Maintenance />
+                      </RoleGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/expenses"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin"]}>
+                        <Expenses />
+                      </RoleGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/reports"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin", "owner"]}>
+                        <Reports />
+                      </RoleGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin"]}>
+                        <Settings />
+                      </RoleGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/users"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin"]}>
+                        <Users />
+                      </RoleGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/owners"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin"]}>
+                        <Owners />
+                      </RoleGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/pending"
+                  element={
+                    <ProtectedRoute>
+                      <Pending />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </ThemeProvider>
         </AuthProvider>
       </CurrencyProvider>
     </TooltipProvider>

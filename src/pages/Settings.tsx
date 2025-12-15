@@ -11,9 +11,11 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAgencyById, updateAgencyTimezone } from "@/services/agencies";
+import { useTheme } from "@/contexts/ThemeProvider";
 
 const Settings = () => {
   const { profile, refreshProfile } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [agencyName, setAgencyName] = useState("");
   const [currency, setCurrency] = useState<"USD" | "DOP">("USD");
   const [saving, setSaving] = useState(false);
@@ -91,6 +93,20 @@ const Settings = () => {
                     You are assigned to an agency. You can now manage users and properties.
                   </div>
                 </div>
+
+                <div className="space-y-2">
+                  <Label>Theme</Label>
+                  <Select value={theme} onValueChange={(v) => setTheme((v as "light" | "dark"))}>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Select theme" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="light">Light</SelectItem>
+                      <SelectItem value="dark">Dark</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="space-y-2">
                   <Label>Timezone</Label>
                   <Select value={timezone} onValueChange={(v) => setTimezone(v)}>
