@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import AppShell from "@/components/layout/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,34 @@ const Maintenance = () => {
     queryFn: () => fetchMaintenanceRequests({ agencyId: agencyId!, status: ["open", "in_progress", "closed"] }),
   });
 
+  // Cache notes in sessionStorage so they show instantly and persist across refresh
+  const cacheKey = "maint_notes_cache";
+  const getCache = (): Record<string, Array<{ id: string; note: string; created_at: string }>> => {
+    try {
+      const raw = sessionStorage.getItem(cacheKey);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  };
+  const setCache = (map: Record<string, Array<{ id: string; note: string; created_at: string }>>) => {
+    try {
+      sessionStorage.setItem(cacheKey, JSON.stringify(map));
+    } catch {
+      // ignore storage errors
+    }
+  };
+
+  // Load cached notes for visible requests on mount/data change
   const requestIds = (data ?? []).map((m) => m.id);
+  useEffect(() => {
+    const cache = getCache();
+    const next: Record<string, Array<{ id: string; note: string; created_at: string }>> = {};
+    requestIds.forEach((rid) => {
+      if (cache[rid]?.length) next[rid] = cache[rid];
+    });
+    setLocalNotesById(next);
+  }, [requestIds.length]);
 
   const { data: bulkLogs, isLoading: logsLoading, refetch: refetchBulkLogs } = useQuery({
     queryKey: ["maint-logs-bulk", agencyId, requestIds],
@@ -42,12 +69,29 @@ const Maintenance = () => {
     queryFn: () => fetchMaintenanceLogsBulk(requestIds),
   });
 
+  // Merge server logs into local cache without blocking UI
+  useEffect(() => {
+    if (!bulkLogs) return;
+    const merged: Record<string, Array<{ id: string; note: string; created_at: string }>> = { ...localNotesById };
+    Object.entries(bulkLogs).forEach(([rid, logs]) => {
+      const existing = merged[rid] ?? [];
+      const union = new Map<string, { id: string; note: string; created_at: string }>();
+      [...logs.map((l: any) => ({ id: l.id, note: l.note, created_at: l.created_at })), ...existing].forEach((ln) => {
+        union.set(ln.id, ln);
+      });
+      merged[rid] = Array.from(union.values());
+    });
+    setLocalNotesById(merged);
+    setCache(merged);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bulkLogs]);
+
   const onUpdateStatus = async (id: string, status: "open" | "in_progress" | "closed") => {
     try {
       await updateMaintenanceStatus(id, status);
       toast.success("Status updated");
       refetch();
-      await refetchBulkLogs();
+      refetchBulkLogs();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to update status");
     }
@@ -59,19 +103,38 @@ const Maintenance = () => {
       toast.error("Please write a note");
       return;
     }
+    // Optimistic: add locally and cache immediately
+    const tempId = `local-${Date.now()}`;
+    const createdAt = new Date().toISOString();
+    setLocalNotesById((prev) => {
+      const arr = prev[id] ? [...prev[id]] : [];
+      arr.push({ id: tempId, note, created_at: createdAt });
+      const next = { ...prev, [id]: arr };
+      setCache(next);
+      return next;
+    });
+    setNoteById((prev) => ({ ...prev, [id]: "" }));
+
     try {
       const created = await addMaintenanceLog(id, note);
-      // Show locally right away
+      // Replace temp note with server note (keep order)
       setLocalNotesById((prev) => {
-        const arr = prev[id] ? [...prev[id]] : [];
-        arr.push({ id: created.id, note: created.note, created_at: created.created_at });
-        return { ...prev, [id]: arr };
+        const arr = (prev[id] ?? []).map((ln) => (ln.id === tempId ? { id: created.id, note: created.note, created_at: created.created_at } : ln));
+        const next = { ...prev, [id]: arr };
+        setCache(next);
+        return next;
       });
-      setNoteById((prev) => ({ ...prev, [id]: "" }));
       toast.success("Note saved");
-      // Refresh server logs so they persist across sessions
-      await refetchBulkLogs();
+      // Background refresh (no await) to bring author names if needed
+      refetchBulkLogs();
     } catch (e: any) {
+      // Roll back optimistic insert on error
+      setLocalNotesById((prev) => {
+        const arr = (prev[id] ?? []).filter((ln) => ln.id !== tempId);
+        const next = { ...prev, [id]: arr };
+        setCache(next);
+        return next;
+      });
       toast.error(e?.message ?? "Failed to save note");
     }
   };
@@ -137,13 +200,9 @@ const Maintenance = () => {
                           </div>
                           <div className="mt-2">
                             <div className="text-xs text-muted-foreground">Recent notes</div>
-                            {logsLoading ? (
-                              <div className="text-xs text-muted-foreground mt-1">Loading notes...</div>
-                            ) : (bulkLogs?.[m.id]?.length ?? 0) === 0 && (localNotesById[m.id]?.length ?? 0) === 0 ? (
-                              <div className="text-xs text-muted-foreground mt-1">No notes yet.</div>
-                            ) : (
+                            {(localNotesById[m.id]?.length ?? 0) > 0 || (bulkLogs?.[m.id]?.length ?? 0) > 0 ? (
                               <ul className="mt-1 space-y-1">
-                                {[...(bulkLogs?.[m.id] ?? []), ...(localNotesById[m.id] ?? [])]
+                                {[...(localNotesById[m.id] ?? []), ...(bulkLogs?.[m.id] ?? [])]
                                   .slice(-3)
                                   .reverse()
                                   .map((ln) => (
@@ -156,6 +215,10 @@ const Maintenance = () => {
                                     </li>
                                   ))}
                               </ul>
+                            ) : logsLoading ? (
+                              <div className="text-xs text-muted-foreground mt-1">Loading notes...</div>
+                            ) : (
+                              <div className="text-xs text-muted-foreground mt-1">No notes yet.</div>
                             )}
                           </div>
                         </div>
