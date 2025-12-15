@@ -52,13 +52,11 @@ const AgencyDashboard = () => {
     enabled: !!role && !!user && !!profile?.agency_id,
   });
 
-  // Occupancy based on properties with active leases
   const occupancyPercent = (() => {
     const totalProps = properties?.length ?? 0;
     if (totalProps === 0) return 0;
     const activeProps = new Set<string>();
     (leases ?? []).forEach((l: any) => {
-      // consider active if today is within lease period
       const today = new Date().toISOString().slice(0, 10);
       if (l.start_date <= today && l.end_date >= today) {
         activeProps.add(l.property_id);
@@ -67,23 +65,20 @@ const AgencyDashboard = () => {
     return Math.round((activeProps.size / totalProps) * 100);
   })();
 
-  // Monthly revenue by currency (current month)
   const monthly = (() => {
     const d = new Date();
-    const ym = d.toISOString().slice(0, 7); // YYYY-MM
+    const ym = d.toISOString().slice(0, 7);
     const list = (payments ?? []).filter((p: any) => (p.received_date ?? "").startsWith(ym));
     const usd = list.filter((p: any) => p.currency === "USD").reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
     const dop = list.filter((p: any) => p.currency === "DOP").reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
     return { usd, dop };
   })();
 
-  // Overdue invoices count
   const overdueCount = (() => {
     const today = new Date().toISOString().slice(0, 10);
     return (invoices ?? []).filter((inv: any) => inv.due_date < today && inv.status !== "paid" && inv.status !== "void").length;
   })();
 
-  // Pending/partial invoices list with remaining amount
   const pendingInvoices = (() => {
     const list = (invoices ?? [])
       .filter((inv: any) => inv.status === "sent" || inv.status === "partial" || inv.status === "overdue")
@@ -100,7 +95,6 @@ const AgencyDashboard = () => {
     return list;
   })();
 
-  // Upcoming expirations (existing)
   const upcomingExpirations = (() => {
     const now = new Date();
     const list = (leases ?? []).filter((l: any) => {
@@ -110,6 +104,15 @@ const AgencyDashboard = () => {
       return diff >= 0 && diff <= 45;
     });
     return list.sort((a: any, b: any) => (a.end_date < b.end_date ? -1 : 1)).slice(0, 6);
+  })();
+
+  const upcomingMaintenance = (() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const list = (maintenance ?? [])
+      .filter((m: any) => m.due_date && m.due_date >= today)
+      .sort((a: any, b: any) => (a.due_date < b.due_date ? -1 : 1))
+      .slice(0, 6);
+    return list;
   })();
 
   return (
@@ -183,6 +186,38 @@ const AgencyDashboard = () => {
                       </span>
                     </div>
                     <div className="text-sm text-muted-foreground">{format(parseISO(l.end_date), "yyyy-MM-dd")}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+      <div className="grid gap-4 grid-cols-1">
+        <Card>
+          <CardHeader>
+            <CardTitle>Upcoming Maintenance</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {(upcomingMaintenance ?? []).length === 0 ? (
+              <div className="text-sm text-muted-foreground">No upcoming maintenance deadlines.</div>
+            ) : (
+              <ul className="space-y-2">
+                {(upcomingMaintenance ?? []).map((m: any) => (
+                  <li key={m.id} className="flex items-center justify-between">
+                    <div className="truncate">
+                      <span className="font-medium">
+                        {m.property?.name ?? (m.property_id ? m.property_id.slice(0, 8) : "Property")}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {" — "}
+                        {m.title}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-muted-foreground">{m.due_date}</div>
+                      <div className="text-xs capitalize text-muted-foreground">{m.status.replace("_", " ")}</div>
+                    </div>
                   </li>
                 ))}
               </ul>
