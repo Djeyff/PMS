@@ -11,6 +11,8 @@ export type InvoiceRow = {
   total_amount: number;
   status: "draft" | "sent" | "partial" | "paid" | "overdue" | "void";
   created_at: string;
+  pdf_lang?: "en" | "es";
+  pdf_url?: string | null;
 };
 
 export type InvoiceWithMeta = InvoiceRow & {
@@ -37,6 +39,8 @@ function normalizeInvoiceRow(row: any): InvoiceWithMeta {
     total_amount: row.total_amount,
     status: row.status,
     created_at: row.created_at,
+    pdf_lang: (row.pdf_lang === "es" ? "es" : "en"),
+    pdf_url: row.pdf_url ?? null,
     lease: leaseRel
       ? {
           id: leaseRel.id,
@@ -52,7 +56,7 @@ export async function fetchInvoices() {
   const { data, error } = await supabase
     .from("invoices")
     .select(`
-      id, lease_id, tenant_id, number, issue_date, due_date, currency, total_amount, status, created_at,
+      id, lease_id, tenant_id, number, issue_date, due_date, currency, total_amount, status, created_at, pdf_lang, pdf_url,
       lease:leases (
         id,
         property:properties ( id, name )
@@ -94,13 +98,15 @@ export async function createInvoice(input: {
     currency: input.currency,
     total_amount: input.total_amount,
     status: input.status ?? "sent",
+    pdf_lang: "en",
+    pdf_url: null,
   };
 
   const { data, error } = await supabase
     .from("invoices")
     .insert(payload)
     .select(`
-      id, lease_id, tenant_id, number, issue_date, due_date, currency, total_amount, status, created_at,
+      id, lease_id, tenant_id, number, issue_date, due_date, currency, total_amount, status, created_at, pdf_lang, pdf_url,
       lease:leases (
         id,
         property:properties ( id, name )
@@ -123,6 +129,8 @@ export async function updateInvoice(
     currency: "USD" | "DOP";
     total_amount: number;
     status: InvoiceRow["status"];
+    pdf_lang: "en" | "es";
+    pdf_url: string | null;
   }>
 ) {
   const payload: any = {};
@@ -132,13 +140,15 @@ export async function updateInvoice(
   if (typeof input.currency !== "undefined") payload.currency = input.currency;
   if (typeof input.total_amount !== "undefined") payload.total_amount = input.total_amount;
   if (typeof input.status !== "undefined") payload.status = input.status;
+  if (typeof input.pdf_lang !== "undefined") payload.pdf_lang = input.pdf_lang;
+  if (typeof input.pdf_url !== "undefined") payload.pdf_url = input.pdf_url;
 
   const { data, error } = await supabase
     .from("invoices")
     .update(payload)
     .eq("id", id)
     .select(`
-      id, lease_id, tenant_id, number, issue_date, due_date, currency, total_amount, status, created_at,
+      id, lease_id, tenant_id, number, issue_date, due_date, currency, total_amount, status, created_at, pdf_lang, pdf_url,
       lease:leases (
         id,
         property:properties ( id, name )
@@ -173,6 +183,26 @@ export async function fetchPendingInvoicesByLease(leaseId: string) {
     const tenantRel = Array.isArray(row.tenant) ? row.tenant[0] : row.tenant ?? null;
     return { ...row, tenant: tenantRel };
   });
+}
+
+export async function generateInvoicePDF(invoiceId: string, lang: "en" | "es", opts: { sendEmail?: boolean; sendWhatsApp?: boolean } = {}) {
+  const { data: sess } = await supabase.auth.getSession();
+  const token = sess.session?.access_token;
+  if (!token) throw new Error("Not authenticated");
+
+  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/invoice-pdf";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ invoiceId, lang, sendEmail: !!opts.sendEmail, sendWhatsApp: !!opts.sendWhatsApp }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `Generate invoice PDF failed (${res.status})`);
+  }
+
+  return (await res.json()) as { ok: true; url: string };
 }
 
 export async function generateSpanishInvoicePDF(invoiceId: string, opts: { sendEmail?: boolean; sendWhatsApp?: boolean } = {}) {

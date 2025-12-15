@@ -172,6 +172,15 @@ serve(async (req) => {
       const { data: pub } = supabase.storage.from(bucketName).getPublicUrl(path);
       const pdfUrl = pub.publicUrl;
 
+      // Update invoice with language and URL
+      const { error: updErr } = await supabase
+        .from("invoices")
+        .update({ pdf_lang: "es", pdf_url: pdfUrl })
+        .eq("id", inv.id);
+      if (updErr) {
+        errors.push(`Update invoice URL/lang failed for invoice ${inv.id}: ${updErr.message}`);
+      }
+
       if (RESEND_API_KEY) {
         const res = await fetch("https://api.resend.com/emails", {
           method: "POST",

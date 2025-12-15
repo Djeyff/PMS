@@ -8,7 +8,6 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
 import { fetchLeases } from "@/services/leases";
 import { createInvoice } from "@/services/invoices";
-import { generateSpanishInvoicePDF } from "@/services/invoices";
 import { toast } from "sonner";
 
 const InvoiceForm = ({ onCreated }: { onCreated?: () => void }) => {
@@ -43,7 +42,7 @@ const InvoiceForm = ({ onCreated }: { onCreated?: () => void }) => {
     }
     setSaving(true);
     try {
-      const inv = await createInvoice({
+      await createInvoice({
         lease_id: leaseId,
         tenant_id: tenantId,
         number: number || null,
@@ -52,9 +51,7 @@ const InvoiceForm = ({ onCreated }: { onCreated?: () => void }) => {
         currency,
         total_amount: Number(total),
       });
-      // Generate Spanish PDF for this invoice and show link
-      const { url } = await generateSpanishInvoicePDF(inv.id, { sendEmail: true, sendWhatsApp: false });
-      toast.success(`Invoice created. PDF (Spanish) ready: ${url}`);
+      toast.success("Invoice created");
       setOpen(false);
       setLeaseId("");
       setTenantId("");

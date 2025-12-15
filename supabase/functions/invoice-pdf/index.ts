@@ -23,12 +23,13 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
   }
 
-  let body: { invoiceId: string; sendEmail?: boolean; sendWhatsApp?: boolean };
+  let body: { invoiceId: string; sendEmail?: boolean; sendWhatsApp?: boolean; lang?: "en" | "es" };
   try {
     body = await req.json();
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers: corsHeaders });
   }
+  const lang = body.lang === "es" ? "es" : "en";
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -59,9 +60,40 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: error?.message || "Invoice not found" }), { status: 404, headers: corsHeaders });
   }
 
-  const invoiceNumber = inv.number || "SIN-NUMERO";
+  // Labels by language
+  const t = lang === "es"
+    ? {
+        title: "Factura",
+        number: "Número",
+        issue: "Fecha de emisión",
+        due: "Fecha de vencimiento",
+        property: "Propiedad",
+        tenant: "Inquilino",
+        total: "Importe total",
+        thanks: "Gracias por su pago puntual.",
+        signature: "Las Terrenas Properties",
+        emailSubject: (n: string) => `Factura ${n}`,
+        emailText: (prop: string, tenant: string, amountText: string) =>
+          `Estimado equipo,\n\nAdjuntamos la factura generada:\nPropiedad: ${prop}\nInquilino: ${tenant}\nImporte: ${amountText}\n\nGracias,\nLas Terrenas Properties`,
+      }
+    : {
+        title: "Invoice",
+        number: "Number",
+        issue: "Issue Date",
+        due: "Due Date",
+        property: "Property",
+        tenant: "Billed To",
+        total: "Total Amount",
+        thanks: "Thank you for your prompt payment.",
+        signature: "Las Terrenas Properties",
+        emailSubject: (n: string) => `Invoice ${n}`,
+        emailText: (prop: string, tenant: string, amountText: string) =>
+          `Dear team,\n\nAttached is the generated invoice:\nProperty: ${prop}\nTenant: ${tenant}\nAmount: ${amountText}\n\nRegards,\nLas Terrenas Properties`,
+      };
+
+  const invoiceNumber = inv.number || (lang === "es" ? "SIN-NUMERO" : "NO-NUMBER");
   const tenantName = [inv.tenant?.first_name ?? "", inv.tenant?.last_name ?? ""].filter(Boolean).join(" ") || "—";
-  const propertyName = inv.lease?.property?.name ?? "Propiedad";
+  const propertyName = inv.lease?.property?.name ?? (lang === "es" ? "Propiedad" : "Property");
   const amount = Number(inv.total_amount || 0);
   const currency = inv.currency;
   const issueDate = inv.issue_date;
@@ -82,21 +114,22 @@ serve(async (req) => {
       y -= size + 8;
     };
 
-    draw("Factura", { size: 24, bold: true, y });
-    draw(`Número: ${invoiceNumber}`, { size: 12 });
-    draw(`Fecha de emisión: ${issueDate}`, { size: 12 });
-    draw(`Fecha de vencimiento: ${dueDate}`, { size: 12 });
+    draw(t.title, { size: 24, bold: true, y });
+    draw(`${t.number}: ${invoiceNumber}`, { size: 12 });
+    draw(`${t.issue}: ${issueDate}`, { size: 12 });
+    draw(`${t.due}: ${dueDate}`, { size: 12 });
     draw("", { size: 12 });
 
-    draw(`Propiedad: ${propertyName}`, { size: 12, bold: true });
-    draw(`Inquilino: ${tenantName}`, { size: 12 });
+    draw(`${t.property}: ${propertyName}`, { size: 12, bold: true });
+    draw(`${t.tenant}: ${tenantName}`, { size: 12 });
     draw("", { size: 12 });
 
-    draw(`Importe total: ${new Intl.NumberFormat("es-ES", { style: "currency", currency }).format(amount)}`, { size: 14, bold: true });
+    const amountText = new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency }).format(amount);
+    draw(`${t.total}: ${amountText}`, { size: 14, bold: true });
     draw("", { size: 12 });
 
-    draw("Gracias por su pago puntual.", { size: 12 });
-    draw("Las Terrenas Properties", { size: 12 });
+    draw(t.thanks, { size: 12 });
+    draw(t.signature, { size: 12 });
 
     const pdfBytes = await pdf.save();
     const fileName = `invoice_${inv.id}.pdf`;
@@ -120,6 +153,15 @@ serve(async (req) => {
     const { data: pub } = supabase.storage.from(bucketName).getPublicUrl(path);
     const pdfUrl = pub.publicUrl;
 
+    // Persist language + URL on invoice
+    const { error: updErr } = await supabase
+      .from("invoices")
+      .update({ pdf_lang: lang, pdf_url: pdfUrl })
+      .eq("id", body.invoiceId);
+    if (updErr) {
+      return new Response(JSON.stringify({ error: updErr.message }), { status: 500, headers: corsHeaders });
+    }
+
     // Optional email
     if (body.sendEmail && RESEND_API_KEY) {
       const res = await fetch("https://api.resend.com/emails", {
@@ -130,18 +172,10 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           from: "invoices@lasterrenas.properties",
-          to: EMAIL_TO,
-          subject: `Factura ${invoiceNumber}`,
-          text:
-            `Estimado equipo,\n\n` +
-            `Adjuntamos la factura generada:\n` +
-            `Propiedad: ${propertyName}\n` +
-            `Inquilino: ${tenantName}\n` +
-            `Importe: ${new Intl.NumberFormat("es-ES", { style: "currency", currency }).format(amount)}\n\n` +
-            `Gracias,\nLas Terrenas Properties`,
-          attachments: [
-            { filename: fileName, content: toBase64(new Uint8Array(pdfBytes)) },
-          ],
+          to: "contact@lasterrenas.properties",
+          subject: t.emailSubject(invoiceNumber),
+          text: t.emailText(propertyName, tenantName, amountText),
+          attachments: [{ filename: fileName, content: toBase64(new Uint8Array(pdfBytes)) }],
         }),
       });
       if (!res.ok) {
@@ -150,14 +184,19 @@ serve(async (req) => {
       }
     }
 
-    // Optional WhatsApp
+    // Optional WhatsApp (kept Spanish/English based on lang)
     if (body.sendWhatsApp && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_WHATSAPP_FROM) {
-      const bodyText = `Factura ${invoiceNumber}\nPropiedad: ${propertyName}\nInquilino: ${tenantName}\nImporte: ${new Intl.NumberFormat("es-ES", { style: "currency", currency }).format(amount)}\nPDF: ${pdfUrl}`;
+      const bodyText =
+        `${t.title} ${invoiceNumber}\n` +
+        `${t.property}: ${propertyName}\n` +
+        `${t.tenant}: ${tenantName}\n` +
+        `${t.total}: ${amountText}\n` +
+        `PDF: ${pdfUrl}`;
       const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
       const auth = btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`);
       const form = new URLSearchParams({
         From: TWILIO_WHATSAPP_FROM,
-        To: WHATSAPP_TO,
+        To: "whatsapp:+18092044903",
         Body: bodyText,
         MediaUrl: pdfUrl,
       });

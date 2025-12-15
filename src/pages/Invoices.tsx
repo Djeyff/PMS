@@ -11,6 +11,9 @@ import DeleteInvoiceDialog from "@/components/invoices/DeleteInvoiceDialog";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import Money from "@/components/Money";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { generateInvoicePDF } from "@/services/invoices";
+import { toast } from "sonner";
 
 const data = [
   { number: "INV-1001", tenant: "Maria Gomez", due: "2024-08-05", total: 1200, currency: "USD" as const, status: "paid" as const },
@@ -95,6 +98,39 @@ const Invoices = () => {
                           <TableCell>
                             <div className="flex gap-2">
                               <Button asChild size="sm" variant="outline"><Link to={`/invoices/${inv.id}`}>View</Link></Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button size="sm" variant="outline">Generate in</Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                  <DropdownMenuItem
+                                    onClick={async () => {
+                                      try {
+                                        await generateInvoicePDF(inv.id, "en", { sendEmail: false, sendWhatsApp: false });
+                                        toast.success("Invoice PDF generated in English");
+                                        refetch();
+                                      } catch (e: any) {
+                                        toast.error(e.message || "Failed to generate PDF");
+                                      }
+                                    }}
+                                  >
+                                    English
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={async () => {
+                                      try {
+                                        await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
+                                        toast.success("Factura generada en Español");
+                                        refetch();
+                                      } catch (e: any) {
+                                        toast.error(e.message || "Failed to generate PDF");
+                                      }
+                                    }}
+                                  >
+                                    Spanish
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                               <EditInvoiceDialog invoice={inv} onUpdated={() => refetch()} />
                               <DeleteInvoiceDialog id={inv.id} onDeleted={() => refetch()} />
                             </div>
