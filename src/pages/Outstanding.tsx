@@ -96,8 +96,8 @@ const Outstanding = () => {
                   {rows.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-medium">{r.name}</TableCell>
-                      <TableCell className={`text-right ${r.usd < 0 ? "text-red-600" : ""}`}>{fmt(r.usd, "USD")}</TableCell>
-                      <TableCell className={`text-right ${r.dop < 0 ? "text-red-600" : ""}`}>{fmt(r.dop, "DOP")}</TableCell>
+                      <TableCell className={`text-right ${r.usd < 0 ? "text-red-600" : r.usd > 0 ? "text-green-600" : ""}`}>{fmt(r.usd, "USD")}</TableCell>
+                      <TableCell className={`text-right ${r.dop < 0 ? "text-red-600" : r.dop > 0 ? "text-green-600" : ""}`}>{fmt(r.dop, "DOP")}</TableCell>
                       <TableCell className="text-right">
                         <Button asChild size="sm" variant="outline">
                           <Link to={`/tenants/${r.id}/overdue`}>View</Link>
