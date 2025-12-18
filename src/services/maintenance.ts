@@ -172,3 +172,9 @@ export async function addMaintenanceLog(requestId: string, note: string) {
       : null,
   };
 }
+
+export async function deleteMaintenanceLog(id: string) {
+  const { error } = await supabase.from("maintenance_logs").delete().eq("id", id);
+  if (error) throw error;
+  return true;
+}

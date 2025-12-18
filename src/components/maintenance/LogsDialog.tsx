@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchMaintenanceLogs, addMaintenanceLog, MaintenanceRow } from "@/services/maintenance";
 import { toast } from "sonner";
 import { formatDateTimeInTZ } from "@/utils/datetime";
+import DeleteMaintenanceLogDialog from "./DeleteMaintenanceLogDialog";
 
 const LogsDialog = ({ request, tz, onUpdated }: { request: MaintenanceRow; tz?: string; onUpdated?: () => void }) => {
   const [open, setOpen] = useState(false);

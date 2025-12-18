@@ -105,9 +105,16 @@ export async function createPayment(input: {
 }
 
 export async function deletePayment(id: string) {
+  // 1) Try direct RLS-protected delete (agency_admin is allowed by policy)
+  const direct = await supabase.from("payments").delete().eq("id", id);
+  if (!direct.error) {
+    return true;
+  }
+
+  // 2) Fallback to edge function with explicit token
   const { data: sess } = await supabase.auth.getSession();
   const token = sess.session?.access_token;
-  if (!token) throw new Error("Not authenticated");
+  if (!token) throw new Error(`Not authenticated: ${direct.error.message || "No session"}`);
 
   const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/delete-payment";
   const res = await fetch(url, {
@@ -120,13 +127,17 @@ export async function deletePayment(id: string) {
   });
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error || `Failed to delete payment (${res.status})`);
+    let detail = "";
+    try {
+      const err = await res.json();
+      detail = err?.error || "";
+    } catch {}
+    throw new Error(detail || `Failed to delete payment (${res.status})`);
   }
 
   const out = await res.json().catch(() => ({}));
   if (!out?.ok) {
-    throw new Error("Failed to delete payment");
+    throw new Error("Failed to delete payment (edge function returned not ok)");
   }
   return true;
 }
