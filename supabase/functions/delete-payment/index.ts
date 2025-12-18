@@ -1,14 +1,38 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+function buildCorsHeaders(origin: string | null) {
+  return {
+    "Access-Control-Allow-Origin": origin ?? "*",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
+}
+function isOriginAllowed(origin: string | null) {
+  const raw = Deno.env.get("ALLOWED_ORIGINS") ?? "";
+  const list = raw.split(",").map(s => s.trim()).filter(Boolean);
+  if (list.length === 0) return true;
+  if (!origin) return true;
+  return list.includes(origin);
+}
 
 serve(async (req) => {
+  const origin = req.headers.get("Origin");
+  const corsHeaders = buildCorsHeaders(origin);
+
   if (req.method === "OPTIONS") {
+    if (!isOriginAllowed(origin)) {
+      return new Response("Origin not allowed", { status: 403, headers: corsHeaders });
+    }
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method Not Allowed" }), { status: 405, headers: corsHeaders });
+  }
+
+  if (!isOriginAllowed(origin)) {
+    return new Response(JSON.stringify({ error: "Origin not allowed" }), { status: 403, headers: corsHeaders });
   }
 
   const authHeader = req.headers.get("Authorization");
@@ -64,7 +88,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "Payment not found" }), { status: 404, headers: corsHeaders });
   }
 
-  // Resolve target agency via explicit steps (no nested embeddings)
+  // Resolve target agency via explicit steps
   let leaseId: string | null = pay.lease_id ?? null;
   if (!leaseId && pay.invoice_id) {
     const { data: inv, error: invErr } = await service
@@ -108,6 +132,15 @@ serve(async (req) => {
   if (delErr) {
     return new Response(JSON.stringify({ error: delErr.message }), { status: 500, headers: corsHeaders });
   }
+
+  // Audit log
+  await anon.from("activity_logs").insert({
+    user_id: userId,
+    action: "delete_payment",
+    entity_type: "payment",
+    entity_id: paymentId,
+    metadata: null,
+  });
 
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: corsHeaders });
 });

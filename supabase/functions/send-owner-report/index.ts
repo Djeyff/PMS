@@ -1,10 +1,20 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-job-token",
-};
+function buildCorsHeaders(origin: string | null) {
+  return {
+    "Access-Control-Allow-Origin": origin ?? "*",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-job-token",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
+}
+function isOriginAllowed(origin: string | null) {
+  const raw = Deno.env.get("ALLOWED_ORIGINS") ?? "";
+  const list = raw.split(",").map(s => s.trim()).filter(Boolean);
+  if (list.length === 0) return true;
+  if (!origin) return true;
+  return list.includes(origin);
+}
 
 function toBase64(str: string) {
   const bytes = new TextEncoder().encode(str);
@@ -16,8 +26,22 @@ function toBase64(str: string) {
 }
 
 serve(async (req) => {
+  const origin = req.headers.get("Origin");
+  const corsHeaders = buildCorsHeaders(origin);
+
   if (req.method === "OPTIONS") {
+    if (!isOriginAllowed(origin)) {
+      return new Response("Origin not allowed", { status: 403, headers: corsHeaders });
+    }
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method Not Allowed" }), { status: 405, headers: corsHeaders });
+  }
+
+  if (!isOriginAllowed(origin)) {
+    return new Response(JSON.stringify({ error: "Origin not allowed" }), { status: 403, headers: corsHeaders });
   }
 
   const authHeader = req.headers.get("Authorization");
@@ -68,16 +92,16 @@ serve(async (req) => {
   }
 
   // Validate that the owner is tied to at least one property in this admin's agency
+  const { data: ownerProps } = await service.from("property_owners").select("property_id").eq("owner_id", payload.ownerId);
+  const ownerPropertyIds = (ownerProps ?? []).map((r: any) => r.property_id);
+  if (ownerPropertyIds.length === 0) {
+    return new Response(JSON.stringify({ error: "Owner not in your agency" }), { status: 403, headers: corsHeaders });
+  }
   const { data: ownerAny } = await service
     .from("properties")
     .select("id")
     .eq("agency_id", callerProfile.agency_id)
-    .in(
-      "id",
-      (
-        await service.from("property_owners").select("property_id").eq("owner_id", payload.ownerId)
-      ).data?.map((r: any) => r.property_id) ?? []
-    )
+    .in("id", ownerPropertyIds)
     .limit(1);
 
   if (!ownerAny || ownerAny.length === 0) {
@@ -124,6 +148,15 @@ serve(async (req) => {
     const errMsg = await res.text().catch(() => "Email send failed");
     return new Response(JSON.stringify({ error: errMsg }), { status: 500, headers: corsHeaders });
   }
+
+  // Audit log
+  await anon.from("activity_logs").insert({
+    user_id: callerId,
+    action: "owner_report_sent",
+    entity_type: "owner",
+    entity_id: payload.ownerId,
+    metadata: { startDate: payload.startDate, endDate: payload.endDate },
+  });
 
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: corsHeaders });
 });

@@ -2,16 +2,40 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { PDFDocument, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-job-token",
-};
+function buildCorsHeaders(origin: string | null) {
+  return {
+    "Access-Control-Allow-Origin": origin ?? "*",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-job-token",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
+}
+function isOriginAllowed(origin: string | null) {
+  const raw = Deno.env.get("ALLOWED_ORIGINS") ?? "";
+  const list = raw.split(",").map(s => s.trim()).filter(Boolean);
+  if (list.length === 0) return true;
+  if (!origin) return true;
+  return list.includes(origin);
+}
 
 type Lang = "en" | "es";
 
 serve(async (req) => {
+  const origin = req.headers.get("Origin");
+  const corsHeaders = buildCorsHeaders(origin);
+
   if (req.method === "OPTIONS") {
+    if (!isOriginAllowed(origin)) {
+      return new Response("Origin not allowed", { status: 403, headers: corsHeaders });
+    }
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method Not Allowed" }), { status: 405, headers: corsHeaders });
+  }
+
+  if (!isOriginAllowed(origin)) {
+    return new Response(JSON.stringify({ error: "Origin not allowed" }), { status: 403, headers: corsHeaders });
   }
 
   const authHeader = req.headers.get("Authorization");
@@ -204,11 +228,11 @@ serve(async (req) => {
 
   const payments = Array.isArray(inv.payments) ? inv.payments : [];
   const paid = payments.filter((p: any) => p.currency === currency).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-  const balance = paid - amount;
+  const balance = amount - paid;
 
   const today = new Date().toISOString().slice(0, 10);
   let displayStatus: string = inv.status || "sent";
-  if (balance >= 0) displayStatus = "paid";
+  if (balance <= 0) displayStatus = "paid";
   else if (dueDate < today && inv.status !== "void") displayStatus = "overdue";
   else if (paid > 0) displayStatus = "partial";
 
@@ -231,7 +255,6 @@ serve(async (req) => {
       } catch {}
     }
     page.drawText(agencyName, { x: 400, y: 800, size: 12, font: fontBold });
-    // Split address into two lines
     const addrParts = agencyAddress.split(",");
     const line1 = addrParts[0]?.trim() ?? "";
     const line2 = addrParts.slice(1).join(", ").trim();
@@ -246,7 +269,7 @@ serve(async (req) => {
     page.drawText(`#${invoiceNumber}`, { x: 50, y, size: 12, font });
     y -= 18;
 
-    // Info grid (two columns)
+    // Info grid
     const leftX = 50;
     const rightX = 320;
     let rowY = y;
@@ -264,17 +287,16 @@ serve(async (req) => {
 
     y = Math.min(rowY, y - 64) - 10;
 
-    // Description table header
+    // Description
     page.drawText(t.description, { x: leftX, y, size: 12, font: fontBold });
     page.drawText(t.amount, { x: rightX + 150, y, size: 12, font: fontBold });
     y -= 14;
 
-    // Single line item: Lease invoice + total
     page.drawText(t.leaseInvoice, { x: leftX, y, size: 12, font });
     page.drawText(fmt(amount, currency), { x: rightX + 150, y, size: 12, font });
     y -= 24;
 
-    // Totals block (align to the right)
+    // Totals
     const totalsXLabel = rightX + 60;
     const totalsXValue = rightX + 150;
 
@@ -332,6 +354,15 @@ serve(async (req) => {
         return new Response(JSON.stringify({ error: msg }), { status: 500, headers: corsHeaders });
       }
     }
+
+    // Audit logs
+    await anon.from("activity_logs").insert({
+      user_id: authedUserId,
+      action: "invoice_pdf_generated",
+      entity_type: "invoice",
+      entity_id: inv.id,
+      metadata: { lang, path, emailed: !!body.sendEmail },
+    });
 
     return new Response(JSON.stringify({ ok: true, url: signedUrl, path }), { status: 200, headers: corsHeaders });
   } catch (e) {

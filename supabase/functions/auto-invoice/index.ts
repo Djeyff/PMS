@@ -2,10 +2,21 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { PDFDocument, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-job-token",
-};
+// Build CORS headers based on optional allowlist
+function buildCorsHeaders(origin: string | null) {
+  return {
+    "Access-Control-Allow-Origin": origin ?? "*",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-job-token",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
+}
+function isOriginAllowed(origin: string | null) {
+  const raw = Deno.env.get("ALLOWED_ORIGINS") ?? "";
+  const list = raw.split(",").map(s => s.trim()).filter(Boolean);
+  if (list.length === 0) return true; // allow all if not configured
+  if (!origin) return true; // allow non-browser clients
+  return list.includes(origin);
+}
 
 function toBase64(bytes: Uint8Array) {
   let binary = "";
@@ -35,8 +46,22 @@ function monthsBetween(startDate: string, refDate: Date) {
 }
 
 serve(async (req) => {
+  const origin = req.headers.get("Origin");
+  const corsHeaders = buildCorsHeaders(origin);
+
   if (req.method === "OPTIONS") {
+    if (!isOriginAllowed(origin)) {
+      return new Response("Origin not allowed", { status: 403, headers: corsHeaders });
+    }
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method Not Allowed" }), { status: 405, headers: corsHeaders });
+  }
+
+  if (!isOriginAllowed(origin)) {
+    return new Response(JSON.stringify({ error: "Origin not allowed" }), { status: 403, headers: corsHeaders });
   }
 
   // Verify Authorization header and JWT
@@ -60,8 +85,15 @@ serve(async (req) => {
   }
   const authedUserId = userRes.user.id;
 
-  const EMAIL_TO = "contact@lasterrenas.properties";
-  const force = new URL(req.url).searchParams.get("force") === "true";
+  const urlForce = new URL(req.url).searchParams.get("force") === "true";
+  let bodyForce = false;
+  try {
+    const b = await req.json();
+    if (typeof b?.force === "boolean") bodyForce = b.force;
+  } catch {
+    // ignore (no JSON body is fine)
+  }
+  const force = urlForce || bodyForce;
   const today = new Date();
 
   const service = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -196,7 +228,7 @@ serve(async (req) => {
       let y = 800;
       if (logoBytes) {
         const img = await pdf.embedPng(logoBytes);
-        const w = 495; // span most of the page width
+        const w = 495;
         const h = (img.height / img.width) * w;
         page.drawImage(img, { x: 50, y: 820 - h, width: w, height: h });
 
@@ -214,7 +246,6 @@ serve(async (req) => {
         }
         y = textY - 24;
       } else {
-        // Fallback without logo
         page.drawText(agencyName, { x: 400, y: 800, size: 14, font: fontBold });
         const lines = agencyAddress.includes(",") ? agencyAddress.split(",") : [agencyAddress];
         const line1 = lines[0] ?? "";
@@ -243,7 +274,8 @@ serve(async (req) => {
       draw(`Inquilino: ${tenantName}`, { size: 12 });
       draw("", { size: 12 });
 
-      draw(`Importe total: ${new Intl.NumberFormat("es-ES", { style: "currency", currency }).format(amount)}`, { size: 14, bold: true });
+      const fmtAmount = new Intl.NumberFormat("es-ES", { style: "currency", currency }).format(amount);
+      draw(`Importe total: ${fmtAmount}`, { size: 14, bold: true });
       draw("", { size: 12 });
 
       draw("Gracias por su pago puntual.", { size: 12 });
@@ -261,7 +293,6 @@ serve(async (req) => {
         errors.push(`Upload PDF failed for invoice ${inv.id}: ${upErr.message}`);
       }
 
-      // Store storage path only
       const { error: updErr } = await service.from("invoices").update({ pdf_lang: "es", pdf_url: path }).eq("id", inv.id);
       if (updErr) {
         errors.push(`Update invoice path/lang failed for invoice ${inv.id}: ${updErr.message}`);
@@ -292,7 +323,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: "invoices@lasterrenas.properties",
-        to: EMAIL_TO,
+        to: "contact@lasterrenas.properties",
         subject,
         text: textBody,
         attachments: emailAttachments,
@@ -304,6 +335,15 @@ serve(async (req) => {
       errors.push(`Bulk email failed: ${msg}`);
     }
   }
+
+  // Audit log (RLS-safe with caller token)
+  await anon.from("activity_logs").insert({
+    user_id: authedUserId,
+    action: "auto_invoice_run",
+    entity_type: "invoices",
+    entity_id: null,
+    metadata: { sent: sentCount, errors_count: errors.length, force },
+  });
 
   return new Response(JSON.stringify({ ok: true, sent: sentCount, errors }), { status: 200, headers: corsHeaders });
 });
