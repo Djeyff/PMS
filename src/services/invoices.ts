@@ -86,7 +86,6 @@ export async function fetchInvoicesByTenant(tenantId: string) {
     .order("issue_date", { ascending: true });
 
   if (error) throw error;
-  // keep shape consistent with a minimal InvoiceRow
   return (data ?? []) as Array<
     Pick<InvoiceRow, "id" | "tenant_id" | "lease_id" | "number" | "issue_date" | "due_date" | "currency" | "total_amount" | "status" | "created_at">
   >;
@@ -121,7 +120,6 @@ export async function createInvoice(input: {
     total_amount: input.total_amount,
     status: input.status ?? "sent",
     pdf_lang: "en",
-    // store null until generated; when generated, it will hold the storage path
     pdf_url: null,
   };
 
@@ -153,7 +151,7 @@ export async function updateInvoice(
     total_amount: number;
     status: InvoiceRow["status"];
     pdf_lang: "en" | "es";
-    pdf_url: string | null; // storage path
+    pdf_url: string | null;
   }>
 ) {
   const payload: any = {};
@@ -208,12 +206,33 @@ export async function fetchPendingInvoicesByLease(leaseId: string) {
   });
 }
 
-// Generate a short-lived signed URL for a stored invoice PDF path
-export async function getInvoiceSignedUrl(storagePath: string, expiresInSeconds = 600) {
-  if (!storagePath) return null;
-  const { data, error } = await supabase.storage.from("invoices").createSignedUrl(storagePath, expiresInSeconds);
-  if (error) throw error;
-  return data?.signedUrl ?? null;
+// Secure: request signed URL via edge function using invoiceId
+export async function getInvoiceSignedUrlByInvoiceId(invoiceId: string) {
+  if (!invoiceId) return null;
+
+  const { data: sess } = await supabase.auth.getSession();
+  const token = sess.session?.access_token;
+  if (!token) throw new Error("Not authenticated");
+
+  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/invoices-sign-url";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ invoiceId }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `Get signed invoice URL failed (${res.status})`);
+  }
+
+  const json = await res.json();
+  return (json?.signedUrl as string) ?? null;
+}
+
+// Deprecated: minting signed URLs directly from the client is unsafe; use getInvoiceSignedUrlByInvoiceId instead.
+export async function getInvoiceSignedUrl(_storagePath: string, _expiresInSeconds = 600) {
+  throw new Error("Use getInvoiceSignedUrlByInvoiceId(invoiceId) instead");
 }
 
 export async function generateInvoicePDF(invoiceId: string, lang: "en" | "es", opts: { sendEmail?: boolean; sendWhatsApp?: boolean } = {}) {
