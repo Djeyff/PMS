@@ -105,14 +105,27 @@ export async function createPayment(input: {
 }
 
 export async function deletePayment(id: string) {
-  // Prefer edge function to enforce admin/agency checks server-side
-  const { data: res, error } = await supabase.functions.invoke("delete-payment", {
-    body: { id },
+  const { data: sess } = await supabase.auth.getSession();
+  const token = sess.session?.access_token;
+  if (!token) throw new Error("Not authenticated");
+
+  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/delete-payment";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ id }),
   });
-  if (error) {
-    throw new Error(error.message || "Failed to delete payment");
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `Failed to delete payment (${res.status})`);
   }
-  if (!res?.ok) {
+
+  const out = await res.json().catch(() => ({}));
+  if (!out?.ok) {
     throw new Error("Failed to delete payment");
   }
   return true;
