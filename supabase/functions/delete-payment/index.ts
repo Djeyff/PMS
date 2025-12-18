@@ -31,9 +31,8 @@ serve(async (req) => {
   const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
+  // Verify caller
+  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
   const { data: userRes, error: userErr } = await anon.auth.getUser();
   if (userErr || !userRes?.user) {
     return new Response(JSON.stringify({ error: "Invalid token" }), { status: 401, headers: corsHeaders });
@@ -51,6 +50,9 @@ serve(async (req) => {
   if (profErr || !profile) {
     return new Response(JSON.stringify({ error: "Profile not found" }), { status: 403, headers: corsHeaders });
   }
+  if (profile.role !== "agency_admin") {
+    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
+  }
 
   // Load payment
   const { data: pay, error: payErr } = await service
@@ -62,34 +64,44 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "Payment not found" }), { status: 404, headers: corsHeaders });
   }
 
-  // Determine agency of the payment via lease/property (or invoice->lease->property)
-  let targetAgencyId: string | null = null;
-
-  if (pay.lease_id) {
-    const { data: lease } = await service
-      .from("leases")
-      .select("id, property:properties(id, agency_id)")
-      .eq("id", pay.lease_id)
-      .maybeSingle();
-    targetAgencyId = lease?.property?.agency_id ?? null;
-  } else if (pay.invoice_id) {
-    const { data: inv } = await service
+  // Resolve target agency via explicit steps (no nested embeddings)
+  let leaseId: string | null = pay.lease_id ?? null;
+  if (!leaseId && pay.invoice_id) {
+    const { data: inv, error: invErr } = await service
       .from("invoices")
-      .select("id, lease:leases(id, property:properties(id, agency_id))")
+      .select("id, lease_id")
       .eq("id", pay.invoice_id)
       .maybeSingle();
-    targetAgencyId = inv?.lease?.property?.agency_id ?? null;
+    if (invErr) {
+      return new Response(JSON.stringify({ error: invErr.message }), { status: 500, headers: corsHeaders });
+    }
+    leaseId = inv?.lease_id ?? null;
   }
 
-  if (!targetAgencyId) {
-    return new Response(JSON.stringify({ error: "Unable to resolve payment agency" }), { status: 403, headers: corsHeaders });
+  if (!leaseId) {
+    return new Response(JSON.stringify({ error: "Unable to resolve lease for payment" }), { status: 403, headers: corsHeaders });
   }
 
-  const isAdmin = profile.role === "agency_admin";
-  const sameAgency = profile.agency_id && profile.agency_id === targetAgencyId;
+  const { data: lease, error: leaseErr } = await service
+    .from("leases")
+    .select("id, property_id")
+    .eq("id", leaseId)
+    .maybeSingle();
+  if (leaseErr || !lease) {
+    return new Response(JSON.stringify({ error: "Lease not found" }), { status: 404, headers: corsHeaders });
+  }
 
-  if (!isAdmin || !sameAgency) {
-    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
+  const { data: property, error: propErr } = await service
+    .from("properties")
+    .select("id, agency_id")
+    .eq("id", lease.property_id)
+    .maybeSingle();
+  if (propErr || !property) {
+    return new Response(JSON.stringify({ error: "Property not found" }), { status: 404, headers: corsHeaders });
+  }
+
+  if (!profile.agency_id || profile.agency_id !== property.agency_id) {
+    return new Response(JSON.stringify({ error: "Forbidden: cross-agency" }), { status: 403, headers: corsHeaders });
   }
 
   const { error: delErr } = await service.from("payments").delete().eq("id", paymentId);
