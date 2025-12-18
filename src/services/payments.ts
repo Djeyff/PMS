@@ -103,3 +103,9 @@ export async function createPayment(input: {
   if (error) throw error;
   return data as PaymentRow;
 }
+
+export async function deletePayment(id: string) {
+  const { error } = await supabase.from("payments").delete().eq("id", id);
+  if (error) throw error;
+  return true;
+}

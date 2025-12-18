@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
 import { fetchPayments } from "@/services/payments";
 import PaymentForm from "@/components/payments/PaymentForm";
+import DeletePaymentDialog from "@/components/payments/DeletePaymentDialog";
 
 const Payments = () => {
   const { role, user, profile } = useAuth();
@@ -70,6 +71,7 @@ const Payments = () => {
                     <TableHead>Date</TableHead>
                     <TableHead>Method</TableHead>
                     <TableHead>Amount</TableHead>
+                    {canCreate && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -83,6 +85,17 @@ const Payments = () => {
                         <TableCell>{p.received_date}</TableCell>
                         <TableCell className="capitalize">{String(p.method).replace("_", " ")}</TableCell>
                         <TableCell>{fmt(Number(p.amount), p.currency)}</TableCell>
+                        {canCreate && (
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <DeletePaymentDialog
+                                id={p.id}
+                                summary={`${tenantName} • ${propName} • ${p.received_date} • ${fmt(Number(p.amount), p.currency)}`}
+                                onDeleted={() => refetch()}
+                              />
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })}
