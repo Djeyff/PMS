@@ -4,7 +4,7 @@ import { PDFDocument, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-job-token",
 };
 
 function toBase64(bytes: Uint8Array) {
@@ -39,27 +39,45 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Verify Authorization header and JWT
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
   }
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 
-  const EMAIL_TO = "contact@lasterrenas.properties";
+  // Verify token and get user
+  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: userRes, error: userErr } = await anon.auth.getUser();
+  if (userErr || !userRes?.user) {
+    return new Response(JSON.stringify({ error: "Invalid token" }), { status: 401, headers: corsHeaders });
+  }
+  const authedUserId = userRes.user.id;
 
+  const EMAIL_TO = "contact@lasterrenas.properties";
   const force = new URL(req.url).searchParams.get("force") === "true";
   const today = new Date();
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const service = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  // Only agency_admin may trigger auto-invoice, and only for their agency's properties
+  const { data: profile } = await service.from("profiles").select("role, agency_id").eq("id", authedUserId).maybeSingle();
+  if (!profile || profile.role !== "agency_admin" || !profile.agency_id) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
+  }
+  const adminAgencyId = profile.agency_id as string;
 
   async function ensureBrandingBucket() {
-    const { data: buckets } = await supabase.storage.listBuckets();
+    const { data: buckets } = await service.storage.listBuckets();
     const exists = (buckets ?? []).some((b: any) => b.name === "branding");
     if (!exists) {
-      await supabase.storage.createBucket("branding", { public: true });
+      await service.storage.createBucket("branding", { public: false });
     }
   }
 
@@ -68,14 +86,14 @@ serve(async (req) => {
     for (const name of candidates) {
       try {
         await ensureBrandingBucket();
-        const { data: blob } = await supabase.storage.from("branding").download(name);
+        const { data: blob } = await service.storage.from("branding").download(name);
         if (blob) {
           const ab = await blob.arrayBuffer();
           return new Uint8Array(ab);
         }
       } catch {}
       try {
-        const { data: pub } = supabase.storage.from("branding").getPublicUrl(name);
+        const { data: pub } = service.storage.from("branding").getPublicUrl(name);
         const url = pub.publicUrl;
         if (url) {
           const res = await fetch(url);
@@ -89,7 +107,8 @@ serve(async (req) => {
     return null;
   }
 
-  const { data: leases, error: leaseErr } = await supabase
+  // Only leases under admin's agency
+  const { data: leases, error: leaseErr } = await service
     .from("leases")
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, status,
@@ -97,6 +116,7 @@ serve(async (req) => {
       property:properties ( id, name, agency_id ),
       tenant:profiles ( id, first_name, last_name )
     `)
+    .filter("property.agency_id", "eq", adminAgencyId)
     .eq("auto_invoice_enabled", true);
 
   if (leaseErr) {
@@ -107,11 +127,20 @@ serve(async (req) => {
   const dueDate = plusDays(issueDate, 7);
 
   const bucketName = "invoices";
-  const { data: bucketList } = await supabase.storage.listBuckets();
+  const { data: bucketList } = await service.storage.listBuckets();
   const hasBucket = (bucketList ?? []).some((b: any) => b.name === bucketName);
   if (!hasBucket) {
-    await supabase.storage.createBucket(bucketName, { public: true });
+    await service.storage.createBucket(bucketName, { public: false });
   }
+
+  // Agency name/address
+  let agencyName = "Las Terrenas Properties";
+  let agencyAddress = "278 calle Duarte, LTI building, Las Terrenas";
+  try {
+    const { data: ag } = await service.from("agencies").select("name, address").eq("id", adminAgencyId).single();
+    if (ag?.name) agencyName = ag.name;
+    if (ag?.address) agencyAddress = ag.address;
+  } catch {}
 
   let sentCount = 0;
   const errors: string[] = [];
@@ -136,7 +165,7 @@ serve(async (req) => {
     const currency = l.rent_currency;
 
     const invoiceNumber = autoNumber();
-    const { data: inv, error: invErr } = await supabase
+    const { data: inv, error: invErr } = await service
       .from("invoices")
       .insert({
         lease_id: l.id,
@@ -218,13 +247,13 @@ serve(async (req) => {
       draw("", { size: 12 });
 
       draw("Gracias por su pago puntual.", { size: 12 });
-      draw("Las Terrenas Properties", { size: 12 });
+      draw(agencyName, { size: 12 });
 
       const pdfBytes = await pdf.save();
       const fileName = `invoice_${inv.id}.pdf`;
       const path = `${inv.id}/${fileName}`;
 
-      const { error: upErr } = await supabase.storage.from(bucketName).upload(path, new Blob([pdfBytes], { type: "application/pdf" }), {
+      const { error: upErr } = await service.storage.from(bucketName).upload(path, new Blob([pdfBytes], { type: "application/pdf" }), {
         contentType: "application/pdf",
         upsert: true,
       });
@@ -232,15 +261,10 @@ serve(async (req) => {
         errors.push(`Upload PDF failed for invoice ${inv.id}: ${upErr.message}`);
       }
 
-      const { data: pub } = supabase.storage.from(bucketName).getPublicUrl(path);
-      const pdfUrl = pub.publicUrl;
-
-      const { error: updErr } = await supabase
-        .from("invoices")
-        .update({ pdf_lang: "es", pdf_url: pdfUrl })
-        .eq("id", inv.id);
+      // Store storage path only
+      const { error: updErr } = await service.from("invoices").update({ pdf_lang: "es", pdf_url: path }).eq("id", inv.id);
       if (updErr) {
-        errors.push(`Update invoice URL/lang failed for invoice ${inv.id}: ${updErr.message}`);
+        errors.push(`Update invoice path/lang failed for invoice ${inv.id}: ${updErr.message}`);
       }
 
       // Collect attachment for single email
@@ -258,7 +282,7 @@ serve(async (req) => {
     const textBody =
       `Estimado equipo,\n\nSe han generado ${sentCount} factura(s) automáticamente.\n` +
       `Adjuntamos todos los PDF en este correo.\n\n` +
-      `Gracias,\nLas Terrenas Properties`;
+      `Gracias,\n${agencyName}`;
 
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",

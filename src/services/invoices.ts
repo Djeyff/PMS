@@ -12,6 +12,7 @@ export type InvoiceRow = {
   status: "draft" | "sent" | "partial" | "paid" | "overdue" | "void";
   created_at: string;
   pdf_lang?: "en" | "es";
+  // NOTE: This field will now store a storage path (not a public URL)
   pdf_url?: string | null;
 };
 
@@ -19,6 +20,8 @@ export type InvoiceWithMeta = InvoiceRow & {
   lease?: { id: string; property?: { id: string; name: string; agency_id?: string } | null } | null;
   tenant?: { id: string; first_name: string | null; last_name: string | null } | null;
   payments?: { amount: number; currency: "USD" | "DOP" }[] | null;
+  // Computed property for convenience
+  signed_pdf_url?: string | null;
 };
 
 function normalizeInvoiceRow(row: any): InvoiceWithMeta {
@@ -39,7 +42,8 @@ function normalizeInvoiceRow(row: any): InvoiceWithMeta {
     total_amount: row.total_amount,
     status: row.status,
     created_at: row.created_at,
-    pdf_lang: (row.pdf_lang === "es" ? "es" : "en"),
+    pdf_lang: row.pdf_lang === "es" ? "es" : "en",
+    // pdf_url now holds storage path (if any)
     pdf_url: row.pdf_url ?? null,
     lease: leaseRel
       ? {
@@ -51,6 +55,7 @@ function normalizeInvoiceRow(row: any): InvoiceWithMeta {
       : null,
     tenant: tenantRel ? { id: tenantRel.id, first_name: tenantRel.first_name ?? null, last_name: tenantRel.last_name ?? null } : null,
     payments: row.payments ?? [],
+    signed_pdf_url: null,
   };
 }
 
@@ -66,7 +71,7 @@ export async function fetchInvoices() {
       tenant:profiles ( id, first_name, last_name ),
       payments:payments ( amount, currency )
     `)
-    .order("due_date", { ascending: true });
+  .order("due_date", { ascending: true });
 
   if (error) throw error;
   return (data ?? []).map(normalizeInvoiceRow);
@@ -101,6 +106,7 @@ export async function createInvoice(input: {
     total_amount: input.total_amount,
     status: input.status ?? "sent",
     pdf_lang: "en",
+    // store null until generated; when generated, it will hold the storage path
     pdf_url: null,
   };
 
@@ -132,7 +138,7 @@ export async function updateInvoice(
     total_amount: number;
     status: InvoiceRow["status"];
     pdf_lang: "en" | "es";
-    pdf_url: string | null;
+    pdf_url: string | null; // storage path
   }>
 ) {
   const payload: any = {};
@@ -187,6 +193,14 @@ export async function fetchPendingInvoicesByLease(leaseId: string) {
   });
 }
 
+// Generate a short-lived signed URL for a stored invoice PDF path
+export async function getInvoiceSignedUrl(storagePath: string, expiresInSeconds = 600) {
+  if (!storagePath) return null;
+  const { data, error } = await supabase.storage.from("invoices").createSignedUrl(storagePath, expiresInSeconds);
+  if (error) throw error;
+  return data?.signedUrl ?? null;
+}
+
 export async function generateInvoicePDF(invoiceId: string, lang: "en" | "es", opts: { sendEmail?: boolean; sendWhatsApp?: boolean } = {}) {
   const { data: sess } = await supabase.auth.getSession();
   const token = sess.session?.access_token;
@@ -204,7 +218,7 @@ export async function generateInvoicePDF(invoiceId: string, lang: "en" | "es", o
     throw new Error(err?.error || `Generate invoice PDF failed (${res.status})`);
   }
 
-  return (await res.json()) as { ok: true; url: string };
+  return (await res.json()) as { ok: true; url: string | null; path: string };
 }
 
 export async function generateSpanishInvoicePDF(invoiceId: string, opts: { sendEmail?: boolean; sendWhatsApp?: boolean } = {}) {
@@ -224,5 +238,5 @@ export async function generateSpanishInvoicePDF(invoiceId: string, opts: { sendE
     throw new Error(err?.error || `Generate invoice PDF failed (${res.status})`);
   }
 
-  return (await res.json()) as { ok: true; url: string };
+  return (await res.json()) as { ok: true; url: string | null; path: string };
 }

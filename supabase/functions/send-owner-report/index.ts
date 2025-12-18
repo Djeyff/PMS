@@ -3,17 +3,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-job-token",
 };
 
 function toBase64(str: string) {
-  // Convert string to base64 safely
   const bytes = new TextEncoder().encode(str);
   let binary = "";
   for (let i = 0; i < bytes.byteLength; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
-  // btoa works with binary strings
   return btoa(binary);
 }
 
@@ -50,9 +48,44 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "Missing RESEND_API_KEY secret" }), { status: 500, headers: corsHeaders });
   }
 
-  // Get owner email using service role
-  const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const { data: ownerData, error: ownerErr } = await serviceClient.auth.admin.getUserById(payload.ownerId);
+  // Verify JWT and get caller
+  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: userRes, error: userErr } = await anon.auth.getUser();
+  if (userErr || !userRes?.user) {
+    return new Response(JSON.stringify({ error: "Invalid token" }), { status: 401, headers: corsHeaders });
+  }
+  const callerId = userRes.user.id;
+
+  // Service client for privileged operations
+  const service = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  // Enforce that only an agency_admin can email owner reports, and the owner must belong to their agency
+  const { data: callerProfile } = await service.from("profiles").select("role, agency_id").eq("id", callerId).maybeSingle();
+  if (!callerProfile || callerProfile.role !== "agency_admin" || !callerProfile.agency_id) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
+  }
+
+  // Validate that the owner is tied to at least one property in this admin's agency
+  const { data: ownerAny } = await service
+    .from("properties")
+    .select("id")
+    .eq("agency_id", callerProfile.agency_id)
+    .in(
+      "id",
+      (
+        await service.from("property_owners").select("property_id").eq("owner_id", payload.ownerId)
+      ).data?.map((r: any) => r.property_id) ?? []
+    )
+    .limit(1);
+
+  if (!ownerAny || ownerAny.length === 0) {
+    return new Response(JSON.stringify({ error: "Owner not in your agency" }), { status: 403, headers: corsHeaders });
+  }
+
+  // Get owner email using service role safely
+  const { data: ownerData, error: ownerErr } = await service.auth.admin.getUserById(payload.ownerId);
   if (ownerErr || !ownerData?.user?.email) {
     return new Response(JSON.stringify({ error: "Owner email not found" }), { status: 404, headers: corsHeaders });
   }
