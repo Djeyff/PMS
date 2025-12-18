@@ -10,6 +10,7 @@ import PropertyForm from "@/components/properties/PropertyForm";
 import EditPropertyDialog from "@/components/properties/EditPropertyDialog";
 import DeletePropertyDialog from "@/components/properties/DeletePropertyDialog";
 import PropertyOwnersDialog from "@/components/properties/PropertyOwnersDialog";
+import LeaseForm from "@/components/leases/LeaseForm";
 
 const data = [
   { name: "Ocean View Villa", type: "villa", status: "rented", bedrooms: 4, city: "Punta Cana" },
@@ -80,6 +81,7 @@ const Properties = () => {
                           <div className="flex gap-2">
                             <EditPropertyDialog property={p} onUpdated={() => refetch()} />
                             <PropertyOwnersDialog propertyId={p.id} />
+                            <LeaseForm propertyId={p.id} triggerLabel="Assign Tenant" onCreated={() => refetch()} />
                             <DeletePropertyDialog id={p.id} name={p.name} onDeleted={() => refetch()} />
                           </div>
                         </TableCell>

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -13,9 +13,9 @@ import { createLease } from "@/services/leases";
 import { toast } from "sonner";
 import AddTenantDialog from "@/components/tenants/AddTenantDialog";
 
-type Props = { onCreated?: () => void };
+type Props = { onCreated?: () => void; propertyId?: string; triggerLabel?: string };
 
-const LeaseForm = ({ onCreated }: Props) => {
+const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Props) => {
   const { role, user, profile } = useAuth();
   const agencyId = profile?.agency_id ?? null;
   const canCreate = role === "agency_admin" && !!agencyId;
@@ -34,7 +34,7 @@ const LeaseForm = ({ onCreated }: Props) => {
 
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [propertyId, setPropertyId] = useState<string>("");
+  const [propertyId, setPropertyId] = useState<string>(propPropertyId ?? "");
   const [tenantId, setTenantId] = useState<string>("");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
@@ -44,6 +44,12 @@ const LeaseForm = ({ onCreated }: Props) => {
   const [autoInvoice, setAutoInvoice] = useState<boolean>(false);
   const [autoDay, setAutoDay] = useState<number>(5);
   const [autoIntervalMonths, setAutoIntervalMonths] = useState<number>(1);
+
+  useEffect(() => {
+    if (open && propPropertyId) {
+      setPropertyId(propPropertyId);
+    }
+  }, [open, propPropertyId]);
 
   const canSubmit = useMemo(() => {
     return (
@@ -100,26 +106,28 @@ const LeaseForm = ({ onCreated }: Props) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>New Lease</Button>
+        <Button>{triggerLabel || "New Lease"}</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create Lease</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Property</Label>
-            <Select value={propertyId} onValueChange={setPropertyId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select property" />
-              </SelectTrigger>
-              <SelectContent>
-                {(propsList ?? []).map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {!propPropertyId ? (
+            <div className="space-y-2">
+              <Label>Property</Label>
+              <Select value={propertyId} onValueChange={setPropertyId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select property" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(propsList ?? []).map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           <div className="space-y-2">
             <Label>Tenant</Label>
             <div className="flex items-center gap-2">
