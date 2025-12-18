@@ -8,6 +8,8 @@ import { fetchTenantProfilesInAgency } from "@/services/users";
 import AddTenantDialog from "@/components/tenants/AddTenantDialog";
 import EditTenantDialog from "@/components/tenants/EditTenantDialog";
 import DeleteTenantDialog from "@/components/tenants/DeleteTenantDialog";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 const data = [
   { name: "Maria Gomez", email: "maria@example.com", phone: "+1 809-555-1100", property: "Ocean View Villa" },
@@ -60,6 +62,9 @@ const Tenants = () => {
                         {isAdmin && (
                           <TableCell>
                             <div className="flex gap-2">
+                              <Button asChild size="sm" variant="outline">
+                                <Link to={`/tenants/${t.id}/overdue`}>Overdue</Link>
+                              </Button>
                               <EditTenantDialog tenant={{ id: t.id, first_name: t.first_name, last_name: t.last_name }} onUpdated={() => refetch()} />
                               <DeleteTenantDialog id={t.id} displayName={displayName} onDeleted={() => refetch()} />
                             </div>

@@ -5,6 +5,8 @@ import { fetchInvoices } from "@/services/invoices";
 import { Button } from "@/components/ui/button";
 import { fetchAgencyById } from "@/services/agencies";
 import { getLogoPublicUrl } from "@/services/branding";
+import { fetchInvoicesByTenant } from "@/services/invoices";
+import { fetchPaymentsByTenant } from "@/services/payments";
 
 const InvoiceDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +17,18 @@ const InvoiceDetail = () => {
 
   const inv = (data ?? []).find((i: any) => i.id === id);
   const agencyId = inv?.lease?.property?.agency_id ?? null;
+
+  const { data: tenantInvoices } = useQuery({
+    queryKey: ["tenant-invoices", inv?.tenant_id],
+    enabled: !!inv?.tenant_id,
+    queryFn: () => fetchInvoicesByTenant(inv!.tenant_id),
+  });
+
+  const { data: tenantPayments } = useQuery({
+    queryKey: ["tenant-payments", inv?.tenant_id],
+    enabled: !!inv?.tenant_id,
+    queryFn: () => fetchPaymentsByTenant(inv!.tenant_id),
+  });
 
   const { data: agency } = useQuery({
     queryKey: ["invoice-agency", agencyId],
@@ -52,6 +66,8 @@ const InvoiceDetail = () => {
         openPdf: "Abrir PDF",
         amount: "Importe",
         contractExpiry: "Vencimiento del contrato",
+        prevBalance: "Saldo previo (mismo inquilino)",
+        overallBalance: "Saldo total (incluye esta factura)",
       }
     : {
         title: "Invoice",
@@ -71,12 +87,14 @@ const InvoiceDetail = () => {
         openPdf: "Open PDF",
         amount: "Amount",
         contractExpiry: "Contract Expiry",
+        prevBalance: "Previous balance (same tenant)",
+        overallBalance: "Overall balance (includes this invoice)",
       };
 
   const fmtLocale = lang === "es" ? "es-ES" : "en-US";
   const fmt = (amt: number, cur: string) => new Intl.NumberFormat(fmtLocale, { style: "currency", currency: cur }).format(amt);
 
-  // Compute paid/balance and derived display status
+  // Compute paid/balance and derived display status (for this invoice)
   const paid = (inv.payments ?? []).filter((p: any) => p.currency === inv.currency).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
   const balance = paid - Number(inv.total_amount);
   const today = new Date().toISOString().slice(0, 10);
@@ -84,6 +102,18 @@ const InvoiceDetail = () => {
   if (balance >= 0) displayStatus = "paid";
   else if (inv.due_date < today && inv.status !== "void") displayStatus = "overdue";
   else if (paid > 0) displayStatus = "partial";
+
+  // Compute previous and overall tenant balances in the invoice currency
+  const invCurrency = inv.currency;
+  const invIssue = inv.issue_date;
+  const prevInvoices = (tenantInvoices ?? []).filter((i: any) => i.currency === invCurrency && i.issue_date < invIssue && i.id !== inv.id);
+  const prevTotals = prevInvoices.reduce((s: number, i: any) => s + Number(i.total_amount || 0), 0);
+  const prevPayments = (tenantPayments ?? []).filter((p: any) => p.currency === invCurrency && p.received_date < invIssue).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+  const previousBalance = prevPayments - prevTotals;
+
+  const allTotalsToDate = (tenantInvoices ?? []).filter((i: any) => i.currency === invCurrency && i.issue_date <= invIssue).reduce((s: number, i: any) => s + Number(i.total_amount || 0), 0);
+  const allPaymentsToDate = (tenantPayments ?? []).filter((p: any) => p.currency === invCurrency && p.received_date <= invIssue).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+  const overallBalance = allPaymentsToDate - allTotalsToDate;
 
   // Branding
   const agencyName = agency?.name ?? "Las Terrenas Properties";
@@ -159,6 +189,14 @@ const InvoiceDetail = () => {
           <div className="flex justify-between">
             <div>{t.balance}</div>
             <div className="font-medium">{fmt(balance, inv.currency)}</div>
+          </div>
+          <div className="flex justify-between text-gray-600 pt-2">
+            <div>{t.prevBalance}</div>
+            <div>{fmt(previousBalance, inv.currency)}</div>
+          </div>
+          <div className="flex justify-between">
+            <div>{t.overallBalance}</div>
+            <div className="font-semibold">{fmt(overallBalance, inv.currency)}</div>
           </div>
         </div>
       </div>

@@ -78,6 +78,20 @@ export async function fetchInvoices() {
   return (data ?? []).map(normalizeInvoiceRow);
 }
 
+export async function fetchInvoicesByTenant(tenantId: string) {
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("id, tenant_id, lease_id, number, issue_date, due_date, currency, total_amount, status, created_at")
+    .eq("tenant_id", tenantId)
+    .order("issue_date", { ascending: true });
+
+  if (error) throw error;
+  // keep shape consistent with a minimal InvoiceRow
+  return (data ?? []) as Array<
+    Pick<InvoiceRow, "id" | "tenant_id" | "lease_id" | "number" | "issue_date" | "due_date" | "currency" | "total_amount" | "status" | "created_at">
+  >;
+}
+
 function autoNumber(): string {
   const d = new Date();
   const y = d.getFullYear();

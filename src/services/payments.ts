@@ -11,6 +11,7 @@ export type PaymentRow = {
   received_date: string;
   reference: string | null;
   created_at: string;
+  invoice_id?: string | null;
 };
 
 export type PaymentWithMeta = PaymentRow & {
@@ -59,6 +60,17 @@ export async function fetchPayments(params: { role: Role | null; userId: string 
   if (error) throw error;
 
   return (data ?? []).map(normalizePaymentRow);
+}
+
+export async function fetchPaymentsByTenant(tenantId: string) {
+  const { data, error } = await supabase
+    .from("payments")
+    .select("id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at, invoice_id")
+    .eq("tenant_id", tenantId)
+    .order("received_date", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []).map((row: any) => row as PaymentRow);
 }
 
 export async function createPayment(input: {
