@@ -37,27 +37,38 @@ export async function logAction(params: {
 }
 
 export async function fetchActivityLogsByAgency(agencyId: string) {
+  // Fetch raw logs (no embeds) for the agency
   const { data, error } = await supabase
     .from("activity_logs")
-    .select(`
-      id, user_id, agency_id, action, entity_type, entity_id, metadata, created_at,
-      user:profiles ( first_name, last_name )
-    `)
+    .select("id, user_id, agency_id, action, entity_type, entity_id, metadata, created_at")
     .eq("agency_id", agencyId)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return (data ?? []).map((row: any) => {
-    const userRel = Array.isArray(row.user) ? row.user[0] : row.user ?? null;
-    return {
-      id: row.id,
-      user_id: row.user_id,
-      agency_id: row.agency_id,
-      action: row.action,
-      entity_type: row.entity_type,
-      entity_id: row.entity_id,
-      metadata: row.metadata ?? null,
-      created_at: row.created_at,
-      user: userRel ? { first_name: userRel.first_name ?? null, last_name: userRel.last_name ?? null } : null,
-    } as ActivityLog;
-  });
+
+  const logs = (data ?? []) as Array<Omit<ActivityLog, "user">>;
+
+  // Collect unique user_ids to resolve names
+  const userIds = Array.from(new Set(logs.map((l) => l.user_id).filter(Boolean)));
+
+  let profilesMap = new Map<string, { first_name: string | null; last_name: string | null }>();
+  if (userIds.length > 0) {
+    const { data: profs, error: profErr } = await supabase
+      .from("profiles")
+      .select("id, first_name, last_name")
+      .in("id", userIds as string[]);
+    if (profErr) throw profErr;
+
+    profilesMap = new Map(
+      (profs ?? []).map((p: any) => [
+        p.id,
+        { first_name: p.first_name ?? null, last_name: p.last_name ?? null },
+      ])
+    );
+  }
+
+  // Attach user names to logs
+  return logs.map((l) => ({
+    ...l,
+    user: profilesMap.get(l.user_id) ?? null,
+  })) as ActivityLog[];
 }
