@@ -105,7 +105,15 @@ export async function createPayment(input: {
 }
 
 export async function deletePayment(id: string) {
-  const { error } = await supabase.from("payments").delete().eq("id", id);
-  if (error) throw error;
+  // Prefer edge function to enforce admin/agency checks server-side
+  const { data: res, error } = await supabase.functions.invoke("delete-payment", {
+    body: { id },
+  });
+  if (error) {
+    throw new Error(error.message || "Failed to delete payment");
+  }
+  if (!res?.ok) {
+    throw new Error("Failed to delete payment");
+  }
   return true;
 }
