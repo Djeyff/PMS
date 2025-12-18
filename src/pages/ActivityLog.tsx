@@ -4,16 +4,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
-import { fetchActivityLogsByAgency } from "@/services/activity-logs";
+import { fetchActivityLogsByAgency, reinstatePaymentFromLog, reinstateMaintenanceRequestFromLog, logAction } from "@/services/activity-logs";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import MaintenanceHistoryInline from "@/components/activity/MaintenanceHistoryInline";
+import { toast } from "sonner";
 
 const ActivityLog = () => {
   const { role, profile } = useAuth();
   const isAdmin = role === "agency_admin";
   const agencyId = profile?.agency_id ?? null;
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ["activity-logs", agencyId],
     enabled: isAdmin && !!agencyId,
     queryFn: () => fetchActivityLogsByAgency(agencyId!),
@@ -21,6 +24,7 @@ const ActivityLog = () => {
 
   const [entityFilter, setEntityFilter] = useState<string>("all");
   const [search, setSearch] = useState<string>("");
+  const [openHistory, setOpenHistory] = useState<Record<string, boolean>>({});
 
   const rows = useMemo(() => {
     let r = (data ?? []);
@@ -58,6 +62,23 @@ const ActivityLog = () => {
       return out;
     }
     return val;
+  };
+
+  const onReinstate = async (logId: string, type: "payment" | "maintenance_request") => {
+    try {
+      if (type === "payment") {
+        await reinstatePaymentFromLog(logId);
+        await logAction({ action: "reinstate_payment", entity_type: "payment", entity_id: null, metadata: { from_log_id: logId } });
+        toast.success("Payment reinstated");
+      } else {
+        await reinstateMaintenanceRequestFromLog(logId);
+        await logAction({ action: "reinstate_maintenance_request", entity_type: "maintenance_request", entity_id: null, metadata: { from_log_id: logId } });
+        toast.success("Maintenance request reinstated");
+      }
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to reinstate");
+    }
   };
 
   return (
@@ -103,20 +124,51 @@ const ActivityLog = () => {
                       <TableHead>Action</TableHead>
                       <TableHead>Entity</TableHead>
                       <TableHead>Details</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {rows.map((x) => {
                       const userName = [x.user?.first_name ?? "", x.user?.last_name ?? ""].filter(Boolean).join(" ") || x.user_id.slice(0, 6);
                       const safeMeta = stripIds(x.metadata ?? {});
+                      const canReinstatePayment = x.action === "delete_payment" && x.entity_type === "payment";
+                      const canReinstateMaint = x.action === "delete_maintenance_request" && x.entity_type === "maintenance_request";
+                      const isMaint = x.entity_type === "maintenance_request";
+                      const showHistory = !!openHistory[x.id];
+                      const reqId = x.entity_id as string | undefined;
+
                       return (
                         <TableRow key={x.id}>
-                          <TableCell className="whitespace-nowrap">{fmt(x.created_at)}</TableCell>
-                          <TableCell>{userName}</TableCell>
-                          <TableCell className="capitalize">{x.action.replace(/_/g, " ")}</TableCell>
-                          <TableCell className="capitalize">{x.entity_type.replace(/_/g, " ")} {x.entity_id ? `(${x.entity_id.slice(0,8)})` : ""}</TableCell>
-                          <TableCell className="max-w-[520px]">
+                          <TableCell className="whitespace-nowrap align-top">{fmt(x.created_at)}</TableCell>
+                          <TableCell className="align-top">{userName}</TableCell>
+                          <TableCell className="capitalize align-top">{x.action.replace(/_/g, " ")}</TableCell>
+                          <TableCell className="capitalize align-top">
+                            {x.entity_type.replace(/_/g, " ")} {x.entity_id ? `(${x.entity_id.slice(0,8)})` : ""}
+                          </TableCell>
+                          <TableCell className="align-top">
                             <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(safeMeta, null, 2)}</pre>
+                            {isMaint && reqId ? (
+                              <div className="mt-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setOpenHistory((prev) => ({ ...prev, [x.id]: !prev[x.id] }))}
+                                >
+                                  {showHistory ? "Hide maintenance history" : "Show maintenance history"}
+                                </Button>
+                                {showHistory ? <MaintenanceHistoryInline requestId={reqId} /> : null}
+                              </div>
+                            ) : null}
+                          </TableCell>
+                          <TableCell className="align-top">
+                            <div className="flex flex-col gap-2">
+                              {canReinstatePayment ? (
+                                <Button size="sm" onClick={() => onReinstate(x.id, "payment")}>Reinstate</Button>
+                              ) : null}
+                              {canReinstateMaint ? (
+                                <Button size="sm" onClick={() => onReinstate(x.id, "maintenance_request")}>Reinstate</Button>
+                              ) : null}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );

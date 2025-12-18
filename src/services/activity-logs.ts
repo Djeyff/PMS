@@ -72,3 +72,74 @@ export async function fetchActivityLogsByAgency(agencyId: string) {
     user: profilesMap.get(l.user_id) ?? null,
   })) as ActivityLog[];
 }
+
+// Reinstate a deleted payment using the metadata captured in the activity log
+export async function reinstatePaymentFromLog(logId: string) {
+  const { data: log, error } = await supabase
+    .from("activity_logs")
+    .select("id, action, entity_type, entity_id, metadata")
+    .eq("id", logId)
+    .single();
+  if (error) throw error;
+  if (!log || log.action !== "delete_payment" || log.entity_type !== "payment") {
+    throw new Error("This log entry is not a deletable payment action.");
+  }
+  const m = (log as any).metadata || {};
+  const payload = {
+    lease_id: m.lease_id as string,
+    tenant_id: m.tenant_id as string,
+    amount: Number(m.amount),
+    currency: m.currency as "USD" | "DOP",
+    method: String(m.method || "bank_transfer"),
+    received_date: String(m.received_date),
+    reference: m.reference ?? null,
+    invoice_id: m.invoice_id ?? null,
+  };
+  if (!payload.lease_id || !payload.tenant_id || !payload.amount || !payload.currency || !payload.received_date) {
+    throw new Error("Missing required payment fields in log metadata.");
+  }
+  const { error: insErr } = await supabase
+    .from("payments")
+    .insert(payload)
+    .select("id")
+    .single();
+  if (insErr) throw insErr;
+  return true;
+}
+
+// Reinstate a deleted maintenance request using the metadata captured; reuse the original id to reattach logs
+export async function reinstateMaintenanceRequestFromLog(logId: string) {
+  const { data: log, error } = await supabase
+    .from("activity_logs")
+    .select("id, action, entity_type, entity_id, metadata")
+    .eq("id", logId)
+    .single();
+  if (error) throw error;
+  if (!log || log.action !== "delete_maintenance_request" || log.entity_type !== "maintenance_request") {
+    throw new Error("This log entry is not a deletable maintenance request action.");
+  }
+  const m = (log as any).metadata || {};
+  const id = (log as any).entity_id as string | null;
+
+  const insertObj: any = {
+    property_id: m.property_id,
+    title: m.title || "Restored request",
+    description: m.description ?? null,
+    priority: m.priority ?? "medium",
+    status: m.status ?? "open",
+    due_date: m.due_date ?? null,
+  };
+  if (id) {
+    insertObj.id = id; // preserve original id to re-link existing maintenance logs
+  }
+  if (!insertObj.property_id) {
+    throw new Error("Missing property_id in log metadata.");
+  }
+  const { error: insErr } = await supabase
+    .from("maintenance_requests")
+    .insert(insertObj)
+    .select("id")
+    .single();
+  if (insErr) throw insErr;
+  return true;
+}
