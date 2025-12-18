@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthProvider";
 import Loader from "@/components/loader";
+import FileUploader from "@/components/FileUploader";
 
 const Index = () => {
   const { loading, session } = useAuth();
@@ -14,7 +15,13 @@ const Index = () => {
     }
   }, [loading, session, navigate]);
 
-  return <Loader />;
+  return (
+    <div className="container mx-auto p-4 space-y-6">
+      <div className="max-w-xl">
+        <FileUploader />
+      </div>
+    </div>
+  );
 };
 
 export default Index;
