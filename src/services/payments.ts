@@ -52,7 +52,7 @@ export async function fetchPayments(params: { role: Role | null; userId: string 
   const { data, error } = await supabase
     .from("payments")
     .select(`
-      id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at,
+      id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at, invoice_id,
       lease:leases ( id, property:properties ( id, name ) ),
       tenant:profiles ( id, first_name, last_name )
     `)

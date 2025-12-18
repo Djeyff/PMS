@@ -91,6 +91,19 @@ const Payments = () => {
                               <DeletePaymentDialog
                                 id={p.id}
                                 summary={`${tenantName} • ${propName} • ${p.received_date} • ${fmt(Number(p.amount), p.currency)}`}
+                                metadata={{
+                                  amount: p.amount,
+                                  currency: p.currency,
+                                  method: p.method,
+                                  received_date: p.received_date,
+                                  reference: p.reference ?? null,
+                                  tenant_id: p.tenant_id,
+                                  tenant_name: tenantName,
+                                  property_id: p.lease?.property?.id ?? null,
+                                  property_name: propName,
+                                  lease_id: p.lease_id,
+                                  invoice_id: p.invoice_id ?? null,
+                                }}
                                 onDeleted={() => refetch()}
                               />
                             </div>

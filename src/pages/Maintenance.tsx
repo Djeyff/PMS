@@ -11,6 +11,7 @@ import LogsDialog from "@/components/maintenance/LogsDialog";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fetchAgencyById } from "@/services/agencies";
+import DeleteMaintenanceRequestDialog from "@/components/maintenance/DeleteMaintenanceRequestDialog";
 
 const Maintenance = () => {
   const { role, profile } = useAuth();
@@ -104,6 +105,12 @@ const Maintenance = () => {
                             {m.status !== "closed" && (
                               <Button size="sm" variant="outline" onClick={() => onUpdateStatus(m.id, "closed")}>Close</Button>
                             )}
+                            <DeleteMaintenanceRequestDialog
+                              id={m.id}
+                              metadata={{ title: m.title, property_id: m.property?.id ?? m.property_id, status: m.status, due_date: m.due_date }}
+                              onDeleted={() => refetch()}
+                              size="sm"
+                            />
                           </>
                         ) : null}
                         <LogsDialog request={m} tz={tz} onUpdated={() => refetch()} />

@@ -129,6 +129,12 @@ export async function updateMaintenanceRequest(
   return data as MaintenanceRow;
 }
 
+export async function deleteMaintenanceRequest(id: string) {
+  const { error } = await supabase.from("maintenance_requests").delete().eq("id", id);
+  if (error) throw error;
+  return true;
+}
+
 export async function fetchMaintenanceLogs(requestId: string) {
   const { data, error } = await supabase
     .from("maintenance_logs")

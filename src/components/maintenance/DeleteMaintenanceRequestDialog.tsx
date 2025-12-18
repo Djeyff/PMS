@@ -11,36 +11,36 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
-import { deletePayment } from "@/services/payments";
-import { toast } from "sonner";
+import { deleteMaintenanceRequest } from "@/services/maintenance";
 import { logAction } from "@/services/activity-logs";
+import { toast } from "sonner";
 
 type Props = {
   id: string;
-  summary?: string;
   metadata?: any;
   onDeleted?: () => void;
+  size?: "icon" | "sm" | "default";
 };
 
-const DeletePaymentDialog = ({ id, summary, metadata, onDeleted }: Props) => {
+const DeleteMaintenanceRequestDialog = ({ id, metadata, onDeleted, size = "sm" }: Props) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleDelete = async () => {
     setLoading(true);
     try {
-      await deletePayment(id);
+      await deleteMaintenanceRequest(id);
       await logAction({
-        action: "delete_payment",
-        entity_type: "payment",
+        action: "delete_maintenance_request",
+        entity_type: "maintenance_request",
         entity_id: id,
         metadata: metadata ?? {},
       });
-      toast.success("Payment deleted");
+      toast.success("Maintenance request deleted");
       setOpen(false);
       onDeleted?.();
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to delete payment");
+      toast.error(e?.message ?? "Failed to delete");
     } finally {
       setLoading(false);
     }
@@ -48,17 +48,14 @@ const DeletePaymentDialog = ({ id, summary, metadata, onDeleted }: Props) => {
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <Button variant="destructive" size="sm" onClick={() => setOpen(true)}>
+      <Button variant="destructive" size={size} onClick={() => setOpen(true)} title="Delete request">
         <Trash2 className="h-4 w-4 mr-1" />
-        Delete
+        {size !== "icon" ? "Delete" : null}
       </Button>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete this payment?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This action cannot be undone.
-            {summary ? <div className="mt-2 text-sm text-foreground/80">{summary}</div> : null}
-          </AlertDialogDescription>
+          <AlertDialogTitle>Delete this maintenance request?</AlertDialogTitle>
+          <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
@@ -71,4 +68,4 @@ const DeletePaymentDialog = ({ id, summary, metadata, onDeleted }: Props) => {
   );
 };
 
-export default DeletePaymentDialog;
+export default DeleteMaintenanceRequestDialog;
