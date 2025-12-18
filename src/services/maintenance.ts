@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { logAction } from "@/services/activity-logs";
 
 export type MaintenanceRow = {
   id: string;
@@ -166,6 +167,19 @@ export async function addMaintenanceLog(requestId: string, note: string) {
     .single();
 
   if (error) throw error;
+
+  // Activity log entry for adding a maintenance log
+  await logAction({
+    action: "add_maintenance_log",
+    entity_type: "maintenance_log",
+    entity_id: data.id,
+    metadata: {
+      request_id: requestId,
+      note,
+      created_at: data.created_at,
+    },
+  });
+
   // Normalize user relation
   const userRel = Array.isArray((data as any).user) ? (data as any).user[0] : (data as any).user ?? null;
   return {

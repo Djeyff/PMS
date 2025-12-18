@@ -119,7 +119,7 @@ export async function reinstateMaintenanceRequestFromLog(logId: string) {
     throw new Error("This log entry is not a deletable maintenance request action.");
   }
   const m = (log as any).metadata || {};
-  const id = (log as any).entity_id as string | null;
+  const originalId = (log as any).entity_id as string | null;
 
   const insertObj: any = {
     property_id: m.property_id,
@@ -129,17 +129,36 @@ export async function reinstateMaintenanceRequestFromLog(logId: string) {
     status: m.status ?? "open",
     due_date: m.due_date ?? null,
   };
-  if (id) {
-    insertObj.id = id; // preserve original id to re-link existing maintenance logs
-  }
   if (!insertObj.property_id) {
     throw new Error("Missing property_id in log metadata.");
   }
-  const { error: insErr } = await supabase
+  if (originalId) {
+    insertObj.id = originalId; // preserve original id to re-link
+  }
+
+  const { data: inserted, error: insErr } = await supabase
     .from("maintenance_requests")
     .insert(insertObj)
     .select("id")
     .single();
   if (insErr) throw insErr;
+
+  const requestIdToUse: string = originalId || inserted.id;
+
+  // Recreate logs if we captured them
+  const logs: any[] = Array.isArray(m.logs) ? m.logs : [];
+  if (logs.length > 0) {
+    const toInsert = logs.map((l) => ({
+      request_id: requestIdToUse,
+      user_id: l.user_id ?? null,
+      note: String(l.note ?? ""),
+      created_at: l.created_at, // keep original timestamps if allowed
+    }));
+    const { error: logsErr } = await supabase
+      .from("maintenance_logs")
+      .insert(toInsert);
+    if (logsErr) throw logsErr;
+  }
+
   return true;
 }

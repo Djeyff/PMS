@@ -78,7 +78,7 @@ const ActivityLog = () => {
         await logAction({ action: "reinstate_maintenance_request", entity_type: "maintenance_request", entity_id: requestId ?? null, metadata: { from_log_id: logId } });
         toast.success("Maintenance request reinstated");
         if (requestId) {
-          // Force the inline history to refresh now that the request exists again
+          // Ensure inline history reloads with recreated logs
           await queryClient.invalidateQueries({ queryKey: ["activity-maint-logs", requestId] });
         }
       }
@@ -116,6 +116,7 @@ const ActivityLog = () => {
                       <SelectItem value="all">All</SelectItem>
                       <SelectItem value="payment">Payment</SelectItem>
                       <SelectItem value="maintenance_request">Maintenance Request</SelectItem>
+                      <SelectItem value="maintenance_log">Maintenance Log</SelectItem>
                       <SelectItem value="invoice">Invoice</SelectItem>
                       <SelectItem value="lease">Lease</SelectItem>
                       <SelectItem value="property">Property</SelectItem>

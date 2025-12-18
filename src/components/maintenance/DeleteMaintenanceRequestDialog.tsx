@@ -11,7 +11,7 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
-import { deleteMaintenanceRequest } from "@/services/maintenance";
+import { deleteMaintenanceRequest, fetchMaintenanceLogs } from "@/services/maintenance";
 import { logAction } from "@/services/activity-logs";
 import { toast } from "sonner";
 
@@ -29,13 +29,26 @@ const DeleteMaintenanceRequestDialog = ({ id, metadata, onDeleted, size = "sm" }
   const handleDelete = async () => {
     setLoading(true);
     try {
+      // Fetch logs BEFORE deleting so we can store them in activity metadata
+      const logs = await fetchMaintenanceLogs(id);
+
       await deleteMaintenanceRequest(id);
+
       await logAction({
         action: "delete_maintenance_request",
         entity_type: "maintenance_request",
         entity_id: id,
-        metadata: metadata ?? {},
+        metadata: {
+          ...(metadata ?? {}),
+          logs: (logs ?? []).map((l: any) => ({
+            id: l.id,
+            user_id: l.user_id ?? null,
+            note: l.note,
+            created_at: l.created_at
+          })),
+        },
       });
+
       toast.success("Maintenance request deleted");
       setOpen(false);
       onDeleted?.();
