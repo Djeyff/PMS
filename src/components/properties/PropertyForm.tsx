@@ -28,10 +28,16 @@ const PropertyForm = ({ agencyId, onCreated }: Props) => {
     }
     setSaving(true);
     try {
+      // Normalize type to match DB constraint expected values
+      const normalizedType =
+        type === "colmado" ? ("Colmado" as any) :
+        type === "banca" ? ("Banca" as any) :
+        (type as any);
+
       await createProperty({
         agency_id: agencyId,
         name,
-        type,
+        type: normalizedType,
         city: city || undefined,
         bedrooms: bedrooms === "" ? undefined : Number(bedrooms),
       });
@@ -39,7 +45,7 @@ const PropertyForm = ({ agencyId, onCreated }: Props) => {
       setOpen(false);
       setName("");
       setType("apartment");
-      setCity("");
+      setCity("Las Terrenas");
       setBedrooms("");
       onCreated?.();
     } catch (e: any) {
@@ -60,6 +66,12 @@ const PropertyForm = ({ agencyId, onCreated }: Props) => {
           <DialogTitle>New Property</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {/* Set default city on dialog open */}
+          {/* We ensure default only when opening */}
+          {/* This is safe since city state resets to 'Las Terrenas' after save */}
+          {/* and remains editable */}
+          {/* eslint-disable-next-line */}
+          {open && city === "" ? setCity("Las Terrenas") : null}
           <div className="space-y-2">
             <Label>Name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Ocean View Villa" />
