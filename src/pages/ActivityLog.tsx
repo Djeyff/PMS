@@ -45,6 +45,21 @@ const ActivityLog = () => {
 
   const fmt = (d: string) => new Date(d).toISOString().slice(0, 19).replace("T", " ");
 
+  // Remove id-like keys recursively from metadata for display
+  const stripIds = (val: any): any => {
+    if (Array.isArray(val)) return val.map(stripIds);
+    if (val && typeof val === "object") {
+      const out: any = {};
+      for (const [k, v] of Object.entries(val)) {
+        const lk = k.toLowerCase();
+        if (lk === "id" || lk.endsWith("_id")) continue;
+        out[k] = stripIds(v);
+      }
+      return out;
+    }
+    return val;
+  };
+
   return (
     <AppShell>
       <div className="space-y-4">
@@ -93,6 +108,7 @@ const ActivityLog = () => {
                   <TableBody>
                     {rows.map((x) => {
                       const userName = [x.user?.first_name ?? "", x.user?.last_name ?? ""].filter(Boolean).join(" ") || x.user_id.slice(0, 6);
+                      const safeMeta = stripIds(x.metadata ?? {});
                       return (
                         <TableRow key={x.id}>
                           <TableCell className="whitespace-nowrap">{fmt(x.created_at)}</TableCell>
@@ -100,7 +116,7 @@ const ActivityLog = () => {
                           <TableCell className="capitalize">{x.action.replace(/_/g, " ")}</TableCell>
                           <TableCell className="capitalize">{x.entity_type.replace(/_/g, " ")} {x.entity_id ? `(${x.entity_id.slice(0,8)})` : ""}</TableCell>
                           <TableCell className="max-w-[520px]">
-                            <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(x.metadata ?? {}, null, 2)}</pre>
+                            <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(safeMeta, null, 2)}</pre>
                           </TableCell>
                         </TableRow>
                       );
