@@ -28,6 +28,7 @@ import Owners from "./pages/Owners";
 import { ThemeProvider } from "./contexts/ThemeProvider";
 import AuthQuerySync from "./components/auth/AuthQuerySync";
 import TenantOverdue from "./pages/tenants/TenantOverdue";
+import Outstanding from "./pages/Outstanding";
 
 const queryClient = new QueryClient();
 
@@ -156,6 +157,16 @@ const App = () => (
                     <ProtectedRoute>
                       <RoleGate allow={["agency_admin", "owner"]}>
                         <Reports />
+                      </RoleGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/outstanding"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin"]}>
+                        <Outstanding />
                       </RoleGate>
                     </ProtectedRoute>
                   }

@@ -88,18 +88,78 @@ const TenantOverdue = () => {
 
   const isLoading = invLoading || payLoading;
 
+  const [activeCur, setActiveCur] = React.useState<"USD" | "DOP">("USD");
+
+  function toCsv(fields: string[], rows: Array<Record<string, any>>) {
+    const escape = (v: any) => {
+      const s = v === null || v === undefined ? "" : String(v);
+      if (s.includes('"') || s.includes(",") || s.includes("\n")) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const header = fields.map(escape).join(",");
+    const body = rows.map((r) => fields.map((f) => escape(r[f])).join(",")).join("\n");
+    return header + "\n" + body;
+  }
+
+  function downloadCsv(filename: string, csv: string) {
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const exportLedgerCsv = () => {
+    const section = contentByCurrency[activeCur];
+    const fields = ["date", "type", "description", "amount", "running_balance", "currency"];
+    const rows = section.ledger.map((e) => ({
+      date: e.date,
+      type: e.type,
+      description: e.description,
+      amount: e.amount,
+      running_balance: e.balance,
+      currency: activeCur,
+    }));
+    const csv = toCsv(fields, rows);
+    downloadCsv(`tenant_ledger_${activeCur}.csv`, csv);
+  };
+
+  const exportOverdueCsv = () => {
+    const section = contentByCurrency[activeCur];
+    const fields = ["invoice_number", "issue_date", "due_date", "total", "paid", "outstanding", "currency"];
+    const rows = section.overdue.map((r) => ({
+      invoice_number: r.number ?? "",
+      issue_date: r.issue_date,
+      due_date: r.due_date,
+      total: r.total,
+      paid: r.paid,
+      outstanding: r.outstanding,
+      currency: activeCur,
+    }));
+    const csv = toCsv(fields, rows);
+    downloadCsv(`tenant_overdue_${activeCur}.csv`, csv);
+  };
+
   return (
     <AppShell>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Tenant Overdue & Ledger</h1>
-          <Button variant="outline" asChild><Link to="/tenants">Back to Tenants</Link></Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={exportOverdueCsv}>Export Overdue CSV</Button>
+            <Button onClick={exportLedgerCsv}>Export Ledger CSV</Button>
+            <Button variant="outline" asChild><Link to="/tenants">Back to Tenants</Link></Button>
+          </div>
         </div>
 
         {isLoading ? (
           <div className="text-sm text-muted-foreground">Loading...</div>
         ) : (
-          <Tabs defaultValue="USD" className="w-full">
+          <Tabs value={activeCur} onValueChange={(v) => setActiveCur(v as "USD" | "DOP")} className="w-full">
             <TabsList>
               <TabsTrigger value="USD">USD</TabsTrigger>
               <TabsTrigger value="DOP">DOP</TabsTrigger>
