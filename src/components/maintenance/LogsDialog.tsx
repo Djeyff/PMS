@@ -7,11 +7,14 @@ import { fetchMaintenanceLogs, addMaintenanceLog, MaintenanceRow } from "@/servi
 import { toast } from "sonner";
 import { formatDateTimeInTZ } from "@/utils/datetime";
 import DeleteMaintenanceLogDialog from "./DeleteMaintenanceLogDialog";
+import { useAuth } from "@/contexts/AuthProvider";
 
 const LogsDialog = ({ request, tz, onUpdated }: { request: MaintenanceRow; tz?: string; onUpdated?: () => void }) => {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const { role } = useAuth();
+  const isAdmin = role === "agency_admin";
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["maint-logs", request.id],
@@ -60,9 +63,22 @@ const LogsDialog = ({ request, tz, onUpdated }: { request: MaintenanceRow; tz?: 
                   const when = tz ? formatDateTimeInTZ(l.created_at, tz) : new Date(l.created_at).toISOString().slice(0, 16).replace("T", " ");
                   return (
                     <li key={l.id} className="p-3 text-sm">
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>{author}</span>
-                        <span>{when}</span>
+                      <div className="flex justify-between items-center">
+                        <div className="text-xs text-muted-foreground">
+                          <span className="mr-2">{author}</span>
+                          <span>{when}</span>
+                        </div>
+                        {isAdmin ? (
+                          <DeleteMaintenanceLogDialog
+                            id={l.id}
+                            size="icon"
+                            summary={l.note?.slice(0, 120)}
+                            onDeleted={async () => {
+                              await refetch();
+                              onUpdated?.();
+                            }}
+                          />
+                        ) : null}
                       </div>
                       <div className="mt-1">{l.note}</div>
                     </li>
