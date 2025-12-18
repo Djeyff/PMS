@@ -1,14 +1,16 @@
-import { createRoot } from "react-dom/client";
-import App from "./App.tsx";
-import "./globals.css";
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
+import App from './App'
+import './globals.css'
+import { registerSW } from './pwa/register-sw'
 
-// Apply theme early to avoid flash
-const savedTheme = typeof window !== "undefined" ? window.localStorage.getItem("app_theme") : null;
-const initialTheme = savedTheme ?? (window.location.pathname.startsWith("/login") ? "dark" : "light");
-if (initialTheme === "dark") {
-  document.documentElement.classList.add("dark");
-} else {
-  document.documentElement.classList.remove("dark");
-}
+registerSW()
 
-createRoot(document.getElementById("root")!).render(<App />);
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  </React.StrictMode>
+)
