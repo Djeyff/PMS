@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import MaintenanceHistoryInline from "@/components/activity/MaintenanceHistoryInline";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 const ActivityLog = () => {
   const { role, profile } = useAuth();
@@ -21,6 +22,8 @@ const ActivityLog = () => {
     enabled: isAdmin && !!agencyId,
     queryFn: () => fetchActivityLogsByAgency(agencyId!),
   });
+
+  const queryClient = useQueryClient();
 
   const [entityFilter, setEntityFilter] = useState<string>("all");
   const [search, setSearch] = useState<string>("");
@@ -64,7 +67,7 @@ const ActivityLog = () => {
     return val;
   };
 
-  const onReinstate = async (logId: string, type: "payment" | "maintenance_request") => {
+  const onReinstate = async (logId: string, type: "payment" | "maintenance_request", requestId?: string) => {
     try {
       if (type === "payment") {
         await reinstatePaymentFromLog(logId);
@@ -72,8 +75,12 @@ const ActivityLog = () => {
         toast.success("Payment reinstated");
       } else {
         await reinstateMaintenanceRequestFromLog(logId);
-        await logAction({ action: "reinstate_maintenance_request", entity_type: "maintenance_request", entity_id: null, metadata: { from_log_id: logId } });
+        await logAction({ action: "reinstate_maintenance_request", entity_type: "maintenance_request", entity_id: requestId ?? null, metadata: { from_log_id: logId } });
         toast.success("Maintenance request reinstated");
+        if (requestId) {
+          // Force the inline history to refresh now that the request exists again
+          await queryClient.invalidateQueries({ queryKey: ["activity-maint-logs", requestId] });
+        }
       }
       refetch();
     } catch (e: any) {
@@ -166,7 +173,7 @@ const ActivityLog = () => {
                                 <Button size="sm" onClick={() => onReinstate(x.id, "payment")}>Reinstate</Button>
                               ) : null}
                               {canReinstateMaint ? (
-                                <Button size="sm" onClick={() => onReinstate(x.id, "maintenance_request")}>Reinstate</Button>
+                                <Button size="sm" onClick={() => onReinstate(x.id, "maintenance_request", reqId)}>Reinstate</Button>
                               ) : null}
                             </div>
                           </TableCell>
