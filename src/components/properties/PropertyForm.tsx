@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,13 @@ const PropertyForm = ({ agencyId, onCreated }: Props) => {
   const [type, setType] = useState<"villa" | "apartment" | "house" | "studio" | "office" | "other" | "restaurant" | "banca" | "business" | "land" | "colmado" | "rentacar">("apartment");
   const [city, setCity] = useState("");
   const [bedrooms, setBedrooms] = useState<number | "">("");
+  
+  // Set default city when dialog opens (avoid side-effects in JSX)
+  useEffect(() => {
+    if (open && city === "") {
+      setCity("Las Terrenas");
+    }
+  }, [open, city]);
 
   const handleSave = async () => {
     if (!name) {
@@ -66,12 +73,6 @@ const PropertyForm = ({ agencyId, onCreated }: Props) => {
           <DialogTitle>New Property</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          {/* Set default city on dialog open */}
-          {/* We ensure default only when opening */}
-          {/* This is safe since city state resets to 'Las Terrenas' after save */}
-          {/* and remains editable */}
-          {/* eslint-disable-next-line */}
-          {open && city === "" ? setCity("Las Terrenas") : null}
           <div className="space-y-2">
             <Label>Name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Ocean View Villa" />
