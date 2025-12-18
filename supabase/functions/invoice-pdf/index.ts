@@ -7,12 +7,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-job-token",
 };
 
-function toBase64(bytes: Uint8Array) {
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
-
 type Lang = "en" | "es";
 
 serve(async (req) => {
@@ -20,13 +14,12 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Require Authorization header and verify JWT
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
   }
 
-  let body: { invoiceId: string; sendEmail?: boolean; lang?: Lang };
+  let body: { invoiceId: string; sendEmail?: boolean; sendWhatsApp?: boolean; lang?: Lang };
   try {
     body = await req.json();
   } catch {
@@ -39,23 +32,18 @@ serve(async (req) => {
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 
-  // Verify the user from the provided token
-  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
+  // Verify user from token
+  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
   const { data: userRes, error: userErr } = await anon.auth.getUser();
   if (userErr || !userRes?.user) {
     return new Response(JSON.stringify({ error: "Invalid token" }), { status: 401, headers: corsHeaders });
   }
   const authedUserId = userRes.user.id;
 
-  // Use service role for server-side DB/storage work after verifying user
+  // Service role for server-side work
   const service = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // Ensure the caller is allowed to access this invoice:
-  // - agency_admin for the property's agency, OR
-  // - the tenant on the invoice, OR
-  // - an owner of the property
+  // Authorization on the resource
   const { data: invMeta, error: invMetaErr } = await service
     .from("invoices")
     .select(`
@@ -73,7 +61,6 @@ serve(async (req) => {
   const propertyId: string | null = invMeta.lease?.property?.id ?? null;
   const agencyId: string | null = invMeta.lease?.property?.agency_id ?? null;
 
-  // Fetch caller's profile
   const { data: callerProfile } = await service
     .from("profiles")
     .select("id, role, agency_id")
@@ -81,13 +68,11 @@ serve(async (req) => {
     .maybeSingle();
 
   let allowed = false;
-
   if (callerProfile?.role === "agency_admin" && agencyId && callerProfile.agency_id === agencyId) {
     allowed = true;
   } else if (invMeta.tenant_id === authedUserId) {
     allowed = true;
   } else if (propertyId) {
-    // Check if caller is an owner for the property
     const { data: ownerRow } = await service
       .from("property_owners")
       .select("owner_id")
@@ -96,22 +81,18 @@ serve(async (req) => {
       .maybeSingle();
     if (ownerRow) allowed = true;
   }
-
   if (!allowed) {
     return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
   }
 
-  const EMAIL_TO = "contact@lasterrenas.properties";
-
+  // Branding helpers
   async function ensureBrandingBucket() {
     const { data: buckets } = await service.storage.listBuckets();
     const exists = (buckets ?? []).some((b: any) => b.name === "branding");
     if (!exists) {
-      // Create branding bucket as PRIVATE (not public)
       await service.storage.createBucket("branding", { public: false });
     }
   }
-
   async function getLogoBytes(): Promise<Uint8Array | null> {
     const candidates = ["logo.png", "LTP_transp copy.png"];
     for (const name of candidates) {
@@ -122,11 +103,8 @@ serve(async (req) => {
           const ab = await blob.arrayBuffer();
           return new Uint8Array(ab);
         }
-      } catch {
-        // ignore and try next method
-      }
+      } catch {}
       try {
-        // As a fallback only if bucket was historically public
         const { data: pub } = service.storage.from("branding").getPublicUrl(name);
         const url = pub.publicUrl;
         if (url) {
@@ -136,23 +114,22 @@ serve(async (req) => {
             return new Uint8Array(ab);
           }
         }
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
     return null;
   }
 
-  // Load invoice data for PDF content
+  // Load invoice with relations and payments
   const { data: inv, error } = await service
     .from("invoices")
     .select(`
-      id, number, issue_date, due_date, currency, total_amount,
+      id, number, issue_date, due_date, currency, total_amount, status,
       lease:leases (
-        id,
+        id, end_date,
         property:properties ( id, name, agency_id )
       ),
-      tenant:profiles ( id, first_name, last_name )
+      tenant:profiles ( id, first_name, last_name ),
+      payments:payments ( amount, currency )
     `)
     .eq("id", body.invoiceId)
     .single();
@@ -161,7 +138,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: error?.message || "Invoice not found" }), { status: 404, headers: corsHeaders });
   }
 
-  // Fetch agency for name/address (fallback if missing)
+  // Agency info
   let agencyName = "Las Terrenas Properties";
   let agencyAddress = "278 calle Duarte, LTI building, Las Terrenas";
   try {
@@ -171,37 +148,50 @@ serve(async (req) => {
       if (ag?.name) agencyName = ag.name;
       if (ag?.address) agencyAddress = ag.address;
     }
-  } catch {
-    // ignore
-  }
+  } catch {}
 
   const t = lang === "es" ? {
     title: "Factura",
     number: "Número",
+    billedTo: "Facturado a",
+    property: "Propiedad",
     issue: "Fecha de emisión",
     due: "Fecha de vencimiento",
-    property: "Propiedad",
-    tenant: "Inquilino",
-    total: "Importe total",
-    thanks: "Gracias por su pago puntual.",
-    signature: agencyName,
+    currency: "Moneda",
+    status: "Estado",
+    description: "Descripción",
+    leaseInvoice: "Factura de contrato",
+    amount: "Importe",
+    total: "Total",
+    paid: "Pagado",
+    balance: "Saldo",
+    contractExpiry: "Vencimiento del contrato",
     emailSubject: (n: string) => `Factura ${n}`,
     emailText: (prop: string, tenant: string, amountText: string) =>
       `Estimado equipo,\n\nAdjuntamos la factura generada:\nPropiedad: ${prop}\nInquilino: ${tenant}\nImporte: ${amountText}\n\nGracias,\n${agencyName}`,
   } : {
     title: "Invoice",
     number: "Number",
+    billedTo: "Billed To",
+    property: "Property",
     issue: "Issue Date",
     due: "Due Date",
-    property: "Property",
-    tenant: "Billed To",
-    total: "Total Amount",
-    thanks: "Thank you for your prompt payment.",
-    signature: agencyName,
+    currency: "Currency",
+    status: "Status",
+    description: "Description",
+    leaseInvoice: "Lease invoice",
+    amount: "Amount",
+    total: "Total",
+    paid: "Paid",
+    balance: "Balance",
+    contractExpiry: "Contract Expiry",
     emailSubject: (n: string) => `Invoice ${n}`,
     emailText: (prop: string, tenant: string, amountText: string) =>
       `Dear team,\n\nAttached is the generated invoice:\nProperty: ${prop}\nTenant: ${tenant}\nAmount: ${amountText}\n\nRegards,\n${agencyName}`,
   };
+
+  const fmt = (amt: number, cur: string) =>
+    new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency: cur }).format(amt);
 
   const invoiceNumber = inv.number || (lang === "es" ? "SIN-NUMERO" : "NO-NUMBER");
   const tenantName = [inv.tenant?.first_name ?? "", inv.tenant?.last_name ?? ""].filter(Boolean).join(" ") || "—";
@@ -210,6 +200,17 @@ serve(async (req) => {
   const currency = inv.currency;
   const issueDate = inv.issue_date;
   const dueDate = inv.due_date;
+  const contractExpiry = inv.lease?.end_date ?? null;
+
+  const payments = Array.isArray(inv.payments) ? inv.payments : [];
+  const paid = payments.filter((p: any) => p.currency === currency).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+  const balance = paid - amount;
+
+  const today = new Date().toISOString().slice(0, 10);
+  let displayStatus: string = inv.status || "sent";
+  if (balance >= 0) displayStatus = "paid";
+  else if (dueDate < today && inv.status !== "void") displayStatus = "overdue";
+  else if (paid > 0) displayStatus = "partial";
 
   try {
     const pdf = await PDFDocument.create();
@@ -217,116 +218,113 @@ serve(async (req) => {
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-    // Branding header with logo and address
-    const logoBytes = await getLogoBytes();
+    // Header with agency
     let y = 800;
+    const logoBytes = await getLogoBytes();
     if (logoBytes) {
-      const img = await pdf.embedPng(logoBytes);
-      const w = 495;
-      const h = (img.height / img.width) * w;
-      page.drawImage(img, { x: 50, y: 820 - h, width: w, height: h });
+      try {
+        const img = await pdf.embedPng(logoBytes);
+        const w = 140;
+        const ratio = img.height / img.width;
+        const h = w * ratio;
+        page.drawImage(img, { x: 50, y: 820 - h, width: w, height: h });
+      } catch {}
+    }
+    page.drawText(agencyName, { x: 400, y: 800, size: 12, font: fontBold });
+    // Split address into two lines
+    const addrParts = agencyAddress.split(",");
+    const line1 = addrParts[0]?.trim() ?? "";
+    const line2 = addrParts.slice(1).join(", ").trim();
+    page.drawText(line1, { x: 400, y: 784, size: 10, font });
+    if (line2) page.drawText(line2, { x: 400, y: 770, size: 10, font });
 
-      let textY = 820 - h - 12;
-      page.drawText(agencyName, { x: 50, y: textY, size: 14, font: fontBold });
-      const addr = agencyAddress;
-      const lines = addr.includes(",") ? addr.split(",") : [addr];
-      const line1 = lines[0] ?? "";
-      const line2 = lines.slice(1).join(", ").trim();
-      textY -= 16;
-      page.drawText(line1, { x: 50, y: textY, size: 10, font });
-      if (line2) {
-        textY -= 14;
-        page.drawText(line2, { x: 50, y: textY, size: 10, font });
-      }
-      y = textY - 24;
-    } else {
-      page.drawText(agencyName, { x: 400, y: 800, size: 14, font: fontBold });
-      const addr = agencyAddress;
-      const lines = addr.includes(",") ? addr.split(",") : [addr];
-      const line1 = lines[0] ?? "";
-      const line2 = lines.slice(1).join(", ").trim();
-      page.drawText(line1, { x: 400, y: 784, size: 10, font });
-      if (line2) page.drawText(line2, { x: 400, y: 770, size: 10, font });
-      y = 740;
+    y = 740;
+
+    // Title and number
+    page.drawText(t.title, { x: 50, y, size: 22, font: fontBold });
+    y -= 26;
+    page.drawText(`#${invoiceNumber}`, { x: 50, y, size: 12, font });
+    y -= 18;
+
+    // Info grid (two columns)
+    const leftX = 50;
+    const rightX = 320;
+    let rowY = y;
+
+    page.drawText(`${t.billedTo}: ${tenantName}`, { x: leftX, y: rowY, size: 12, font }); rowY -= 16;
+    page.drawText(`${t.property}: ${propertyName}`, { x: leftX, y: rowY, size: 12, font }); rowY -= 16;
+    if (contractExpiry) {
+      page.drawText(`${t.contractExpiry}: ${contractExpiry}`, { x: leftX, y: rowY, size: 12, font }); rowY -= 16;
     }
 
-    const draw = (text: string, opts: { x?: number; y?: number; size?: number; bold?: boolean } = {}) => {
-      const size = opts.size ?? 12;
-      const x = opts.x ?? 50;
-      y = opts.y ?? y;
-      page.drawText(text, { x, y, size, font: opts.bold ? fontBold : font });
-      y -= size + 8;
-    };
+    page.drawText(`${t.issue}: ${issueDate}`, { x: rightX, y: y, size: 12, font });
+    page.drawText(`${t.due}: ${dueDate}`, { x: rightX, y: y - 16, size: 12, font });
+    page.drawText(`${t.currency}: ${currency}`, { x: rightX, y: y - 32, size: 12, font });
+    page.drawText(`${t.status}: ${String(displayStatus).toUpperCase()}`, { x: rightX, y: y - 48, size: 12, font });
 
-    draw(t.title, { size: 24, bold: true, y });
-    draw(`${t.number}: ${invoiceNumber}`, { size: 12 });
-    draw(`${t.issue}: ${issueDate}`, { size: 12 });
-    draw(`${t.due}: ${dueDate}`, { size: 12 });
-    draw("", { size: 12 });
+    y = Math.min(rowY, y - 64) - 10;
 
-    draw(`${lang === "es" ? "Propiedad" : "Property"}: ${propertyName}`, { size: 12, bold: true });
-    draw(`${t.tenant}: ${tenantName}`, { size: 12 });
-    draw("", { size: 12 });
+    // Description table header
+    page.drawText(t.description, { x: leftX, y, size: 12, font: fontBold });
+    page.drawText(t.amount, { x: rightX + 150, y, size: 12, font: fontBold });
+    y -= 14;
 
-    const amountText = new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency }).format(amount);
-    draw(`${t.total}: ${amountText}`, { size: 14, bold: true });
-    draw("", { size: 12 });
+    // Single line item: Lease invoice + total
+    page.drawText(t.leaseInvoice, { x: leftX, y, size: 12, font });
+    page.drawText(fmt(amount, currency), { x: rightX + 150, y, size: 12, font });
+    y -= 24;
 
-    draw(t.thanks, { size: 12 });
-    draw(t.signature, { size: 12 });
+    // Totals block (align to the right)
+    const totalsXLabel = rightX + 60;
+    const totalsXValue = rightX + 150;
+
+    page.drawText(t.total, { x: totalsXLabel, y, size: 12, font });
+    page.drawText(fmt(amount, currency), { x: totalsXValue, y, size: 12, font: fontBold });
+    y -= 16;
+
+    page.drawText(t.paid, { x: totalsXLabel, y, size: 12, font });
+    page.drawText(fmt(paid, currency), { x: totalsXValue, y, size: 12, font });
+    y -= 16;
+
+    page.drawText(t.balance, { x: totalsXLabel, y, size: 12, font });
+    page.drawText(fmt(balance, currency), { x: totalsXValue, y, size: 12, font: fontBold });
 
     const pdfBytes = await pdf.save();
-    const fileName = `invoice_${inv.id}.pdf`;
-    const path = `${inv.id}/${fileName}`;
 
-    // Invoices bucket must be PRIVATE
+    // Upload to private invoices bucket
     const bucketName = "invoices";
     const { data: bucketList } = await service.storage.listBuckets();
     const hasBucket = (bucketList ?? []).some((b: any) => b.name === bucketName);
     if (!hasBucket) {
       await service.storage.createBucket(bucketName, { public: false });
-    } else {
-      // If it exists and was public historically, this call is harmless if already private
-      // No direct API to flip to private reliably here; rely on storage policies to restrict access.
     }
 
+    const fileName = `invoice_${inv.id}.pdf`;
+    const path = `${inv.id}/${fileName}`;
     const blob = new Blob([pdfBytes], { type: "application/pdf" });
-    const { error: upErr } = await service.storage.from(bucketName).upload(path, blob, {
-      contentType: "application/pdf",
-      upsert: true,
-    });
+    const { error: upErr } = await service.storage.from(bucketName).upload(path, blob, { contentType: "application/pdf", upsert: true });
     if (upErr) {
       return new Response(JSON.stringify({ error: upErr.message }), { status: 500, headers: corsHeaders });
     }
 
-    // Store only the storage path (not a public URL)
-    const { error: updErr } = await service
-      .from("invoices")
-      .update({ pdf_lang: lang, pdf_url: path })
-      .eq("id", body.invoiceId);
+    const { error: updErr } = await service.from("invoices").update({ pdf_lang: lang, pdf_url: path }).eq("id", body.invoiceId);
     if (updErr) {
       return new Response(JSON.stringify({ error: updErr.message }), { status: 500, headers: corsHeaders });
     }
 
-    // Return a short-lived signed URL to the caller
-    const { data: signed } = await service.storage.from(bucketName).createSignedUrl(path, 60 * 10); // 10 minutes
+    const { data: signed } = await service.storage.from(bucketName).createSignedUrl(path, 60 * 10);
     const signedUrl = signed?.signedUrl ?? null;
 
     if (body.sendEmail && RESEND_API_KEY) {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${RESEND_API_KEY}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           from: "invoices@lasterrenas.properties",
-          to: EMAIL_TO,
+          to: "contact@lasterrenas.properties",
           subject: (lang === "es" ? `Factura ${invoiceNumber}` : `Invoice ${invoiceNumber}`),
-          text: (lang === "es"
-            ? `Estimado equipo,\n\nAdjuntamos la factura generada:\nPropiedad: ${propertyName}\nInquilino: ${tenantName}\nImporte: ${amountText}\n\nGracias,\n${agencyName}`
-            : `Dear team,\n\nAttached is the generated invoice:\nProperty: ${propertyName}\nTenant: ${tenantName}\nAmount: ${amountText}\n\nRegards,\n${agencyName}`),
-          attachments: [{ filename: fileName, content: toBase64(new Uint8Array(pdfBytes)) }],
+          text: t.emailText(propertyName, tenantName, fmt(amount, currency)),
+          attachments: [{ filename: fileName, content: btoa(String.fromCharCode(...new Uint8Array(pdfBytes))) }],
         }),
       });
       if (!res.ok) {

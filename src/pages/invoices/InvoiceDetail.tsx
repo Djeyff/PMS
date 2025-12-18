@@ -51,6 +51,7 @@ const InvoiceDetail = () => {
         print: "Imprimir",
         openPdf: "Abrir PDF",
         amount: "Importe",
+        contractExpiry: "Vencimiento del contrato",
       }
     : {
         title: "Invoice",
@@ -69,6 +70,7 @@ const InvoiceDetail = () => {
         print: "Print",
         openPdf: "Open PDF",
         amount: "Amount",
+        contractExpiry: "Contract Expiry",
       };
 
   const fmtLocale = lang === "es" ? "es-ES" : "en-US";
@@ -76,10 +78,10 @@ const InvoiceDetail = () => {
 
   // Compute paid/balance and derived display status
   const paid = (inv.payments ?? []).filter((p: any) => p.currency === inv.currency).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-  const balance = Math.max(0, Number(inv.total_amount) - paid);
+  const balance = paid - Number(inv.total_amount);
   const today = new Date().toISOString().slice(0, 10);
   let displayStatus: string = inv.status;
-  if (balance <= 0) displayStatus = "paid";
+  if (balance >= 0) displayStatus = "paid";
   else if (inv.due_date < today && inv.status !== "void") displayStatus = "overdue";
   else if (paid > 0) displayStatus = "partial";
 
@@ -130,6 +132,7 @@ const InvoiceDetail = () => {
         <div>{t.due}: {inv.due_date}</div>
         <div>{t.currency}: {inv.currency}</div>
         <div>{t.status}: {String(displayStatus).toUpperCase()}</div>
+        <div className="col-span-2">{t.contractExpiry}: {inv.lease?.end_date ?? "—"}</div>
       </div>
 
       <div className="border rounded">

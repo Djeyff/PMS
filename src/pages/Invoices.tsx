@@ -34,11 +34,11 @@ const Invoices = () => {
       const paid = (inv.payments ?? [])
         .filter((p: any) => p.currency === inv.currency)
         .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-      const balance = Math.max(0, Number(inv.total_amount) - paid);
-      // naive status compute for display
+      const balance = paid - Number(inv.total_amount);
+      // derived status for display
       let displayStatus = inv.status;
       const today = new Date().toISOString().slice(0, 10);
-      if (balance <= 0) displayStatus = "paid";
+      if (balance >= 0) displayStatus = "paid";
       else if (inv.due_date < today && inv.status !== "void") displayStatus = "overdue";
       else if (paid > 0) displayStatus = "partial";
       return { ...inv, paid, balance, displayStatus };

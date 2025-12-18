@@ -17,7 +17,7 @@ export type InvoiceRow = {
 };
 
 export type InvoiceWithMeta = InvoiceRow & {
-  lease?: { id: string; property?: { id: string; name: string; agency_id?: string } | null } | null;
+  lease?: { id: string; end_date?: string; property?: { id: string; name: string; agency_id?: string } | null } | null;
   tenant?: { id: string; first_name: string | null; last_name: string | null } | null;
   payments?: { amount: number; currency: "USD" | "DOP" }[] | null;
   // Computed property for convenience
@@ -48,6 +48,7 @@ function normalizeInvoiceRow(row: any): InvoiceWithMeta {
     lease: leaseRel
       ? {
           id: leaseRel.id,
+          end_date: leaseRel.end_date,
           property: leaseRel.property
             ? { id: leaseRel.property.id, name: leaseRel.property.name, agency_id: leaseRel.property.agency_id }
             : null,
@@ -65,7 +66,7 @@ export async function fetchInvoices() {
     .select(`
       id, lease_id, tenant_id, number, issue_date, due_date, currency, total_amount, status, created_at, pdf_lang, pdf_url,
       lease:leases (
-        id,
+        id, end_date,
         property:properties ( id, name, agency_id )
       ),
       tenant:profiles ( id, first_name, last_name ),
@@ -116,7 +117,7 @@ export async function createInvoice(input: {
     .select(`
       id, lease_id, tenant_id, number, issue_date, due_date, currency, total_amount, status, created_at, pdf_lang, pdf_url,
       lease:leases (
-        id,
+        id, end_date,
         property:properties ( id, name )
       ),
       tenant:profiles ( id, first_name, last_name ),
@@ -158,7 +159,7 @@ export async function updateInvoice(
     .select(`
       id, lease_id, tenant_id, number, issue_date, due_date, currency, total_amount, status, created_at, pdf_lang, pdf_url,
       lease:leases (
-        id,
+        id, end_date,
         property:properties ( id, name )
       ),
       tenant:profiles ( id, first_name, last_name ),
