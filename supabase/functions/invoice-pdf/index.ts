@@ -288,37 +288,42 @@ serve(async (req) => {
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-    // Centered header within margins
-    let yTop = H - M;
+    // Header: agency name + address, then logo safely below
+    const headerTop = H - M;
+    const nameY = headerTop - 14;
+    page.drawText(agencyName, { x: (W - font.widthOfTextAtSize(agencyName, 14)) / 2, y: nameY, size: 14, font: fontBold });
+    const addrParts = agencyAddress.split(",");
+    const line1 = addrParts[0]?.trim() ?? "";
+    const line2 = addrParts.slice(1).join(", ").trim();
+    page.drawText(line1, { x: (W - font.widthOfTextAtSize(line1, 10)) / 2, y: nameY - 16, size: 10, font });
+    if (line2) page.drawText(line2, { x: (W - font.widthOfTextAtSize(line2, 10)) / 2, y: nameY - 30, size: 10, font });
+
+    // Logo (cap width to 120pt) positioned below header with spacing
+    let contentStartY = nameY - 60;
     const logoBytes = await getLogoBytes();
     if (logoBytes) {
       try {
         const img = await pdf.embedPng(logoBytes);
-        const w = 140;
-        const ratio = img.height / img.width;
+        const w = 120;
+        const ratio = img.height / img.width || 1;
         const h = w * ratio;
         const x = (W - w) / 2;
-        page.drawImage(img, { x, y: yTop - h, width: w, height: h });
-        yTop = yTop - h;
+        const logoBottomY = contentStartY - h;
+        page.drawImage(img, { x, y: logoBottomY, width: w, height: h });
+        contentStartY = logoBottomY - 24; // spacing after logo
       } catch {}
     }
-    page.drawText(agencyName, { x: (W - font.widthOfTextAtSize(agencyName, 14)) / 2, y: yTop - 18, size: 14, font: fontBold });
-    const addrParts = agencyAddress.split(",");
-    const line1 = addrParts[0]?.trim() ?? "";
-    const line2 = addrParts.slice(1).join(", ").trim();
-    page.drawText(line1, { x: (W - font.widthOfTextAtSize(line1, 10)) / 2, y: yTop - 32, size: 10, font });
-    if (line2) page.drawText(line2, { x: (W - font.widthOfTextAtSize(line2, 10)) / 2, y: yTop - 46, size: 10, font });
 
     // Titles
-    page.drawText(lang === "es" ? "Recibo" : "Receipt", { x: M, y: yTop - 74, size: 22, font: fontBold });
-    page.drawText(lang === "es" ? "Factura" : "Invoice", { x: M, y: yTop - 92, size: 12, font });
+    page.drawText(lang === "es" ? "Recibo" : "Receipt", { x: M, y: contentStartY, size: 22, font: fontBold });
+    page.drawText(lang === "es" ? "Factura" : "Invoice", { x: M, y: contentStartY - 18, size: 12, font });
 
-    // Info grid inside margins
+    // Info grid inside margins with shared baseline
     const leftX = M;
     const rightX = W - M - 240;
-    let y = yTop - 140;
+    let y = contentStartY - 48;
     page.drawText(`${t.billedTo}: ${tenantName}`, { x: leftX, y, size: 12, font }); y -= 16;
-    page.drawText(`${t.property}: ${propertyName}`, { x: leftX, y, size: 12, font }); y -= 16;
+    page.drawText(`${t.property}: ${propertyName}`, { x: leftX, y, size: 12, font });
 
     const monthText = (() => {
       const iso = issueDate;
@@ -329,11 +334,11 @@ serve(async (req) => {
       return lang === "es" ? `${m} ${yStr.slice(-2)}` : `${m} ${yStr}`;
     })();
 
-    page.drawText(`${t.issue}: ${issueDate}`, { x: rightX, y: yTop - 140, size: 12, font });
-    page.drawText(`${lang === "es" ? "Para el mes de" : "For month of"}: ${monthText}`, { x: rightX, y: yTop - 156, size: 12, font });
+    page.drawText(`${t.issue}: ${issueDate}`, { x: rightX, y: contentStartY - 48, size: 12, font });
+    page.drawText(`${lang === "es" ? "Para el mes de" : "For month of"}: ${monthText}`, { x: rightX, y: contentStartY - 64, size: 12, font });
 
-    // Summary header-style row
-    y = yTop - 190;
+    // Summary header row
+    y = contentStartY - 98;
     page.drawText(lang === "es" ? "Alquiler DOP" : "Rent DOP", { x: leftX, y, size: 10, font: fontBold });
     page.drawText(lang === "es" ? "Alquiler USD" : "Rent USD", { x: leftX + 140, y, size: 10, font: fontBold });
     page.drawText(lang === "es" ? "Importe Anterior USD" : "Overdue USD", { x: leftX + 280, y, size: 10, font: fontBold });
@@ -349,7 +354,7 @@ serve(async (req) => {
     page.drawText(`${lang === "es" ? "Fin del contrato" : "Lease End Date"}: ${contractExpiry ?? "—"}`, { x: leftX, y: y - 40, size: 11, font });
 
     // Description line item
-    y = yTop - 240;
+    y = contentStartY - 160;
     page.drawText(t.description, { x: leftX, y, size: 12, font: fontBold });
     page.drawText(t.amount, { x: rightX + 150, y, size: 12, font: fontBold });
     y -= 16;

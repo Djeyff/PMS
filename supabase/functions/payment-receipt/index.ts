@@ -215,45 +215,51 @@ serve(async (req) => {
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-    // Centered logo + agency name
+    // Header: agency name + address, then logo placed safely below
+    const headerTop = H - M;
+    const nameY = headerTop - 14;
+    page.drawText(agencyName, { x: (W - font.widthOfTextAtSize(agencyName, 14)) / 2, y: nameY, size: 14, font: fontBold });
+    const addrParts = agencyAddress.split(",");
+    const line1 = addrParts[0]?.trim() ?? "";
+    const line2 = addrParts.slice(1).join(", ").trim();
+    page.drawText(line1, { x: (W - font.widthOfTextAtSize(line1, 10)) / 2, y: nameY - 16, size: 10, font });
+    if (line2) page.drawText(line2, { x: (W - font.widthOfTextAtSize(line2, 10)) / 2, y: nameY - 30, size: 10, font });
+
+    // Logo (cap width to 120pt), positioned at least 60pt below header text
+    let contentStartY = nameY - 60;
     const logoBytes = await getLogoBytes();
     if (logoBytes) {
       try {
         const img = await pdf.embedPng(logoBytes);
-        const w = 140;
-        const ratio = img.height / img.width;
+        const w = 120;
+        const ratio = img.height / img.width || 1;
         const h = w * ratio;
         const x = (W - w) / 2;
-        const y = H - M - h;
-        page.drawImage(img, { x, y, width: w, height: h });
+        const logoBottomY = contentStartY - h;
+        page.drawImage(img, { x, y: logoBottomY, width: w, height: h });
+        contentStartY = logoBottomY - 24; // add spacing after logo
       } catch {}
     }
-    const agencyNameY = H - M - 18;
-    page.drawText(agencyName, { x: (W - font.widthOfTextAtSize(agencyName, 14)) / 2, y: agencyNameY, size: 14, font: fontBold });
-    const addrParts = agencyAddress.split(",");
-    const line1 = addrParts[0]?.trim() ?? "";
-    const line2 = addrParts.slice(1).join(", ").trim();
-    page.drawText(line1, { x: (W - font.widthOfTextAtSize(line1, 10)) / 2, y: agencyNameY - 14, size: 10, font });
-    if (line2) page.drawText(line2, { x: (W - font.widthOfTextAtSize(line2, 10)) / 2, y: agencyNameY - 28, size: 10, font });
 
-    // Header titles (bilingual style)
-    page.drawText(t.receiptTitleTop, { x: M, y: agencyNameY - 56, size: 22, font: fontBold });
-    page.drawText(t.invoiceTitleSub, { x: M, y: agencyNameY - 74, size: 12, font });
+    // Titles
+    page.drawText(t.receiptTitleTop, { x: M, y: contentStartY, size: 22, font: fontBold });
+    page.drawText(t.invoiceTitleSub, { x: M, y: contentStartY - 18, size: 12, font });
 
-    // Info grid aligned to margins
+    // Info grid aligned to margins with shared baseline
     const leftX = M;
     const rightLabelX = W - M - 220;
     const rightValueX = W - M - 100;
-    let y = agencyNameY - 104;
+    let y = contentStartY - 48;
 
     page.drawText(`${t.billedTo}: ${tenantName}`, { x: leftX, y, size: 12, font }); y -= 16;
-    page.drawText(`${t.property}: ${propertyName}`, { x: leftX, y, size: 12, font }); y -= 16;
+    page.drawText(`${t.property}: ${propertyName}`, { x: leftX, y, size: 12, font });
 
-    page.drawText(`${t.date}:`, { x: rightLabelX, y: agencyNameY - 104, size: 12, font });
-    page.drawText(receivedDate, { x: rightValueX, y: agencyNameY - 104, size: 12, font });
+    // Date aligned to same first row baseline used above
+    page.drawText(`${t.date}:`, { x: rightLabelX, y: contentStartY - 48, size: 12, font });
+    page.drawText(receivedDate, { x: rightValueX, y: contentStartY - 48, size: 12, font });
 
     // Summary block with right-aligned values
-    y -= 24;
+    y = contentStartY - 88;
     page.drawText(t.amountReceived, { x: leftX, y, size: 12, font: fontBold });
     page.drawText(fmt(amount, currency), { x: rightValueX, y, size: 12, font: fontBold });
     y -= 18;
