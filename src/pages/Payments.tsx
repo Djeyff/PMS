@@ -31,6 +31,22 @@ const Payments = () => {
 
   const fmt = (amt: number, cur: string) => new Intl.NumberFormat(undefined, { style: "currency", currency: cur }).format(amt);
 
+  const methodLabel = (m: string | null | undefined) => {
+    const key = String(m ?? "").toLowerCase();
+    const map: Record<string, string> = {
+      bank_transfer: "Bank Transfer",
+      cash: "Cash",
+      card: "Card",
+      check: "Check",
+    };
+    if (map[key]) return map[key];
+    const cleaned = key.replace(/_/g, " ").trim();
+    return cleaned
+      .split(" ")
+      .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+      .join(" ") || "—";
+  };
+
   return (
     <AppShell>
       <div className="space-y-4">
@@ -88,7 +104,7 @@ const Payments = () => {
                         <TableCell className="font-medium">{propName}</TableCell>
                         <TableCell>{tenantName}</TableCell>
                         <TableCell>{p.received_date}</TableCell>
-                        <TableCell className="capitalize">{String(p.method).replace("_", " ")}</TableCell>
+                        <TableCell>{methodLabel(p.method)}</TableCell>
                         <TableCell>{fmt(Number(p.amount), p.currency)}</TableCell>
                         {/* Always allow viewing a receipt */}
                         <TableCell>

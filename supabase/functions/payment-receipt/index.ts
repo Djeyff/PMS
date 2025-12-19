@@ -172,6 +172,27 @@ serve(async (req) => {
     const fmt = (amt: number, cur: string) =>
       new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency: cur }).format(amt);
 
+    const toTitle = (s: string) => s.split(" ").map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(" ");
+    const formatMethod = (method: string | null, lng: Lang) => {
+      const key = String(method ?? "").toLowerCase();
+      const mapEn: Record<string, string> = {
+        bank_transfer: "Bank Transfer",
+        cash: "Cash",
+        card: "Card",
+        check: "Check",
+      };
+      const mapEs: Record<string, string> = {
+        bank_transfer: "Transferencia bancaria",
+        cash: "Efectivo",
+        card: "Tarjeta",
+        check: "Cheque",
+      };
+      const fromMap = lng === "es" ? mapEs[key] : mapEn[key];
+      if (fromMap) return fromMap;
+      const cleaned = key.replace(/_/g, " ").trim();
+      return cleaned ? toTitle(cleaned) : "—";
+    }
+
     // Prepare data
     const tenantName = [pay.tenant?.first_name ?? "", pay.tenant?.last_name ?? ""].filter(Boolean).join(" ") || "—";
     const propertyName = pay.lease?.property?.name ?? "—";
@@ -181,6 +202,8 @@ serve(async (req) => {
     const ref = pay.reference ?? "—";
     const receivedDate = pay.received_date;
     const exchangeRate = typeof pay.exchange_rate === "number" ? pay.exchange_rate : null;
+
+    const methodDisplay = formatMethod(method, lang);
 
     // Build PDF
     const pdf = await PDFDocument.create();
@@ -217,32 +240,34 @@ serve(async (req) => {
     page.drawText(t.receiptTitleTop, { x: M, y: agencyNameY - 56, size: 22, font: fontBold });
     page.drawText(t.invoiceTitleSub, { x: M, y: agencyNameY - 74, size: 12, font });
 
-    // Info grid
+    // Info grid aligned to margins
     const leftX = M;
-    const rightX = W - M - 240;
+    const rightLabelX = W - M - 220;
+    const rightValueX = W - M - 100;
     let y = agencyNameY - 104;
 
     page.drawText(`${t.billedTo}: ${tenantName}`, { x: leftX, y, size: 12, font }); y -= 16;
     page.drawText(`${t.property}: ${propertyName}`, { x: leftX, y, size: 12, font }); y -= 16;
 
-    page.drawText(`${t.date}: ${receivedDate}`, { x: rightX, y: agencyNameY - 104, size: 12, font });
+    page.drawText(`${t.date}:`, { x: rightLabelX, y: agencyNameY - 104, size: 12, font });
+    page.drawText(receivedDate, { x: rightValueX, y: agencyNameY - 104, size: 12, font });
 
-    // Summary block
+    // Summary block with right-aligned values
     y -= 24;
     page.drawText(t.amountReceived, { x: leftX, y, size: 12, font: fontBold });
-    page.drawText(fmt(amount, currency), { x: rightX + 120, y, size: 12, font: fontBold });
+    page.drawText(fmt(amount, currency), { x: rightValueX, y, size: 12, font: fontBold });
     y -= 18;
 
     page.drawText(t.method, { x: leftX, y, size: 12, font });
-    page.drawText(method, { x: rightX + 120, y, size: 12, font });
+    page.drawText(methodDisplay, { x: rightValueX, y, size: 12, font });
     y -= 16;
 
     page.drawText(t.reference, { x: leftX, y, size: 12, font });
-    page.drawText(ref, { x: rightX + 120, y, size: 12, font });
+    page.drawText(ref, { x: rightValueX, y, size: 12, font });
     y -= 16;
 
     page.drawText(t.exchangeRate, { x: leftX, y, size: 12, font });
-    page.drawText(exchangeRate ? String(exchangeRate) : "—", { x: rightX + 120, y, size: 12, font });
+    page.drawText(exchangeRate ? String(exchangeRate) : "—", { x: rightValueX, y, size: 12, font });
     y -= 28;
 
     // Footer note

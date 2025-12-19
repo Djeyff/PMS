@@ -219,6 +219,27 @@ serve(async (req) => {
   const fmt = (amt: number, cur: string) =>
     new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency: cur }).format(amt);
 
+  const toTitle = (s: string) => s.split(" ").map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(" ");
+  const formatMethod = (method: string | null, lng: Lang) => {
+    const key = String(method ?? "").toLowerCase();
+    const mapEn: Record<string, string> = {
+      bank_transfer: "Bank Transfer",
+      cash: "Cash",
+      card: "Card",
+      check: "Check",
+    };
+    const mapEs: Record<string, string> = {
+      bank_transfer: "Transferencia bancaria",
+      cash: "Efectivo",
+      card: "Tarjeta",
+      check: "Cheque",
+    };
+    const fromMap = lng === "es" ? mapEs[key] : mapEn[key];
+    if (fromMap) return fromMap;
+    const cleaned = key.replace(/_/g, " ").trim();
+    return cleaned ? toTitle(cleaned) : "—";
+  };
+
   const invoiceNumber = inv.number || (lang === "es" ? "SIN-NUMERO" : "NO-NUMBER");
   const tenantName = [inv.tenant?.first_name ?? "", inv.tenant?.last_name ?? ""].filter(Boolean).join(" ") || "—";
   const propertyName = inv.lease?.property?.name ?? (lang === "es" ? "Propiedad" : "Property");
@@ -240,7 +261,7 @@ serve(async (req) => {
     return sum;
   }, 0);
   const methodsDisplay = (() => {
-    const list = payments.map((p: any) => p.method).filter(Boolean);
+    const list = payments.map((p: any) => formatMethod(p.method, lang)).filter(Boolean);
     const uniq = Array.from(new Set(list));
     return uniq.length ? uniq.join(", ") : "—";
   })();
@@ -259,12 +280,16 @@ serve(async (req) => {
 
   try {
     const pdf = await PDFDocument.create();
-    const page = pdf.addPage([595.28, 841.89]); // A4
+    // Letter size: 8.5in x 11in = 612 x 792 points
+    const W = 612;
+    const H = 792;
+    const M = 36; // 0.5" margins
+    const page = pdf.addPage([W, H]);
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-    // Centered logo + agency name (closer to on-screen header style)
-    let y = 800;
+    // Centered header within margins
+    let yTop = H - M;
     const logoBytes = await getLogoBytes();
     if (logoBytes) {
       try {
@@ -272,29 +297,29 @@ serve(async (req) => {
         const w = 140;
         const ratio = img.height / img.width;
         const h = w * ratio;
-        const x = (595.28 - w) / 2;
-        page.drawImage(img, { x, y: 820 - h, width: w, height: h });
+        const x = (W - w) / 2;
+        page.drawImage(img, { x, y: yTop - h, width: w, height: h });
+        yTop = yTop - h;
       } catch {}
     }
-    page.drawText(agencyName, { x: (595.28 - font.widthOfTextAtSize(agencyName, 14)) / 2, y: 800, size: 14, font: fontBold });
+    page.drawText(agencyName, { x: (W - font.widthOfTextAtSize(agencyName, 14)) / 2, y: yTop - 18, size: 14, font: fontBold });
     const addrParts = agencyAddress.split(",");
     const line1 = addrParts[0]?.trim() ?? "";
     const line2 = addrParts.slice(1).join(", ").trim();
-    page.drawText(line1, { x: (595.28 - font.widthOfTextAtSize(line1, 10)) / 2, y: 786, size: 10, font });
-    if (line2) page.drawText(line2, { x: (595.28 - font.widthOfTextAtSize(line2, 10)) / 2, y: 772, size: 10, font });
+    page.drawText(line1, { x: (W - font.widthOfTextAtSize(line1, 10)) / 2, y: yTop - 32, size: 10, font });
+    if (line2) page.drawText(line2, { x: (W - font.widthOfTextAtSize(line2, 10)) / 2, y: yTop - 46, size: 10, font });
 
-    // Bilingual header titles (Receipt + Invoice)
-    page.drawText(lang === "es" ? "Recibo" : "Receipt", { x: 50, y: 740, size: 22, font: fontBold });
-    page.drawText(lang === "es" ? "Factura" : "Invoice", { x: 50, y: 722, size: 12, font });
+    // Titles
+    page.drawText(lang === "es" ? "Recibo" : "Receipt", { x: M, y: yTop - 74, size: 22, font: fontBold });
+    page.drawText(lang === "es" ? "Factura" : "Invoice", { x: M, y: yTop - 92, size: 12, font });
 
-    // Info grid
-    const leftX = 50;
-    const rightX = 320;
-    y = 690;
+    // Info grid inside margins
+    const leftX = M;
+    const rightX = W - M - 240;
+    let y = yTop - 140;
     page.drawText(`${t.billedTo}: ${tenantName}`, { x: leftX, y, size: 12, font }); y -= 16;
     page.drawText(`${t.property}: ${propertyName}`, { x: leftX, y, size: 12, font }); y -= 16;
 
-    // Month text like the page ("For month of")
     const monthText = (() => {
       const iso = issueDate;
       if (!iso) return "—";
@@ -304,11 +329,11 @@ serve(async (req) => {
       return lang === "es" ? `${m} ${yStr.slice(-2)}` : `${m} ${yStr}`;
     })();
 
-    page.drawText(`${t.issue}: ${issueDate}`, { x: rightX, y: 690, size: 12, font });
-    page.drawText(`${lang === "es" ? "Para el mes de" : "For month of"}: ${monthText}`, { x: rightX, y: 674, size: 12, font });
+    page.drawText(`${t.issue}: ${issueDate}`, { x: rightX, y: yTop - 140, size: 12, font });
+    page.drawText(`${lang === "es" ? "Para el mes de" : "For month of"}: ${monthText}`, { x: rightX, y: yTop - 156, size: 12, font });
 
-    // Summary header-style row (Rent/Overdue/Lease end)
-    y = 640;
+    // Summary header-style row
+    y = yTop - 190;
     page.drawText(lang === "es" ? "Alquiler DOP" : "Rent DOP", { x: leftX, y, size: 10, font: fontBold });
     page.drawText(lang === "es" ? "Alquiler USD" : "Rent USD", { x: leftX + 140, y, size: 10, font: fontBold });
     page.drawText(lang === "es" ? "Importe Anterior USD" : "Overdue USD", { x: leftX + 280, y, size: 10, font: fontBold });
@@ -317,64 +342,42 @@ serve(async (req) => {
     const rentUsd = currency === "USD" ? amount : 0;
     const rentDop = currency === "DOP" ? amount : 0;
 
-    // Compute previous balance (same tenant, same currency, before issue date)
-    let prevBalance = 0;
-    try {
-      const { data: invs } = await service
-        .from("invoices")
-        .select("id, tenant_id, issue_date, total_amount, currency")
-        .eq("tenant_id", inv.tenant?.id ?? inv.tenant_id)
-        .order("issue_date", { ascending: true });
-      const { data: pays } = await service
-        .from("payments")
-        .select("amount, currency, received_date, tenant_id")
-        .eq("tenant_id", inv.tenant?.id ?? inv.tenant_id)
-        .order("received_date", { ascending: true });
-      const invCurrency = currency;
-      const prevInvs = (invs ?? []).filter((i: any) => i.currency === invCurrency && i.issue_date < issueDate && i.id !== inv.id);
-      const prevTotals = prevInvs.reduce((s: number, i: any) => s + Number(i.total_amount || 0), 0);
-      const prevPays = (pays ?? []).filter((p: any) => p.currency === invCurrency && p.received_date < issueDate)
-        .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-      prevBalance = prevPays - prevTotals;
-    } catch {}
-
-    page.drawText(rentDop ? new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency: "DOP" }).format(rentDop) : "—", { x: leftX, y: 622, size: 11, font });
-    page.drawText(rentUsd ? new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency: "USD" }).format(rentUsd) : "—", { x: leftX + 140, y: 622, size: 11, font });
-    page.drawText(currency === "USD" ? new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency: "USD" }).format(Math.max(0, prevBalance)) : "—", { x: leftX + 280, y: 622, size: 11, font });
-    page.drawText(currency === "DOP" ? new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency: "DOP" }).format(Math.max(0, prevBalance)) : "—", { x: leftX + 420, y: 622, size: 11, font });
+    page.drawText(rentDop ? new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency: "DOP" }).format(rentDop) : "—", { x: leftX, y: y - 18, size: 11, font });
+    page.drawText(rentUsd ? new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency: "USD" }).format(rentUsd) : "—", { x: leftX + 140, y: y - 18, size: 11, font });
 
     // Lease end
-    page.drawText(`${lang === "es" ? "Fin del contrato" : "Lease End Date"}: ${contractExpiry ?? "—"}`, { x: leftX, y: 600, size: 11, font });
+    page.drawText(`${lang === "es" ? "Fin del contrato" : "Lease End Date"}: ${contractExpiry ?? "—"}`, { x: leftX, y: y - 40, size: 11, font });
 
     // Description line item
-    y = 570;
+    y = yTop - 240;
     page.drawText(t.description, { x: leftX, y, size: 12, font: fontBold });
     page.drawText(t.amount, { x: rightX + 150, y, size: 12, font: fontBold });
     y -= 16;
     page.drawText(t.leaseInvoice, { x: leftX, y, size: 12, font });
     page.drawText(fmt(amount, currency), { x: rightX + 150, y, size: 12, font });
 
-    // Payment summary
+    // Payment summary with right-aligned values
+    const valueX = W - M - 120;
     y -= 40;
     page.drawText(lang === "es" ? "Total a pagar" : "Amount to be Paid", { x: leftX, y, size: 12, font: fontBold });
-    page.drawText(fmt(amount, currency), { x: rightX + 150, y, size: 12, font: fontBold });
+    page.drawText(fmt(amount, currency), { x: valueX, y, size: 12, font: fontBold });
     y -= 16;
 
     page.drawText(t.paid, { x: leftX, y, size: 12, font });
-    page.drawText(fmt(paidConverted, currency), { x: rightX + 150, y, size: 12, font });
+    page.drawText(fmt(paidConverted, currency), { x: valueX, y, size: 12, font });
     y -= 16;
 
     page.drawText(lang === "es" ? "Tasa de Cambio" : "Exchange Rate", { x: leftX, y, size: 12, font });
-    page.drawText(exchangeRateDisplay, { x: rightX + 150, y, size: 12, font });
+    page.drawText(exchangeRateDisplay, { x: valueX, y, size: 12, font });
     y -= 16;
 
     page.drawText(lang === "es" ? "Método de pago" : "Payment Method", { x: leftX, y, size: 12, font });
-    page.drawText(methodsDisplay, { x: rightX + 150, y, size: 12, font });
+    page.drawText(methodsDisplay, { x: valueX, y, size: 12, font });
     y -= 24;
 
-    // Balance + previous/overall (overall omitted for brevity)
+    // Balance
     page.drawText(t.balance, { x: leftX, y, size: 12, font: fontBold });
-    page.drawText(fmt(balance, currency), { x: rightX + 150, y, size: 12, font: fontBold });
+    page.drawText(fmt(balance, currency), { x: valueX, y, size: 12, font: fontBold });
     y -= 28;
 
     // Reminder
