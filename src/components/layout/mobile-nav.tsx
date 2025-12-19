@@ -14,12 +14,18 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { to: "/dashboard", label: "Home", icon: Home, roles: ["agency_admin", "owner", "tenant"] },
+  { to: "/properties", label: "Properties", icon: Building2, roles: ["agency_admin", "owner"] },
+  { to: "/owners", label: "Owners", icon: Users, roles: ["agency_admin"] },
+  { to: "/tenants", label: "Tenants", icon: Users, roles: ["agency_admin"] },
+  { to: "/leases", label: "Leases", icon: FileText, roles: ["agency_admin"] },
   { to: "/invoices", label: "Invoices", icon: Receipt, roles: ["agency_admin", "owner", "tenant"] },
   { to: "/payments", label: "Payments", icon: CreditCard, roles: ["agency_admin", "owner", "tenant"] },
-  { to: "/properties", label: "Properties", icon: Building2, roles: ["agency_admin", "owner"] },
   { to: "/maintenance", label: "Maintenance", icon: Wrench, roles: ["agency_admin", "owner", "tenant"] },
   { to: "/reports", label: "Reports", icon: BarChart3, roles: ["agency_admin", "owner"] },
+  { to: "/contracts", label: "Contracts", icon: FileText, roles: ["agency_admin"] },
   { to: "/outstanding", label: "Outstanding", icon: History, roles: ["agency_admin"] },
+  { to: "/logs", label: "Activity Log", icon: History, roles: ["agency_admin"] },
+  { to: "/users", label: "Users", icon: Users, roles: ["agency_admin"] },
   { to: "/settings", label: "Settings", icon: Settings, roles: ["agency_admin"] },
 ];
 
@@ -27,21 +33,29 @@ const MobileNav = () => {
   const { role } = useAuth();
   const location = useLocation();
 
-  const items = navItems.filter((n) => !role || n.roles.includes(role as any)).slice(0, 5);
+  const items = navItems.filter((n) => !role || n.roles.includes(role as any));
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-30 border-t bg-background md:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-30 border-t bg-background md:hidden"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
       <div className="mx-auto max-w-5xl">
-        <ul className="grid grid-cols-5">
+        <ul
+          className="flex items-stretch gap-2 px-2 py-1 overflow-x-auto snap-x snap-mandatory"
+          // Enable smooth touch scrolling on mobile Safari
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
           {items.map((item) => {
             const Icon = item.icon;
             const active = location.pathname.startsWith(item.to);
             return (
-              <li key={item.to}>
+              <li key={item.to} className="snap-start flex-shrink-0">
                 <Link
                   to={item.to}
-                  className={`flex flex-col items-center justify-center py-2 text-xs ${active ? "text-primary" : "text-muted-foreground"}`}
+                  className={`flex min-w-[90px] flex-col items-center justify-center py-2 text-xs ${
+                    active ? "text-primary" : "text-muted-foreground"
+                  }`}
                 >
                   <Icon className="h-5 w-5" />
                   <span className="mt-1">{item.label}</span>
