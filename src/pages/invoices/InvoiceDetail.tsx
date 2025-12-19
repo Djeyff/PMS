@@ -208,9 +208,9 @@ const InvoiceDetail = () => {
               <div>{t.prevBalance}</div>
               <div>{fmt(previousBalance, inv.currency)}</div>
             </div>
-            <div className="flex justify-between">
-              <div>{t.overallBalance}</div>
-              <div className="font-semibold">{fmt(overallBalance, inv.currency)}</div>
+            <div className="grid grid-cols-[1fr,auto] items-start gap-4">
+              <div className="leading-snug">{t.overallBalance}</div>
+              <div className="font-semibold text-right min-w-[100px]">{fmt(overallBalance, inv.currency)}</div>
             </div>
           </div>
         </div>
