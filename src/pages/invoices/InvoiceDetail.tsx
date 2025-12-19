@@ -189,7 +189,7 @@ const InvoiceDetail = () => {
       </div>
 
       <div className="flex justify-end mt-4">
-        <div className="w-64 space-y-1">
+        <div className="w-64 space-y-2">
           <div className="flex justify-between">
             <div>{t.total}</div>
             <div className="font-medium">{fmt(Number(inv.total_amount), inv.currency)}</div>
@@ -202,13 +202,16 @@ const InvoiceDetail = () => {
             <div>{t.balance}</div>
             <div className="font-medium">{fmt(balance, inv.currency)}</div>
           </div>
-          <div className="flex justify-between text-gray-600 pt-2">
-            <div>{t.prevBalance}</div>
-            <div>{fmt(previousBalance, inv.currency)}</div>
-          </div>
-          <div className="flex justify-between">
-            <div>{t.overallBalance}</div>
-            <div className="font-semibold">{fmt(overallBalance, inv.currency)}</div>
+
+          <div className="mt-3 pt-3 border-t space-y-2">
+            <div className="flex justify-between text-gray-600">
+              <div>{t.prevBalance}</div>
+              <div>{fmt(previousBalance, inv.currency)}</div>
+            </div>
+            <div className="flex justify-between">
+              <div>{t.overallBalance}</div>
+              <div className="font-semibold">{fmt(overallBalance, inv.currency)}</div>
+            </div>
           </div>
         </div>
       </div>

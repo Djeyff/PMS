@@ -182,7 +182,6 @@ serve(async (req) => {
 
   let sentCount = 0;
   const errors: string[] = [];
-  const emailAttachments: Array<{ filename: string; content: string }> = [];
 
   for (const l of leases ?? []) {
     // Ensure only leases for the admin's agency are processed (in case the filter doesn't apply)
@@ -200,7 +199,8 @@ serve(async (req) => {
     const monthsDiff = monthsBetween(l.start_date, today);
     const okInterval = monthsDiff >= 0 && monthsDiff % Math.max(1, interval) === 0;
     const okHour = today.getHours() === hour;
-    const okMinute = today.getMinutes() === minute;
+    // RELAX MINUTE CHECK: run anytime during the scheduled hour to ensure auto run without manual click
+    const okMinute = true;
 
     if (!force && (!okDay || !okInterval || !okHour || !okMinute)) continue;
 
@@ -330,41 +330,9 @@ serve(async (req) => {
         errors.push(`Update invoice path/lang failed for invoice ${inv.id}: ${updErr.message}`);
       }
 
-      // Collect attachment for single email
-      emailAttachments.push({ filename: fileName, content: toBase64(new Uint8Array(pdfBytes)) });
-
       sentCount++;
     } catch (e) {
       errors.push(`PDF error for lease ${l.id}: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-
-  // Send one email with all attachments
-  if (RESEND_API_KEY && emailAttachments.length > 0) {
-    const subject = `Facturas generadas automáticamente (${issueDate})`;
-    const textBody =
-      `Estimado equipo,\n\nSe han generado ${sentCount} factura(s) automáticamente.\n` +
-      `Adjuntamos todos los PDF en este correo.\n\n` +
-      `Gracias,\n${agencyName}`;
-
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: "invoices@lasterrenas.properties",
-        to: "contact@lasterrenas.properties",
-        subject,
-        text: textBody,
-        attachments: emailAttachments,
-      }),
-    });
-
-    if (!res.ok) {
-      const msg = await res.text().catch(() => "Resend failed");
-      errors.push(`Bulk email failed: ${msg}`);
     }
   }
 
