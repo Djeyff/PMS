@@ -27,6 +27,7 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
   const [autoInvoiceEnabled, setAutoInvoiceEnabled] = useState<boolean>(!!lease.auto_invoice_enabled);
   const [autoDay, setAutoDay] = useState<number>(lease.auto_invoice_day ?? 5);
   const [autoIntervalMonths, setAutoIntervalMonths] = useState<number>(lease.auto_invoice_interval_months ?? 1);
+  const [autoHour, setAutoHour] = useState<number>(typeof lease.auto_invoice_hour === "number" ? lease.auto_invoice_hour : 9);
 
   const reset = () => {
     setStartDate(lease.start_date);
@@ -38,6 +39,7 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
     setAutoInvoiceEnabled(!!lease.auto_invoice_enabled);
     setAutoDay(lease.auto_invoice_day ?? 5);
     setAutoIntervalMonths(lease.auto_invoice_interval_months ?? 1);
+    setAutoHour(typeof lease.auto_invoice_hour === "number" ? lease.auto_invoice_hour : 9);
   };
 
   const onSave = async () => {
@@ -53,6 +55,7 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
         auto_invoice_enabled: autoInvoiceEnabled,
         auto_invoice_day: autoDay,
         auto_invoice_interval_months: autoIntervalMonths,
+        auto_invoice_hour: autoHour,
       });
       toast.success("Lease updated");
       setOpen(false);
@@ -127,7 +130,7 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
             <Switch checked={autoInvoiceEnabled} onCheckedChange={setAutoInvoiceEnabled} />
           </div>
           {autoInvoiceEnabled && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Day of month</Label>
                 <Input
@@ -146,6 +149,19 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
                   max={12}
                   value={autoIntervalMonths}
                   onChange={(e) => setAutoIntervalMonths(Math.max(1, Math.min(12, Number(e.target.value || 1))))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Hour of day (0–23)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={autoHour}
+                  onChange={(e) => {
+                    const v = Number(e.target.value ?? 0);
+                    setAutoHour(Math.max(0, Math.min(23, isNaN(v) ? 0 : v)));
+                  }}
                 />
               </div>
             </div>

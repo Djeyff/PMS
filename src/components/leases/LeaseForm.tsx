@@ -44,6 +44,7 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
   const [autoInvoice, setAutoInvoice] = useState<boolean>(false);
   const [autoDay, setAutoDay] = useState<number>(5);
   const [autoIntervalMonths, setAutoIntervalMonths] = useState<number>(1);
+  const [autoHour, setAutoHour] = useState<number>(new Date().getHours());
 
   useEffect(() => {
     if (open && propPropertyId) {
@@ -80,6 +81,7 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
         auto_invoice_enabled: autoInvoice,
         auto_invoice_day: autoDay,
         auto_invoice_interval_months: autoIntervalMonths,
+        auto_invoice_hour: autoHour,
       });
       toast.success("Lease created");
       setOpen(false);
@@ -93,6 +95,7 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
       setAutoInvoice(false);
       setAutoDay(5);
       setAutoIntervalMonths(1);
+      setAutoHour(new Date().getHours());
       onCreated?.();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to create lease");
@@ -190,7 +193,7 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
               <Switch checked={autoInvoice} onCheckedChange={setAutoInvoice} />
             </div>
             {autoInvoice && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Day of month</Label>
                   <Input
@@ -211,6 +214,20 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
                     value={autoIntervalMonths}
                     onChange={(e) => setAutoIntervalMonths(Math.max(1, Math.min(12, Number(e.target.value || 1))))}
                     placeholder="e.g., 1 for monthly, 3 for quarterly"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Hour of day (0–23)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={autoHour}
+                    onChange={(e) => {
+                      const v = Number(e.target.value ?? 0);
+                      setAutoHour(Math.max(0, Math.min(23, isNaN(v) ? 0 : v)));
+                    }}
+                    placeholder="e.g., 9"
                   />
                 </div>
               </div>
