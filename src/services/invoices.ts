@@ -298,3 +298,34 @@ export async function generateSpanishInvoicePDF(invoiceId: string, opts: { sendE
 
   return (await res.json()) as { ok: true; url: string | null; path: string };
 }
+
+export async function recomputeInvoiceStatus(invoiceId: string) {
+  const { data, error } = await supabase
+    .from("invoices")
+    .select(`
+      id, currency, total_amount,
+      payments:payments ( amount, currency, exchange_rate )
+    `)
+    .eq("id", invoiceId)
+    .single();
+  if (error) throw error;
+
+  const currency = data.currency as "USD" | "DOP";
+  const total = Number(data.total_amount || 0);
+  const paidConverted = (data.payments ?? []).reduce((sum: number, p: any) => {
+    const amt = Number(p.amount || 0);
+    if (p.currency === currency) return sum + amt;
+    const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : null;
+    if (!rate || rate <= 0) return sum;
+    if (currency === "USD" && p.currency === "DOP") return sum + amt / rate;
+    if (currency === "DOP" && p.currency === "USD") return sum + amt * rate;
+    return sum;
+  }, 0);
+
+  const newStatus =
+    paidConverted >= total ? "paid"
+    : paidConverted > 0 ? "partial"
+    : "sent";
+
+  await supabase.from("invoices").update({ status: newStatus }).eq("id", invoiceId);
+}

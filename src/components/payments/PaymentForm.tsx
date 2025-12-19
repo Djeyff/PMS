@@ -10,6 +10,7 @@ import { fetchLeases } from "@/services/leases";
 import { createPayment } from "@/services/payments";
 import { toast } from "sonner";
 import { fetchPendingInvoicesByLease } from "@/services/invoices";
+import { recomputeInvoiceStatus } from "@/services/invoices";
 
 const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
   const { role, user, profile } = useAuth();
@@ -62,6 +63,10 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
         invoice_id: invoiceId || undefined,
         exchange_rate: exchangeRate && !Number.isNaN(Number(exchangeRate)) ? Number(exchangeRate) : undefined,
       });
+      // Recompute invoice status if linked
+      if (invoiceId) {
+        await recomputeInvoiceStatus(invoiceId);
+      }
       toast.success("Payment recorded");
       setOpen(false);
       setLeaseId("");

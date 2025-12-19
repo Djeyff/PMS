@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { PaymentWithMeta } from "@/services/payments";
 import { updatePayment } from "@/services/payments";
 import { toast } from "sonner";
+import { recomputeInvoiceStatus } from "@/services/invoices";
 
 type Props = {
   payment: PaymentWithMeta;
@@ -53,6 +54,10 @@ const EditPaymentDialog = ({ payment, onUpdated }: Props) => {
         reference: reference.trim() !== "" ? reference.trim() : null,
         exchange_rate: exchangeRate && !Number.isNaN(Number(exchangeRate)) ? Number(exchangeRate) : null,
       });
+      // If this payment is linked to an invoice, recompute its status
+      if (payment.invoice_id) {
+        await recomputeInvoiceStatus(payment.invoice_id);
+      }
       toast.success("Payment updated");
       setOpen(false);
       onUpdated?.();

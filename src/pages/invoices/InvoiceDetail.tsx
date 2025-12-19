@@ -106,14 +106,24 @@ const InvoiceDetail = () => {
   const fmtLocale = lang === "es" ? "es-ES" : "en-US";
   const fmt = (amt: number, cur: string) => new Intl.NumberFormat(fmtLocale, { style: "currency", currency: cur }).format(amt);
 
-  // Compute paid/balance and derived display status (for this invoice)
-  const paid = (inv.payments ?? []).filter((p: any) => p.currency === inv.currency).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-  const balance = paid - Number(inv.total_amount);
+  // Compute paid using currency conversion (exchange_rate), then balance
+  const paidConverted = (inv.payments ?? []).reduce((sum: number, p: any) => {
+    const amt = Number(p.amount || 0);
+    if (p.currency === inv.currency) return sum + amt;
+    // Convert using exchange_rate when available
+    const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : null;
+    if (!rate || rate <= 0) return sum;
+    if (inv.currency === "USD" && p.currency === "DOP") return sum + amt / rate; // DOP → USD
+    if (inv.currency === "DOP" && p.currency === "USD") return sum + amt * rate; // USD → DOP
+    return sum;
+  }, 0);
+
+  const balance = paidConverted - Number(inv.total_amount);
   const today = new Date().toISOString().slice(0, 10);
   let displayStatus: string = inv.status;
   if (balance >= 0) displayStatus = "paid";
   else if (inv.due_date < today && inv.status !== "void") displayStatus = "overdue";
-  else if (paid > 0) displayStatus = "partial";
+  else if (paidConverted > 0) displayStatus = "partial";
 
   // Compute previous and overall tenant balances in the invoice currency
   const invCurrency = inv.currency;
@@ -131,13 +141,17 @@ const InvoiceDetail = () => {
   const agencyName = agency?.name ?? "Las Terrenas Properties";
   const agencyAddress = agency?.address ?? "278 calle Duarte, LTI building, Las Terrenas";
 
+  // Safe month text computation
   const monthText = React.useMemo(() => {
-    const d = new Date(inv.issue_date);
+    const iso = inv?.issue_date;
+    if (!iso) return "—";
+    const d = new Date(iso);
     const m = d.toLocaleString(lang === "es" ? "es-ES" : "en-US", { month: "long" });
     const y = String(d.getFullYear());
     return lang === "es" ? `${m} ${y.slice(-2)}` : `${m} ${y}`;
-  }, [inv.issue_date, lang]);
+  }, [inv?.issue_date, lang]);
 
+  // Method and exchange rate display
   const methodsDisplay = (() => {
     const list = (inv.payments ?? []).map((p: any) => p.method).filter(Boolean);
     if (list.length === 0) return "—";
@@ -146,7 +160,6 @@ const InvoiceDetail = () => {
   })();
 
   const exchangeRateDisplay = (() => {
-    // Show the first available exchange rate from a payment where currency differs from invoice currency
     const diffPay = (inv.payments ?? []).find((p: any) => p.exchange_rate && p.currency !== inv.currency);
     if (!diffPay?.exchange_rate) return "—";
     return String(diffPay.exchange_rate);
@@ -235,14 +248,14 @@ const InvoiceDetail = () => {
         </div>
       </div>
 
-      {/* Payment summary + Balance block separated */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+      {/* Payment summary + Balance block */}
+      <div className="grid grid-cols-1 md-grid-cols-2 gap-6 mt-6">
         <div className="space-y-2 bg-gray-50 rounded p-3">
           <div className="font-medium">{lang === "es" ? "Total a pagar" : "Amount to be Paid"} :</div>
           <div className="text-lg font-semibold">{fmt(Number(inv.total_amount), inv.currency)}</div>
 
           <div className="font-medium mt-2">{lang === "es" ? "Pagado" : "Paid"} :</div>
-          <div>{fmt(paid, inv.currency)}</div>
+          <div>{fmt(paidConverted, inv.currency)}</div>
 
           <div className="font-medium mt-2">{lang === "es" ? "Tasa de Cambio" : "Exchange Rate"} :</div>
           <div className="text-sm">{exchangeRateDisplay}</div>

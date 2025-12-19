@@ -32,17 +32,22 @@ const Invoices = () => {
 
   const rows = useMemo(() => {
     return (data ?? []).map((inv: any) => {
-      const paid = (inv.payments ?? [])
-        .filter((p: any) => p.currency === inv.currency)
-        .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-      const balance = paid - Number(inv.total_amount);
-      // derived status for display
+      const paidConverted = (inv.payments ?? []).reduce((sum: number, p: any) => {
+        const amt = Number(p.amount || 0);
+        if (p.currency === inv.currency) return sum + amt;
+        const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : null;
+        if (!rate || rate <= 0) return sum;
+        if (inv.currency === "USD" && p.currency === "DOP") return sum + amt / rate;
+        if (inv.currency === "DOP" && p.currency === "USD") return sum + amt * rate;
+        return sum;
+      }, 0);
+      const balance = paidConverted - Number(inv.total_amount);
       let displayStatus = inv.status;
       const today = new Date().toISOString().slice(0, 10);
       if (balance >= 0) displayStatus = "paid";
       else if (inv.due_date < today && inv.status !== "void") displayStatus = "overdue";
-      else if (paid > 0) displayStatus = "partial";
-      return { ...inv, paid, balance, displayStatus };
+      else if (paidConverted > 0) displayStatus = "partial";
+      return { ...inv, paid: paidConverted, balance, displayStatus };
     });
   }, [data]);
 
