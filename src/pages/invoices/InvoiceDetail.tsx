@@ -131,9 +131,16 @@ const InvoiceDetail = () => {
   const agencyName = agency?.name ?? "Las Terrenas Properties";
   const agencyAddress = agency?.address ?? "278 calle Duarte, LTI building, Las Terrenas";
 
+  const monthText = React.useMemo(() => {
+    const d = new Date(inv.issue_date);
+    const m = d.toLocaleString(lang === "es" ? "es-ES" : "en-US", { month: "long" });
+    const y = String(d.getFullYear());
+    return lang === "es" ? `${m} ${y.slice(-2)}` : `${m} ${y}`;
+  }, [inv.issue_date, lang]);
+
   return (
     <div className="p-6 max-w-3xl mx-auto bg-white text-black">
-      {/* Branding header */}
+      {/* Header with bilingual title (aligned right) */}
       <div className="flex items-start justify-between mb-6">
         <div className="flex items-start gap-3">
           {logoUrl ? <img src={logoUrl} alt="Logo" className="h-12 w-auto rounded" /> : null}
@@ -142,45 +149,71 @@ const InvoiceDetail = () => {
             <div className="text-xs text-gray-600 whitespace-pre-line">{agencyAddress}</div>
           </div>
         </div>
-        <div className="space-x-2 print:hidden">
-          <Button variant="secondary" asChild><Link to="/invoices">{t.back}</Link></Button>
-          {signedUrl ? (
-            <Button asChild><a href={signedUrl} target="_blank" rel="noreferrer">{t.openPdf}</a></Button>
-          ) : null}
-          <Button onClick={() => window.print()}>{t.print}</Button>
+        <div className="text-right">
+          <div className="text-xl font-semibold leading-tight">{lang === "es" ? "Recibo" : "Receipt"}</div>
+          <div className="text-sm text-gray-600">{lang === "es" ? "Factura" : "Invoice"}</div>
+          <div className="mt-2 space-x-2 print:hidden">
+            <Button variant="secondary" asChild><Link to="/invoices">{t.back}</Link></Button>
+            {signedUrl ? (
+              <Button asChild><a href={signedUrl} target="_blank" rel="noreferrer">{t.openPdf}</a></Button>
+            ) : null}
+            <Button onClick={() => window.print()}>{t.print}</Button>
+          </div>
         </div>
       </div>
 
-      <div className="flex justify-between items-start mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">{t.title}</h1>
-          <div className="text-sm text-gray-600">#{inv.number ?? inv.id.slice(0, 8)}</div>
-        </div>
-      </div>
-
+      {/* Info grid: agency block left, billed-to and meta right */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div>
-          <div className="font-medium">{t.billedTo}</div>
-          <div>{tenantName}</div>
+        <div className="space-y-1">
+          <div className="font-semibold">{agencyName}</div>
+          <div className="text-sm text-gray-600 whitespace-pre-line">{agencyAddress}</div>
         </div>
-        <div>
-          <div className="font-medium">{t.property}</div>
-          <div>{propName}</div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+          <div className="text-gray-600">{lang === "es" ? "Facturado a" : "Billed to"}</div>
+          <div className="font-medium">{tenantName}</div>
+
+          <div className="text-gray-600">{lang === "es" ? "Para" : "For"}</div>
+          <div className="font-medium">{propName}</div>
+
+          <div className="text-gray-600">{lang === "es" ? "Fecha" : "Date"}</div>
+          <div className="font-medium">{inv.issue_date}</div>
+
+          <div className="text-gray-600">{lang === "es" ? "Para el mes de" : "For month of"}</div>
+          <div className="font-medium">{monthText}</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 text-sm mb-6">
-        <div>{t.issue}: {inv.issue_date}</div>
-        <div>{t.due}: {inv.due_date}</div>
-        <div>{t.currency}: {inv.currency}</div>
-        <div>{t.status}: {String(displayStatus).toUpperCase()}</div>
-        <div className="col-span-2">{t.contractExpiry}: {inv.lease?.end_date ?? "—"}</div>
+      {/* Summary header row (compact table-style) */}
+      <div className="rounded border bg-gray-50">
+        <div className="grid grid-cols-5 gap-2 p-2 text-xs font-medium text-gray-700">
+          <div className="truncate">{lang === "es" ? "Alquiler DOP" : "Rent DOP"}</div>
+          <div className="truncate">{lang === "es" ? "Alquiler USD" : "Rent USD"}</div>
+          <div className="truncate">{lang === "es" ? "Importe Anterior USD" : "Overdue USD"}</div>
+          <div className="truncate">{lang === "es" ? "Importe Anterior DOP" : "Overdue DOP"}</div>
+          <div className="truncate">{lang === "es" ? "Fin del contrato" : "Lease End Date"}</div>
+        </div>
+        <div className="grid grid-cols-5 gap-2 p-2 text-sm">
+          <div className="truncate">
+            {inv.currency === "DOP" ? fmt(Number(inv.total_amount), "DOP") : "—"}
+          </div>
+          <div className="truncate">
+            {inv.currency === "USD" ? fmt(Number(inv.total_amount), "USD") : "—"}
+          </div>
+          <div className="truncate">
+            {inv.currency === "USD" ? fmt(Math.max(0, previousBalance), "USD") : "—"}
+          </div>
+          <div className="truncate">
+            {inv.currency === "DOP" ? fmt(Math.max(0, previousBalance), "DOP") : "—"}
+          </div>
+          <div className="truncate">{inv.lease?.end_date ?? "—"}</div>
+        </div>
       </div>
 
-      <div className="border rounded">
+      {/* Line item block */}
+      <div className="border rounded mt-6">
         <div className="flex justify-between p-3 border-b">
-          <div>{t.description}</div>
-          <div>{t.amount}</div>
+          <div className="font-medium">{t.description}</div>
+          <div className="font-medium">{t.amount}</div>
         </div>
         <div className="flex justify-between p-3">
           <div>{t.leaseInvoice}</div>
@@ -188,31 +221,46 @@ const InvoiceDetail = () => {
         </div>
       </div>
 
-      <div className="flex justify-end mt-4">
-        <div className="w-64 space-y-2">
-          <div className="flex justify-between">
-            <div>{t.total}</div>
-            <div className="font-medium">{fmt(Number(inv.total_amount), inv.currency)}</div>
-          </div>
-          <div className="flex justify-between text-gray-600">
-            <div>{t.paid}</div>
-            <div>{fmt(paid, inv.currency)}</div>
-          </div>
-          <div className="flex justify-between">
-            <div>{t.balance}</div>
-            <div className="font-medium">{fmt(balance, inv.currency)}</div>
-          </div>
+      {/* Payment summary + Balance block separated */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+        <div className="space-y-2 bg-gray-50 rounded p-3">
+          <div className="font-medium">{lang === "es" ? "Total a pagar" : "Amount to be Paid"} :</div>
+          <div className="text-lg font-semibold">{fmt(Number(inv.total_amount), inv.currency)}</div>
 
-          <div className="mt-3 pt-3 border-t space-y-2">
+          <div className="font-medium mt-2">{lang === "es" ? "Pagado" : "Paid"} :</div>
+          <div>{fmt(paid, inv.currency)}</div>
+
+          <div className="font-medium mt-2">{lang === "es" ? "Tasa de Cambio" : "Exchange Rate"} :</div>
+          <div className="text-sm text-gray-600">—</div>
+
+          <div className="font-medium mt-2">{lang === "es" ? "Método de pago" : "Payment Method"} :</div>
+          <div className="text-sm text-gray-600">—</div>
+        </div>
+
+        <div className="space-y-2 bg-gray-50 rounded p-3">
+          <div className="font-medium">{lang === "es" ? "Saldo" : "Balance"} :</div>
+          <div className="text-lg font-semibold">{fmt(balance, inv.currency)}</div>
+
+          <div className="mt-4 pt-3 border-t space-y-2">
             <div className="flex justify-between text-gray-600">
               <div>{t.prevBalance}</div>
               <div>{fmt(previousBalance, inv.currency)}</div>
             </div>
             <div className="grid grid-cols-[1fr,auto] items-start gap-4">
               <div className="leading-snug">{t.overallBalance}</div>
-              <div className="font-semibold text-right min-w-[100px]">{fmt(overallBalance, inv.currency)}</div>
+              <div className="font-semibold text-right min-w-[110px]">{fmt(overallBalance, inv.currency)}</div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Reminder */}
+      <div className="mt-6 text-sm">
+        <div className="font-medium">{lang === "es" ? "Recordatorio" : "Reminder"} :</div>
+        <div className="text-gray-700">
+          {lang === "es"
+            ? "Por favor, pague antes del día 5 de cada mes."
+            : "Please pay before the 5th of each month."}
         </div>
       </div>
     </div>
