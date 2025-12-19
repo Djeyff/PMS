@@ -11,9 +11,10 @@ type Props = {
   agencyId: string;
   value: string;
   onChange: (next: string) => void;
+  allowCreate?: boolean;
 };
 
-const GroupPicker: React.FC<Props> = ({ agencyId, value, onChange }) => {
+const GroupPicker: React.FC<Props> = ({ agencyId, value, onChange, allowCreate = true }) => {
   const qc = useQueryClient();
   const { data } = useQuery({
     queryKey: ["location-groups", agencyId],
@@ -62,28 +63,32 @@ const GroupPicker: React.FC<Props> = ({ agencyId, value, onChange }) => {
                 </DropdownMenuItem>
               ))
             )}
-            <DropdownMenuSeparator />
-            <div className="px-2 py-2 space-y-2">
-              <Label className="text-xs">Create new folder</Label>
-              <Input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="Folder name"
-              />
-              <Button
-                size="sm"
-                onClick={() => {
-                  const name = newName.trim();
-                  if (!name) {
-                    toast.error("Enter a folder name");
-                    return;
-                  }
-                  createMut.mutate(name);
-                }}
-              >
-                Create
-              </Button>
-            </div>
+            {allowCreate && (
+              <>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-2 space-y-2">
+                  <Label className="text-xs">Create new folder</Label>
+                  <Input
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="Folder name"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      const name = newName.trim();
+                      if (!name) {
+                        toast.error("Enter a folder name");
+                        return;
+                      }
+                      createMut.mutate(name);
+                    }}
+                  >
+                    Create
+                  </Button>
+                </div>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

@@ -12,6 +12,7 @@ import DeletePropertyDialog from "@/components/properties/DeletePropertyDialog";
 import PropertyOwnersDialog from "@/components/properties/PropertyOwnersDialog";
 import LeaseForm from "@/components/leases/LeaseForm";
 import { Separator } from "@/components/ui/separator";
+import GroupPicker from "@/components/properties/GroupPicker";
 
 // sample data removed
 
@@ -39,9 +40,21 @@ const Properties = () => {
   return (
     <AppShell>
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
           <h1 className="text-xl font-semibold">Properties</h1>
-          {canCreate && profile?.agency_id ? <PropertyForm agencyId={profile.agency_id} onCreated={() => refetch()} /> : null}
+          <div className="flex items-center gap-3">
+            {canCreate && profile?.agency_id ? <PropertyForm agencyId={profile.agency_id} onCreated={() => refetch()} /> : null}
+            {canCreate && profile?.agency_id ? (
+              // Manage folders here; selecting just updates local state (no filter yet)
+              <div className="min-w-[320px]">
+                <GroupPicker
+                  agencyId={profile.agency_id}
+                  value={""}
+                  onChange={() => {}}
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
 
         {canCreate && !profile?.agency_id ? (

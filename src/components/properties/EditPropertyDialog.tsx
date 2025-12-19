@@ -131,7 +131,12 @@ const EditPropertyDialog = ({ property, onUpdated }: Props) => {
               />
             </div>
           </div>
-          <GroupPicker agencyId={profile?.agency_id ?? property.agency_id} value={locationGroup} onChange={setLocationGroup} />
+          <GroupPicker
+            agencyId={profile?.agency_id ?? property.agency_id}
+            value={locationGroup}
+            onChange={setLocationGroup}
+            allowCreate={false}
+          />
           <div className="pt-2">
             <Button onClick={onSave} disabled={saving}>
               {saving ? "Saving..." : "Save changes"}
