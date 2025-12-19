@@ -53,6 +53,17 @@ const InvoiceDetail = () => {
     }
   }, [inv?.id, inv?.pdf_url]);
 
+  // Safe month text computation - moved above early returns to keep hook order consistent
+  const monthText = React.useMemo(() => {
+    const iso = inv?.issue_date;
+    const localeLang = inv?.pdf_lang === "es" ? "es" : "en";
+    if (!iso) return "—";
+    const d = new Date(iso);
+    const m = d.toLocaleString(localeLang === "es" ? "es-ES" : "en-US", { month: "long" });
+    const y = String(d.getFullYear());
+    return localeLang === "es" ? `${m} ${y.slice(-2)}` : `${m} ${y}`;
+  }, [inv?.issue_date, inv?.pdf_lang]);
+
   if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>;
   if (isError) return <div className="p-6">Failed to load invoice. <Link to="/invoices" className="underline text-blue-600">Back</Link></div>;
   if (!inv) return <div className="p-6">Invoice not found. <Link to="/invoices" className="underline text-blue-600">Back</Link></div>;
@@ -141,16 +152,6 @@ const InvoiceDetail = () => {
   // Branding
   const agencyName = agency?.name ?? "Las Terrenas Properties";
   const agencyAddress = agency?.address ?? "278 calle Duarte, LTI building, Las Terrenas";
-
-  // Safe month text computation
-  const monthText = React.useMemo(() => {
-    const iso = inv?.issue_date;
-    if (!iso) return "—";
-    const d = new Date(iso);
-    const m = d.toLocaleString(lang === "es" ? "es-ES" : "en-US", { month: "long" });
-    const y = String(d.getFullYear());
-    return lang === "es" ? `${m} ${y.slice(-2)}` : `${m} ${y}`;
-  }, [inv?.issue_date, lang]);
 
   // Method and exchange rate display
   const methodsDisplay = (() => {
