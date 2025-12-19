@@ -204,6 +204,25 @@ serve(async (req) => {
 
     if (!force && (!okDay || !okInterval || !okHour || !okMinute)) continue;
 
+    // DUPLICATE GUARD: skip if an invoice for this lease already exists this month
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
+    const { data: existingInvs, error: existingErr } = await service
+      .from("invoices")
+      .select("id, issue_date")
+      .eq("lease_id", l.id)
+      .gte("issue_date", monthStart)
+      .lte("issue_date", monthEnd)
+      .limit(1);
+    if (existingErr) {
+      errors.push(`Check existing invoice failed for lease ${l.id}: ${existingErr.message}`);
+      continue;
+    }
+    if ((existingInvs ?? []).length > 0) {
+      // Skip silently to avoid duplicates even on manual runs
+      continue;
+    }
+
     const tenantName = [l.tenant?.first_name ?? "", l.tenant?.last_name ?? ""].filter(Boolean).join(" ") || "—";
     const propertyName = l.property?.name ?? (l.property_id?.slice(0, 8) || "Propiedad");
     const amount = Number(l.rent_amount || 0);
