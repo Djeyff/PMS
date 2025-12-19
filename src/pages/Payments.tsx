@@ -8,6 +8,9 @@ import { fetchPayments } from "@/services/payments";
 import PaymentForm from "@/components/payments/PaymentForm";
 import DeletePaymentDialog from "@/components/payments/DeletePaymentDialog";
 import EditPaymentDialog from "@/components/payments/EditPaymentDialog";
+import { generatePaymentReceiptPDF } from "@/services/payment-pdf";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const Payments = () => {
   const { role, user, profile } = useAuth();
@@ -86,31 +89,53 @@ const Payments = () => {
                         <TableCell>{p.received_date}</TableCell>
                         <TableCell className="capitalize">{String(p.method).replace("_", " ")}</TableCell>
                         <TableCell>{fmt(Number(p.amount), p.currency)}</TableCell>
-                        {canCreate && (
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <EditPaymentDialog payment={p} onUpdated={() => refetch()} />
-                              <DeletePaymentDialog
-                                id={p.id}
-                                summary={`${tenantName} • ${propName} • ${p.received_date} • ${fmt(Number(p.amount), p.currency)}`}
-                                metadata={{
-                                  amount: p.amount,
-                                  currency: p.currency,
-                                  method: p.method,
-                                  received_date: p.received_date,
-                                  reference: p.reference ?? null,
-                                  tenant_id: p.tenant_id,
-                                  tenant_name: tenantName,
-                                  property_id: p.lease?.property?.id ?? null,
-                                  property_name: propName,
-                                  lease_id: p.lease_id,
-                                  invoice_id: p.invoice_id ?? null,
-                                }}
-                                onDeleted={() => refetch()}
-                              />
-                            </div>
-                          </TableCell>
-                        )}
+                        {/* Always allow viewing a receipt */}
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                try {
+                                  const out = await generatePaymentReceiptPDF(p.id, "en");
+                                  if (out.url) {
+                                    window.open(out.url, "_blank");
+                                    toast.success("Payment receipt generated");
+                                  } else {
+                                    toast.info("Receipt generated but no URL returned");
+                                  }
+                                } catch (e: any) {
+                                  toast.error(e?.message ?? "Failed to open receipt");
+                                }
+                              }}
+                            >
+                              View
+                            </Button>
+                            {canCreate && (
+                              <>
+                                <EditPaymentDialog payment={p} onUpdated={() => refetch()} />
+                                <DeletePaymentDialog
+                                  id={p.id}
+                                  summary={`${tenantName} • ${propName} • ${p.received_date} • ${fmt(Number(p.amount), p.currency)}`}
+                                  metadata={{
+                                    amount: p.amount,
+                                    currency: p.currency,
+                                    method: p.method,
+                                    received_date: p.received_date,
+                                    reference: p.reference ?? null,
+                                    tenant_id: p.tenant_id,
+                                    tenant_name: tenantName,
+                                    property_id: p.lease?.property?.id ?? null,
+                                    property_name: propName,
+                                    lease_id: p.lease_id,
+                                    invoice_id: p.invoice_id ?? null,
+                                  }}
+                                  onDeleted={() => refetch()}
+                                />
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
