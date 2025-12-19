@@ -82,7 +82,12 @@ const Users = () => {
                           value={u.role ?? "pending"}
                           onValueChange={(v) => {
                             if (v === "pending") return;
-                            mutation.mutate({ userId: u.id, role: v as "agency_admin" | "owner" | "tenant" });
+                            // Only allow 'owner' or 'tenant' from client-side
+                            if (v === "agency_admin") {
+                              toast.error("Assigning Agency Admin must be done through a secure server workflow.");
+                              return;
+                            }
+                            mutation.mutate({ userId: u.id, role: v as "owner" | "tenant" });
                           }}
                         >
                           <SelectTrigger className="w-[160px]">
@@ -90,7 +95,6 @@ const Users = () => {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="pending">Pending</SelectItem>
-                            <SelectItem value="agency_admin">Agency Admin</SelectItem>
                             <SelectItem value="owner">Owner</SelectItem>
                             <SelectItem value="tenant">Tenant</SelectItem>
                           </SelectContent>
@@ -98,7 +102,10 @@ const Users = () => {
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={() => mutation.mutate({ userId: u.id, role: u.role ?? "tenant" })}
+                          onClick={() => {
+                            const nextRole = u.role === "owner" || u.role === "tenant" ? u.role : "tenant";
+                            mutation.mutate({ userId: u.id, role: nextRole });
+                          }}
                           disabled={!agencyId || pending === u.id}
                         >
                           {pending === u.id ? "Saving..." : "Assign to my agency"}

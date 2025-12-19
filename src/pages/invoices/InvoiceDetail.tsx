@@ -7,6 +7,7 @@ import { fetchAgencyById } from "@/services/agencies";
 import { getLogoPublicUrl } from "@/services/branding";
 import { fetchInvoicesByTenant } from "@/services/invoices";
 import { fetchPaymentsByTenant } from "@/services/payments";
+import { getInvoiceSignedUrlByInvoiceId } from "@/services/invoices";
 
 const InvoiceDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -40,6 +41,17 @@ const InvoiceDetail = () => {
   React.useEffect(() => {
     getLogoPublicUrl().then((url) => setLogoUrl(url)).catch(() => setLogoUrl(""));
   }, []);
+
+  const [signedUrl, setSignedUrl] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (inv?.id && inv?.pdf_url) {
+      getInvoiceSignedUrlByInvoiceId(inv.id)
+        .then((url) => setSignedUrl(url))
+        .catch(() => setSignedUrl(null));
+    } else {
+      setSignedUrl(null);
+    }
+  }, [inv?.id, inv?.pdf_url]);
 
   if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>;
   if (!inv) return <div className="p-6">Invoice not found. <Link to="/invoices" className="underline text-blue-600">Back</Link></div>;
@@ -132,8 +144,8 @@ const InvoiceDetail = () => {
         </div>
         <div className="space-x-2 print:hidden">
           <Button variant="secondary" asChild><Link to="/invoices">{t.back}</Link></Button>
-          {inv.pdf_url ? (
-            <Button asChild><a href={inv.pdf_url} target="_blank" rel="noreferrer">{t.openPdf}</a></Button>
+          {signedUrl ? (
+            <Button asChild><a href={signedUrl} target="_blank" rel="noreferrer">{t.openPdf}</a></Button>
           ) : null}
           <Button onClick={() => window.print()}>{t.print}</Button>
         </div>
