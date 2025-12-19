@@ -94,4 +94,6 @@
     "typescript": "^5.5.3",
     "vite": "4.5.5"
   }
+  "packageManager": "pnpm@latest",
+"engines": { "node": ">=22" }
 }
