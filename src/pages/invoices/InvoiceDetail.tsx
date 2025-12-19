@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { fetchAgencyById } from "@/services/agencies";
 import { getLogoPublicUrl } from "@/services/branding";
 import { fetchPaymentsByTenant } from "@/services/payments";
-import { getInvoiceSignedUrlByInvoiceId } from "@/services/invoices";
+import { getInvoiceSignedUrlByInvoiceId, generateInvoicePDF } from "@/services/invoices";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 
 const InvoiceDetail = () => {
   const { id } = useParams<{ id: string }>();
 
-  const { data: inv, isLoading, isError } = useQuery({
+  const { data: inv, isLoading, isError, refetch } = useQuery({
     queryKey: ["invoice-detail", id],
     queryFn: () => fetchInvoiceById(id!),
     enabled: !!id,
@@ -153,9 +155,32 @@ const InvoiceDetail = () => {
   const agencyName = agency?.name ?? "Las Terrenas Properties";
   const agencyAddress = agency?.address ?? "278 calle Duarte, LTI building, Las Terrenas";
 
-  // Method and exchange rate display
+  // Friendly payment method label (localized)
+  const methodLabel = (m: string | null | undefined) => {
+    const key = String(m ?? "").toLowerCase();
+    const mapEn: Record<string, string> = {
+      bank_transfer: "Bank Transfer",
+      cash: "Cash",
+      card: "Card",
+      check: "Check",
+    };
+    const mapEs: Record<string, string> = {
+      bank_transfer: "Transferencia bancaria",
+      cash: "Efectivo",
+      card: "Tarjeta",
+      check: "Cheque",
+    };
+    const map = lang === "es" ? mapEs : mapEn;
+    if (map[key]) return map[key];
+    const cleaned = key.replace(/_/g, " ").trim();
+    return cleaned
+      .split(" ")
+      .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+      .join(" ") || "—";
+  };
+
   const methodsDisplay = (() => {
-    const list = (inv.payments ?? []).map((p: any) => p.method).filter(Boolean);
+    const list = (inv.payments ?? []).map((p: any) => methodLabel(p.method)).filter(Boolean);
     if (list.length === 0) return "—";
     const uniq = Array.from(new Set(list));
     return uniq.join(", ");
@@ -181,11 +206,50 @@ const InvoiceDetail = () => {
         <div className="text-right">
           <div className="text-xl font-semibold leading-tight">{lang === "es" ? "Recibo" : "Receipt"}</div>
           <div className="text-sm text-gray-600">{lang === "es" ? "Factura" : "Invoice"}</div>
-          <div className="mt-2 space-x-2 print:hidden">
+          <div className="mt-2 space-x-2 print:hidden flex items-center gap-2">
             <Button variant="secondary" asChild><Link to="/invoices">{t.back}</Link></Button>
             {signedUrl ? (
               <Button asChild><a href={signedUrl} target="_blank" rel="noreferrer">{t.openPdf}</a></Button>
             ) : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">{lang === "es" ? "Generar PDF" : "Generate PDF"}</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem
+                  onClick={async () => {
+                    if (!inv?.id) return;
+                    try {
+                      const out = await generateInvoicePDF(inv.id, "en", { sendEmail: false, sendWhatsApp: false });
+                      toast.success("Invoice PDF generated in English");
+                      await refetch();
+                      const url = await getInvoiceSignedUrlByInvoiceId(inv.id);
+                      if (url) window.open(url, "_blank");
+                    } catch (e: any) {
+                      toast.error(e?.message ?? "Failed to generate PDF");
+                    }
+                  }}
+                >
+                  English
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={async () => {
+                    if (!inv?.id) return;
+                    try {
+                      const out = await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
+                      toast.success("Factura generada en Español");
+                      await refetch();
+                      const url = await getInvoiceSignedUrlByInvoiceId(inv.id);
+                      if (url) window.open(url, "_blank");
+                    } catch (e: any) {
+                      toast.error(e?.message ?? "No se pudo generar el PDF");
+                    }
+                  }}
+                >
+                  Español
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button onClick={() => window.print()}>{t.print}</Button>
           </div>
         </div>
