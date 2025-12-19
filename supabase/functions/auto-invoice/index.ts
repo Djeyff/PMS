@@ -1,6 +1,12 @@
+// @ts-ignore: Deno runtime remote import
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+// @ts-ignore: Deno runtime remote import
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+// @ts-ignore: Deno runtime remote import
 import { PDFDocument, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
+
+// Provide a minimal declaration so TypeScript doesn't error in web build
+declare const Deno: { env: { get(name: string): string | undefined } };
 
 // Build CORS headers based on optional allowlist
 function buildCorsHeaders(origin: string | null) {
@@ -144,7 +150,7 @@ serve(async (req) => {
     .from("leases")
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, status,
-      auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour,
+      auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute,
       property:properties ( id, name, agency_id ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -179,19 +185,24 @@ serve(async (req) => {
   const emailAttachments: Array<{ filename: string; content: string }> = [];
 
   for (const l of leases ?? []) {
+    // Ensure only leases for the admin's agency are processed (in case the filter doesn't apply)
+    if ((l.property?.agency_id as string | undefined) !== adminAgencyId) continue;
+
     const todayStrIso = today.toISOString().slice(0, 10);
     if (l.status !== "active" || l.start_date > todayStrIso || l.end_date < todayStrIso) continue;
 
     const day = typeof l.auto_invoice_day === "number" ? l.auto_invoice_day : 5;
     const interval = typeof l.auto_invoice_interval_months === "number" ? l.auto_invoice_interval_months : 1;
     const hour = typeof l.auto_invoice_hour === "number" ? l.auto_invoice_hour : 9;
+    const minute = typeof l.auto_invoice_minute === "number" ? l.auto_invoice_minute : 0;
 
     const okDay = today.getDate() === day;
     const monthsDiff = monthsBetween(l.start_date, today);
     const okInterval = monthsDiff >= 0 && monthsDiff % Math.max(1, interval) === 0;
     const okHour = today.getHours() === hour;
+    const okMinute = today.getMinutes() === minute;
 
-    if (!force && (!okDay || !okInterval || !okHour)) continue;
+    if (!force && (!okDay || !okInterval || !okHour || !okMinute)) continue;
 
     const tenantName = [l.tenant?.first_name ?? "", l.tenant?.last_name ?? ""].filter(Boolean).join(" ") || "—";
     const propertyName = l.property?.name ?? (l.property_id?.slice(0, 8) || "Propiedad");

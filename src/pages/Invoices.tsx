@@ -14,6 +14,7 @@ import Money from "@/components/Money";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { generateInvoicePDF } from "@/services/invoices";
 import { toast } from "sonner";
+import { runAutoInvoice } from "@/services/auto-invoice";
 
 const data = [
   { number: "INV-1001", tenant: "Maria Gomez", due: "2024-08-05", total: 1200, currency: "USD" as const, status: "paid" as const },
@@ -50,7 +51,27 @@ const Invoices = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Invoices</h1>
-          {isAdmin ? <InvoiceForm onCreated={() => refetch()} /> : null}
+          {isAdmin ? (
+            <div className="flex items-center gap-2">
+              <InvoiceForm onCreated={() => refetch()} />
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    const res = await runAutoInvoice(true);
+                    if (res.sent > 0) toast.success(`Auto-invoice ran: ${res.sent} invoice(s) created`);
+                    else toast.info("Auto-invoice ran: no invoices matched the schedule");
+                    if (res.errors?.length) toast.error(res.errors[0]);
+                    refetch();
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed to run auto-invoice");
+                  }
+                }}
+              >
+                Run Auto-Invoice
+              </Button>
+            </div>
+          ) : null}
         </div>
         <Card>
           <CardHeader>

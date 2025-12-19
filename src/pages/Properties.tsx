@@ -97,8 +97,8 @@ const Properties = () => {
                     </div>
                     <div className="flex justify-end gap-2">
                       <Button variant="secondary" onClick={() => setFolderOpen(false)}>Cancel</Button>
-                      <Button onClick={() => createFolder.mutate()} disabled={createFolder.isLoading}>
-                        {createFolder.isLoading ? "Creating..." : "Create"}
+                      <Button onClick={() => createFolder.mutate()} disabled={createFolder.isPending}>
+                        {createFolder.isPending ? "Creating..." : "Create"}
                       </Button>
                     </div>
                   </div>

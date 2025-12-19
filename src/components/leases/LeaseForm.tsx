@@ -45,6 +45,7 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
   const [autoDay, setAutoDay] = useState<number>(5);
   const [autoIntervalMonths, setAutoIntervalMonths] = useState<number>(1);
   const [autoHour, setAutoHour] = useState<number>(new Date().getHours());
+  const [autoMinute, setAutoMinute] = useState<number>(new Date().getMinutes());
 
   useEffect(() => {
     if (open && propPropertyId) {
@@ -82,6 +83,7 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
         auto_invoice_day: autoDay,
         auto_invoice_interval_months: autoIntervalMonths,
         auto_invoice_hour: autoHour,
+        auto_invoice_minute: autoMinute,
       });
       toast.success("Lease created");
       setOpen(false);
@@ -96,6 +98,7 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
       setAutoDay(5);
       setAutoIntervalMonths(1);
       setAutoHour(new Date().getHours());
+      setAutoMinute(new Date().getMinutes());
       onCreated?.();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to create lease");
@@ -193,7 +196,7 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
               <Switch checked={autoInvoice} onCheckedChange={setAutoInvoice} />
             </div>
             {autoInvoice && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label>Day of month</Label>
                   <Input
@@ -228,6 +231,20 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
                       setAutoHour(Math.max(0, Math.min(23, isNaN(v) ? 0 : v)));
                     }}
                     placeholder="e.g., 9"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Minute (0–59)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={autoMinute}
+                    onChange={(e) => {
+                      const v = Number(e.target.value ?? 0);
+                      setAutoMinute(Math.max(0, Math.min(59, isNaN(v) ? 0 : v)));
+                    }}
+                    placeholder="e.g., 30"
                   />
                 </div>
               </div>
