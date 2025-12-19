@@ -132,9 +132,9 @@ const Properties = () => {
               <div className="space-y-8">
                 {grouped.map(([groupName, items]) => (
                   <div key={groupName}>
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="mb-2">
                       <h2 className="text-lg font-semibold">{groupName}</h2>
-                      <Separator />
+                      <Separator className="mt-2 w-full" />
                     </div>
                     <Table>
                       <TableHeader>
