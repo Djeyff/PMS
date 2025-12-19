@@ -22,6 +22,7 @@ const EditPropertyDialog = ({ property, onUpdated }: Props) => {
   const [status, setStatus] = useState<Property["status"]>(property.status);
   const [city, setCity] = useState(property.city ?? "");
   const [bedrooms, setBedrooms] = useState<number | "">(property.bedrooms ?? "");
+  const [locationGroup, setLocationGroup] = useState(property.location_group ?? "");
 
   const reset = () => {
     setName(property.name);
@@ -29,6 +30,7 @@ const EditPropertyDialog = ({ property, onUpdated }: Props) => {
     setStatus(property.status);
     setCity(property.city ?? "");
     setBedrooms(property.bedrooms ?? "");
+    setLocationGroup(property.location_group ?? "");
   };
 
   const onSave = async () => {
@@ -44,6 +46,7 @@ const EditPropertyDialog = ({ property, onUpdated }: Props) => {
         status,
         city: city || undefined,
         bedrooms: bedrooms === "" ? undefined : Number(bedrooms),
+        location_group: locationGroup || undefined,
       });
       toast.success("Property updated");
       setOpen(false);
@@ -83,6 +86,12 @@ const EditPropertyDialog = ({ property, onUpdated }: Props) => {
                   <SelectItem value="house">House</SelectItem>
                   <SelectItem value="studio">Studio</SelectItem>
                   <SelectItem value="office">Office</SelectItem>
+                  <SelectItem value="restaurant">Restaurant</SelectItem>
+                  <SelectItem value="banca">Banca</SelectItem>
+                  <SelectItem value="business">Business</SelectItem>
+                  <SelectItem value="land">Land</SelectItem>
+                  <SelectItem value="colmado">Colmado</SelectItem>
+                  <SelectItem value="rentacar">Rent a car</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
@@ -118,6 +127,10 @@ const EditPropertyDialog = ({ property, onUpdated }: Props) => {
                 placeholder="e.g., 3"
               />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Folder / Location Group</Label>
+            <Input value={locationGroup} onChange={(e) => setLocationGroup(e.target.value)} placeholder="e.g., Beachfront, Downtown, LT/Coson" />
           </div>
           <div className="pt-2">
             <Button onClick={onSave} disabled={saving}>

@@ -10,6 +10,7 @@ export type Property = {
   bedrooms: number | null;
   status: "active" | "rented" | "vacant" | "maintenance" | "sold";
   created_at: string;
+  location_group?: string | null;
 };
 
 export async function fetchProperties(params: { role: Role | null; userId: string | null; agencyId: string | null; }) {
@@ -21,7 +22,7 @@ export async function fetchProperties(params: { role: Role | null; userId: strin
     if (!agencyId) return [];
     const { data, error } = await supabase
       .from("properties")
-      .select("id, agency_id, name, type, city, bedrooms, status, created_at")
+      .select("id, agency_id, name, type, city, bedrooms, status, created_at, location_group")
       .eq("agency_id", agencyId)
       .order("created_at", { ascending: false });
     if (error) throw error;
@@ -35,7 +36,7 @@ export async function fetchProperties(params: { role: Role | null; userId: strin
     // Join via foreign table embedding
     const { data, error } = await supabase
       .from("properties")
-      .select("id, agency_id, name, type, city, bedrooms, status, created_at, property_owners!inner(owner_id)")
+      .select("id, agency_id, name, type, city, bedrooms, status, created_at, location_group, property_owners!inner(owner_id)")
       .eq("property_owners.owner_id", userId)
       .order("created_at", { ascending: false });
     if (error) throw error;
@@ -55,6 +56,7 @@ export async function createProperty(input: {
   city?: string;
   bedrooms?: number;
   status?: Property["status"];
+  location_group?: string;
 }) {
   const payload = {
     agency_id: input.agency_id,
@@ -63,12 +65,13 @@ export async function createProperty(input: {
     city: input.city ?? null,
     bedrooms: typeof input.bedrooms === "number" ? input.bedrooms : null,
     status: input.status ?? "active",
+    location_group: input.location_group ?? null,
   };
 
   const { data, error } = await supabase
     .from("properties")
     .insert(payload)
-    .select("id, agency_id, name, type, city, bedrooms, status, created_at")
+    .select("id, agency_id, name, type, city, bedrooms, status, created_at, location_group")
     .single();
 
   if (error) throw error;
@@ -83,6 +86,7 @@ export async function updateProperty(
     status?: Property["status"];
     city?: string;
     bedrooms?: number;
+    location_group?: string;
   }
 ) {
   const payload: any = {};
@@ -91,12 +95,13 @@ export async function updateProperty(
   if (typeof input.status !== "undefined") payload.status = input.status;
   if (typeof input.city !== "undefined") payload.city = input.city ?? null;
   if (typeof input.bedrooms !== "undefined") payload.bedrooms = typeof input.bedrooms === "number" ? input.bedrooms : null;
+  if (typeof input.location_group !== "undefined") payload.location_group = input.location_group ?? null;
 
   const { data, error } = await supabase
     .from("properties")
     .update(payload)
     .eq("id", id)
-    .select("id, agency_id, name, type, city, bedrooms, status, created_at")
+    .select("id, agency_id, name, type, city, bedrooms, status, created_at, location_group")
     .single();
 
   if (error) throw error;

@@ -20,6 +20,7 @@ const PropertyForm = ({ agencyId, onCreated }: Props) => {
   const [type, setType] = useState<"villa" | "apartment" | "house" | "studio" | "office" | "other" | "restaurant" | "banca" | "business" | "land" | "colmado" | "rentacar">("apartment");
   const [city, setCity] = useState("");
   const [bedrooms, setBedrooms] = useState<number | "">("");
+  const [locationGroup, setLocationGroup] = useState<string>("");
   
   // Set default city when dialog opens (avoid side-effects in JSX)
   useEffect(() => {
@@ -47,6 +48,7 @@ const PropertyForm = ({ agencyId, onCreated }: Props) => {
         type: normalizedType,
         city: city || undefined,
         bedrooms: bedrooms === "" ? undefined : Number(bedrooms),
+        location_group: locationGroup || undefined,
       });
       toast.success("Property created");
       setOpen(false);
@@ -54,6 +56,7 @@ const PropertyForm = ({ agencyId, onCreated }: Props) => {
       setType("apartment");
       setCity("Las Terrenas");
       setBedrooms("");
+      setLocationGroup("");
       onCreated?.();
     } catch (e: any) {
       console.error("Create property failed:", e);
@@ -99,19 +102,25 @@ const PropertyForm = ({ agencyId, onCreated }: Props) => {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label>City</Label>
-            <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>City</Label>
+              <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" />
+            </div>
+            <div className="space-y-2">
+              <Label>Bedrooms</Label>
+              <Input
+                type="number"
+                min={0}
+                value={bedrooms}
+                onChange={(e) => setBedrooms(e.target.value === "" ? "" : Number(e.target.value))}
+                placeholder="e.g., 3"
+              />
+            </div>
           </div>
           <div className="space-y-2">
-            <Label>Bedrooms</Label>
-            <Input
-              type="number"
-              min={0}
-              value={bedrooms}
-              onChange={(e) => setBedrooms(e.target.value === "" ? "" : Number(e.target.value))}
-              placeholder="e.g., 3"
-            />
+            <Label>Folder / Location Group</Label>
+            <Input value={locationGroup} onChange={(e) => setLocationGroup(e.target.value)} placeholder="e.g., Beachfront, Downtown, LT/Coson" />
           </div>
           <div className="pt-2">
             <Button onClick={handleSave} disabled={saving}>
