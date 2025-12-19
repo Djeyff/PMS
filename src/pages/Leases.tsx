@@ -51,6 +51,7 @@ const Leases = () => {
                     <TableHead>End</TableHead>
                     <TableHead>Rent</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Contract</TableHead>
                     {canCreate && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -67,6 +68,19 @@ const Leases = () => {
                         {new Intl.NumberFormat(undefined, { style: "currency", currency: l.rent_currency }).format(l.rent_amount)}
                       </TableCell>
                       <TableCell className="capitalize">{String(l.status).replace("_", " ")}</TableCell>
+                      <TableCell>
+                        {l.contract_kdrive_file_url ? (
+                          <a href={l.contract_kdrive_file_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                            Open
+                          </a>
+                        ) : l.contract_kdrive_folder_url ? (
+                          <a href={l.contract_kdrive_folder_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                            Folder
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       {canCreate && (
                         <TableCell>
                           <div className="flex gap-2">

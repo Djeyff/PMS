@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import type { LeaseWithMeta } from "@/services/leases";
 import { updateLease } from "@/services/leases";
 import { toast } from "sonner";
+import KDriveUploader from "@/components/leases/KDriveUploader";
 
 type Props = {
   lease: LeaseWithMeta;
@@ -29,6 +30,8 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
   const [autoIntervalMonths, setAutoIntervalMonths] = useState<number>(lease.auto_invoice_interval_months ?? 1);
   const [autoHour, setAutoHour] = useState<number>(typeof lease.auto_invoice_hour === "number" ? lease.auto_invoice_hour : 9);
   const [autoMinute, setAutoMinute] = useState<number>(typeof lease.auto_invoice_minute === "number" ? lease.auto_invoice_minute : 0);
+  const [kdriveFolderUrl, setKdriveFolderUrl] = useState<string>(lease.contract_kdrive_folder_url ?? "");
+  const [kdriveFileUrl, setKdriveFileUrl] = useState<string>(lease.contract_kdrive_file_url ?? "");
 
   const reset = () => {
     setStartDate(lease.start_date);
@@ -42,6 +45,8 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
     setAutoIntervalMonths(lease.auto_invoice_interval_months ?? 1);
     setAutoHour(typeof lease.auto_invoice_hour === "number" ? lease.auto_invoice_hour : 9);
     setAutoMinute(typeof lease.auto_invoice_minute === "number" ? lease.auto_invoice_minute : 0);
+    setKdriveFolderUrl(lease.contract_kdrive_folder_url ?? "");
+    setKdriveFileUrl(lease.contract_kdrive_file_url ?? "");
   };
 
   const onSave = async () => {
@@ -59,6 +64,8 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
         auto_invoice_interval_months: autoIntervalMonths,
         auto_invoice_hour: autoHour,
         auto_invoice_minute: autoMinute,
+        contract_kdrive_folder_url: kdriveFolderUrl.trim() !== "" ? kdriveFolderUrl.trim() : null,
+        contract_kdrive_file_url: kdriveFileUrl.trim() !== "" ? kdriveFileUrl.trim() : null,
       });
       toast.success("Lease updated");
       setOpen(false);
@@ -182,6 +189,35 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
               </div>
             </div>
           )}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>kDrive Folder URL (optional)</Label>
+              <Input
+                type="url"
+                placeholder="https://kdrive.infomaniak.com/your/folder"
+                value={kdriveFolderUrl}
+                onChange={(e) => setKdriveFolderUrl(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>kDrive File URL (optional)</Label>
+              <Input
+                type="url"
+                placeholder="https://kdrive.infomaniak.com/your/file.pdf"
+                value={kdriveFileUrl}
+                onChange={(e) => setKdriveFileUrl(e.target.value)}
+              />
+            </div>
+            <KDriveUploader
+              leaseId={lease.id}
+              targetFolderUrl={kdriveFolderUrl || null}
+              onUploaded={(fileUrl, folderUrl) => {
+                setKdriveFileUrl(fileUrl || "");
+                if (folderUrl) setKdriveFolderUrl(folderUrl);
+                toast.success("Linked contract file to lease");
+              }}
+            />
+          </div>
           <div className="pt-2">
             <Button onClick={onSave} disabled={saving}>
               {saving ? "Saving..." : "Save changes"}

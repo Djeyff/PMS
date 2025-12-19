@@ -17,6 +17,8 @@ export type LeaseRow = {
   auto_invoice_interval_months?: number;
   auto_invoice_hour?: number;
   auto_invoice_minute?: number;
+  contract_kdrive_folder_url?: string | null;
+  contract_kdrive_file_url?: string | null;
 };
 
 export type LeaseWithMeta = LeaseRow & {
@@ -43,6 +45,8 @@ function normalizeLeaseRow(row: any): LeaseWithMeta {
     auto_invoice_interval_months: typeof row.auto_invoice_interval_months === "number" ? row.auto_invoice_interval_months : 1,
     auto_invoice_hour: typeof row.auto_invoice_hour === "number" ? row.auto_invoice_hour : 9,
     auto_invoice_minute: typeof row.auto_invoice_minute === "number" ? row.auto_invoice_minute : 0,
+    contract_kdrive_folder_url: row.contract_kdrive_folder_url ?? null,
+    contract_kdrive_file_url: row.contract_kdrive_file_url ?? null,
     property: property ? { id: property.id, name: property.name } : null,
     tenant: tenant ? { id: tenant.id, first_name: tenant.first_name ?? null, last_name: tenant.last_name ?? null } : null,
   };
@@ -57,6 +61,7 @@ export async function fetchLeases(params: { role: Role | null; userId: string | 
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute,
+      contract_kdrive_folder_url, contract_kdrive_file_url,
       property:properties ( id, name ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -80,6 +85,8 @@ export async function createLease(input: {
   auto_invoice_interval_months?: number;
   auto_invoice_hour?: number;
   auto_invoice_minute?: number;
+  contract_kdrive_folder_url?: string | null;
+  contract_kdrive_file_url?: string | null;
 }) {
   const payload = {
     property_id: input.property_id,
@@ -95,6 +102,8 @@ export async function createLease(input: {
     auto_invoice_interval_months: typeof input.auto_invoice_interval_months === "number" ? input.auto_invoice_interval_months : 1,
     auto_invoice_hour: typeof input.auto_invoice_hour === "number" ? input.auto_invoice_hour : 9,
     auto_invoice_minute: typeof input.auto_invoice_minute === "number" ? input.auto_invoice_minute : 0,
+    contract_kdrive_folder_url: input.contract_kdrive_folder_url ?? null,
+    contract_kdrive_file_url: input.contract_kdrive_file_url ?? null,
   };
 
   const { data, error } = await supabase
@@ -103,6 +112,7 @@ export async function createLease(input: {
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute,
+      contract_kdrive_folder_url, contract_kdrive_file_url,
       property:properties ( id, name ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -126,6 +136,8 @@ export async function updateLease(
     auto_invoice_interval_months: number;
     auto_invoice_hour: number;
     auto_invoice_minute: number;
+    contract_kdrive_folder_url: string | null;
+    contract_kdrive_file_url: string | null;
   }>
 ) {
   const payload: any = {};
@@ -140,6 +152,8 @@ export async function updateLease(
   if (typeof input.auto_invoice_interval_months !== "undefined") payload.auto_invoice_interval_months = input.auto_invoice_interval_months;
   if (typeof input.auto_invoice_hour !== "undefined") payload.auto_invoice_hour = input.auto_invoice_hour;
   if (typeof input.auto_invoice_minute !== "undefined") payload.auto_invoice_minute = input.auto_invoice_minute;
+  if (typeof input.contract_kdrive_folder_url !== "undefined") payload.contract_kdrive_folder_url = input.contract_kdrive_folder_url;
+  if (typeof input.contract_kdrive_file_url !== "undefined") payload.contract_kdrive_file_url = input.contract_kdrive_file_url;
 
   const { data, error } = await supabase
     .from("leases")
@@ -148,6 +162,7 @@ export async function updateLease(
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute,
+      contract_kdrive_folder_url, contract_kdrive_file_url,
       property:properties ( id, name ),
       tenant:profiles ( id, first_name, last_name )
     `)

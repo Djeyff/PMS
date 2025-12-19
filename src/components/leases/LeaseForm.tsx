@@ -46,6 +46,8 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
   const [autoIntervalMonths, setAutoIntervalMonths] = useState<number>(1);
   const [autoHour, setAutoHour] = useState<number>(new Date().getHours());
   const [autoMinute, setAutoMinute] = useState<number>(new Date().getMinutes());
+  const [kdriveFolderUrl, setKdriveFolderUrl] = useState<string>("");
+  const [kdriveFileUrl, setKdriveFileUrl] = useState<string>("");
 
   useEffect(() => {
     if (open && propPropertyId) {
@@ -84,6 +86,8 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
         auto_invoice_interval_months: autoIntervalMonths,
         auto_invoice_hour: autoHour,
         auto_invoice_minute: autoMinute,
+        contract_kdrive_folder_url: kdriveFolderUrl.trim() !== "" ? kdriveFolderUrl.trim() : null,
+        contract_kdrive_file_url: kdriveFileUrl.trim() !== "" ? kdriveFileUrl.trim() : null,
       });
       toast.success("Lease created");
       setOpen(false);
@@ -99,6 +103,8 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
       setAutoIntervalMonths(1);
       setAutoHour(new Date().getHours());
       setAutoMinute(new Date().getMinutes());
+      setKdriveFolderUrl("");
+      setKdriveFileUrl("");
       onCreated?.();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to create lease");
@@ -249,6 +255,24 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
                 </div>
               </div>
             )}
+          </div>
+          <div className="space-y-2">
+            <Label>kDrive Folder URL (optional)</Label>
+            <Input
+              type="url"
+              placeholder="https://kdrive.infomaniak.com/your/folder"
+              value={kdriveFolderUrl}
+              onChange={(e) => setKdriveFolderUrl(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>kDrive File URL (optional)</Label>
+            <Input
+              type="url"
+              placeholder="https://kdrive.infomaniak.com/your/file.pdf"
+              value={kdriveFileUrl}
+              onChange={(e) => setKdriveFileUrl(e.target.value)}
+            />
           </div>
           <div className="pt-2">
             <Button onClick={onSave} disabled={saving || !canSubmit}>
