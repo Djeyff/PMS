@@ -6,6 +6,7 @@ import { Home, Building2, Users, FileText, Wrench, Receipt, CreditCard, Settings
 import { useAuth } from "@/contexts/AuthProvider";
 import type { Role } from "@/contexts/AuthProvider";
 import CurrencySelector from "@/components/CurrencySelector";
+import MobileNav from "@/components/layout/mobile-nav";
 
 const AppShell = ({ children }: { children: React.ReactNode }) => {
   const { role, signOut } = useAuth();
@@ -73,8 +74,9 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
               <CurrencySelector />
             </div>
           </header>
-          <main className="flex-1 p-3 md:p-6">{children}</main>
+          <main className="flex-1 p-3 md:p-6 pb-20 md:pb-6">{children}</main>
         </div>
+        <MobileNav />
       </div>
     </SidebarProvider>
   );

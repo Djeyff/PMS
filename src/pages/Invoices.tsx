@@ -15,6 +15,8 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { generateInvoicePDF } from "@/services/invoices";
 import { toast } from "sonner";
 import { runAutoInvoice } from "@/services/auto-invoice";
+import { useIsMobile } from "@/hooks/use-mobile";
+import InvoiceListItemMobile from "@/components/invoices/InvoiceListItemMobile";
 
 const data = [
   { number: "INV-1001", tenant: "Maria Gomez", due: "2024-08-05", total: 1200, currency: "USD" as const, status: "paid" as const },
@@ -50,6 +52,8 @@ const Invoices = () => {
       return { ...inv, paid: paidConverted, balance, displayStatus };
     });
   }, [data]);
+
+  const isMobile = useIsMobile();
 
   return (
     <AppShell>
@@ -87,86 +91,94 @@ const Invoices = () => {
               <div className="text-sm text-muted-foreground">Loading...</div>
             ) : (rows?.length ?? 0) === 0 ? (
               <div className="text-sm text-muted-foreground">No invoices yet.</div>
+            ) : isMobile ? (
+              <div>
+                {rows.map((inv: any) => (
+                  <InvoiceListItemMobile key={inv.id} inv={inv} onRefetch={() => refetch()} />
+                ))}
+              </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>No.</TableHead>
-                    <TableHead>Property</TableHead>
-                    <TableHead>Tenant</TableHead>
-                    <TableHead>Issue</TableHead>
-                    <TableHead>Due</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Paid</TableHead>
-                    <TableHead>Balance</TableHead>
-                    <TableHead>Status</TableHead>
-                    {isAdmin && <TableHead>Actions</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((inv: any) => {
-                    const propName = inv.lease?.property?.name ?? inv.lease_id?.slice(0, 8);
-                    const tenantName = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || inv.tenant_id?.slice(0, 6);
-                    const fmt = (amt: number, cur: string) =>
-                      new Intl.NumberFormat(undefined, { style: "currency", currency: cur }).format(amt);
-                    return (
-                      <TableRow key={inv.id}>
-                        <TableCell className="font-mono text-xs">{inv.number ?? "—"}</TableCell>
-                        <TableCell className="font-medium">{propName}</TableCell>
-                        <TableCell>{tenantName}</TableCell>
-                        <TableCell>{inv.issue_date}</TableCell>
-                        <TableCell>{inv.due_date}</TableCell>
-                        <TableCell>{fmt(Number(inv.total_amount), inv.currency)}</TableCell>
-                        <TableCell>{fmt(inv.paid, inv.currency)}</TableCell>
-                        <TableCell>{fmt(inv.balance, inv.currency)}</TableCell>
-                        <TableCell className="capitalize">{String(inv.displayStatus).replace("_", " ")}</TableCell>
-                        {isAdmin && (
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button asChild size="sm" variant="outline"><Link to={`/invoices/${inv.id}`}>View</Link></Button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button size="sm" variant="outline">Generate in</Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                  <DropdownMenuItem
-                                    onClick={async () => {
-                                      try {
-                                        await generateInvoicePDF(inv.id, "en", { sendEmail: false, sendWhatsApp: false });
-                                        toast.success("Invoice PDF generated in English");
-                                        refetch();
-                                      } catch (e: any) {
-                                        toast.error(e.message || "Failed to generate PDF");
-                                      }
-                                    }}
-                                  >
-                                    English
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={async () => {
-                                      try {
-                                        await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
-                                        toast.success("Factura generada en Español");
-                                        refetch();
-                                      } catch (e: any) {
-                                        toast.error(e.message || "Failed to generate PDF");
-                                      }
-                                    }}
-                                  >
-                                    Spanish
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                              <EditInvoiceDialog invoice={inv} onUpdated={() => refetch()} />
-                              <DeleteInvoiceDialog id={inv.id} onDeleted={() => refetch()} />
-                            </div>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>No.</TableHead>
+                      <TableHead>Property</TableHead>
+                      <TableHead>Tenant</TableHead>
+                      <TableHead>Issue</TableHead>
+                      <TableHead>Due</TableHead>
+                      <TableHead>Total</TableHead>
+                      <TableHead>Paid</TableHead>
+                      <TableHead>Balance</TableHead>
+                      <TableHead>Status</TableHead>
+                      {isAdmin && <TableHead>Actions</TableHead>}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((inv: any) => {
+                      const propName = inv.lease?.property?.name ?? inv.lease_id?.slice(0, 8);
+                      const tenantName = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || inv.tenant_id?.slice(0, 6);
+                      const fmt = (amt: number, cur: string) =>
+                        new Intl.NumberFormat(undefined, { style: "currency", currency: cur }).format(amt);
+                      return (
+                        <TableRow key={inv.id}>
+                          <TableCell className="font-mono text-xs">{inv.number ?? "—"}</TableCell>
+                          <TableCell className="font-medium">{propName}</TableCell>
+                          <TableCell>{tenantName}</TableCell>
+                          <TableCell>{inv.issue_date}</TableCell>
+                          <TableCell>{inv.due_date}</TableCell>
+                          <TableCell>{fmt(Number(inv.total_amount), inv.currency)}</TableCell>
+                          <TableCell>{fmt(inv.paid, inv.currency)}</TableCell>
+                          <TableCell>{fmt(inv.balance, inv.currency)}</TableCell>
+                          <TableCell className="capitalize">{String(inv.displayStatus).replace("_", " ")}</TableCell>
+                          {isAdmin && (
+                            <TableCell>
+                              <div className="flex gap-2">
+                                <Button asChild size="sm" variant="outline"><Link to={`/invoices/${inv.id}`}>View</Link></Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button size="sm" variant="outline">Generate in</Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent>
+                                    <DropdownMenuItem
+                                      onClick={async () => {
+                                        try {
+                                          await generateInvoicePDF(inv.id, "en", { sendEmail: false, sendWhatsApp: false });
+                                          toast.success("Invoice PDF generated in English");
+                                          refetch();
+                                        } catch (e: any) {
+                                          toast.error(e.message || "Failed to generate PDF");
+                                        }
+                                      }}
+                                    >
+                                      English
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={async () => {
+                                        try {
+                                          await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
+                                          toast.success("Factura generada en Español");
+                                          refetch();
+                                        } catch (e: any) {
+                                          toast.error(e.message || "Failed to generate PDF");
+                                        }
+                                      }}
+                                    >
+                                      Spanish
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                                <EditInvoiceDialog invoice={inv} onUpdated={() => refetch()} />
+                                <DeleteInvoiceDialog id={inv.id} onDeleted={() => refetch()} />
+                              </div>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>

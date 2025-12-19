@@ -12,9 +12,12 @@ import { generatePaymentReceiptPDF } from "@/services/payment-pdf";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { useIsMobile } from "@/hooks/use-mobile";
+import PaymentListItemMobile from "@/components/payments/PaymentListItemMobile";
 
 const Payments = () => {
   const { role, user, profile } = useAuth();
+  const isMobile = useIsMobile();
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["payments", role, user?.id, profile?.agency_id],
@@ -83,105 +86,113 @@ const Payments = () => {
               <div className="text-sm text-muted-foreground">Loading...</div>
             ) : (data?.length ?? 0) === 0 ? (
               <div className="text-sm text-muted-foreground">No payments yet.</div>
+            ) : isMobile ? (
+              <div>
+                {(data ?? []).map((p: any) => (
+                  <PaymentListItemMobile key={p.id} payment={p} onRefetch={() => refetch()} />
+                ))}
+              </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Property</TableHead>
-                    <TableHead>Tenant</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Method</TableHead>
-                    <TableHead>Amount</TableHead>
-                    {canCreate && <TableHead>Actions</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(data ?? []).map((p: any) => {
-                    const propName = p.lease?.property?.name ?? "—";
-                    const tenantName = [p.tenant?.first_name, p.tenant?.last_name].filter(Boolean).join(" ") || "—";
-                    return (
-                      <TableRow key={p.id}>
-                        <TableCell className="font-medium">{propName}</TableCell>
-                        <TableCell>{tenantName}</TableCell>
-                        <TableCell>{p.received_date}</TableCell>
-                        <TableCell>{methodLabel(p.method)}</TableCell>
-                        <TableCell>{fmt(Number(p.amount), p.currency)}</TableCell>
-                        {/* Always allow viewing a receipt */}
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button size="sm" variant="outline">
-                                  View
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent>
-                                <DropdownMenuItem
-                                  onClick={async () => {
-                                    try {
-                                      const out = await generatePaymentReceiptPDF(p.id, "en");
-                                      if (out.url) {
-                                        window.open(out.url, "_blank");
-                                        toast.success("Payment receipt generated in English");
-                                      } else {
-                                        toast.info("Receipt generated but no URL returned");
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Property</TableHead>
+                      <TableHead>Tenant</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Method</TableHead>
+                      <TableHead>Amount</TableHead>
+                      {canCreate && <TableHead>Actions</TableHead>}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(data ?? []).map((p: any) => {
+                      const propName = p.lease?.property?.name ?? "—";
+                      const tenantName = [p.tenant?.first_name, p.tenant?.last_name].filter(Boolean).join(" ") || "—";
+                      return (
+                        <TableRow key={p.id}>
+                          <TableCell className="font-medium">{propName}</TableCell>
+                          <TableCell>{tenantName}</TableCell>
+                          <TableCell>{p.received_date}</TableCell>
+                          <TableCell>{methodLabel(p.method)}</TableCell>
+                          <TableCell>{fmt(Number(p.amount), p.currency)}</TableCell>
+                          {/* Always allow viewing a receipt */}
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button size="sm" variant="outline">
+                                    View
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                  <DropdownMenuItem
+                                    onClick={async () => {
+                                      try {
+                                        const out = await generatePaymentReceiptPDF(p.id, "en");
+                                        if (out.url) {
+                                          window.open(out.url, "_blank");
+                                          toast.success("Payment receipt generated in English");
+                                        } else {
+                                          toast.info("Receipt generated but no URL returned");
+                                        }
+                                      } catch (e: any) {
+                                        toast.error(e?.message ?? "Failed to open receipt");
                                       }
-                                    } catch (e: any) {
-                                      toast.error(e?.message ?? "Failed to open receipt");
-                                    }
-                                  }}
-                                >
-                                  English
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={async () => {
-                                    try {
-                                      const out = await generatePaymentReceiptPDF(p.id, "es");
-                                      if (out.url) {
-                                        window.open(out.url, "_blank");
-                                        toast.success("Recibo generado en Español");
-                                      } else {
-                                        toast.info("Recibo generado pero sin URL");
+                                    }}
+                                  >
+                                    English
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={async () => {
+                                      try {
+                                        const out = await generatePaymentReceiptPDF(p.id, "es");
+                                        if (out.url) {
+                                          window.open(out.url, "_blank");
+                                          toast.success("Recibo generado en Español");
+                                        } else {
+                                          toast.info("Recibo generado pero sin URL");
+                                        }
+                                      } catch (e: any) {
+                                        toast.error(e?.message ?? "Error al abrir el recibo");
                                       }
-                                    } catch (e: any) {
-                                      toast.error(e?.message ?? "Error al abrir el recibo");
-                                    }
-                                  }}
-                                >
-                                  Spanish
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                            {canCreate && (
-                              <>
-                                <EditPaymentDialog payment={p} onUpdated={() => refetch()} />
-                                <DeletePaymentDialog
-                                  id={p.id}
-                                  summary={`${tenantName} • ${propName} • ${p.received_date} • ${fmt(Number(p.amount), p.currency)}`}
-                                  metadata={{
-                                    amount: p.amount,
-                                    currency: p.currency,
-                                    method: p.method,
-                                    received_date: p.received_date,
-                                    reference: p.reference ?? null,
-                                    tenant_id: p.tenant_id,
-                                    tenant_name: tenantName,
-                                    property_id: p.lease?.property?.id ?? null,
-                                    property_name: propName,
-                                    lease_id: p.lease_id,
-                                    invoice_id: p.invoice_id ?? null,
-                                  }}
-                                  onDeleted={() => refetch()}
-                                />
-                              </>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                                    }}
+                                  >
+                                    Spanish
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                              {canCreate && (
+                                <>
+                                  <EditPaymentDialog payment={p} onUpdated={() => refetch()} />
+                                  <DeletePaymentDialog
+                                    id={p.id}
+                                    summary={`${tenantName} • ${propName} • ${p.received_date} • ${fmt(Number(p.amount), p.currency)}`}
+                                    metadata={{
+                                      amount: p.amount,
+                                      currency: p.currency,
+                                      method: p.method,
+                                      received_date: p.received_date,
+                                      reference: p.reference ?? null,
+                                      tenant_id: p.tenant_id,
+                                      tenant_name: tenantName,
+                                      property_id: p.lease?.property?.id ?? null,
+                                      property_name: propName,
+                                      lease_id: p.lease_id,
+                                      invoice_id: p.invoice_id ?? null,
+                                    }}
+                                    onDeleted={() => refetch()}
+                                  />
+                                </>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
