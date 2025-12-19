@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createProperty } from "@/services/properties";
 import { toast } from "sonner";
+import GroupPicker from "@/components/properties/GroupPicker";
 
 type Props = {
   agencyId: string;
@@ -118,10 +119,7 @@ const PropertyForm = ({ agencyId, onCreated }: Props) => {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label>Folder / Location Group</Label>
-            <Input value={locationGroup} onChange={(e) => setLocationGroup(e.target.value)} placeholder="e.g., Beachfront, Downtown, LT/Coson" />
-          </div>
+          <GroupPicker agencyId={agencyId} value={locationGroup} onChange={setLocationGroup} />
           <div className="pt-2">
             <Button onClick={handleSave} disabled={saving}>
               {saving ? "Saving..." : "Create Property"}

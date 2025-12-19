@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { Property } from "@/services/properties";
 import { updateProperty } from "@/services/properties";
 import { toast } from "sonner";
+import GroupPicker from "@/components/properties/GroupPicker";
+import { useAuth } from "@/contexts/AuthProvider";
 
 type Props = {
   property: Property;
@@ -14,6 +16,7 @@ type Props = {
 };
 
 const EditPropertyDialog = ({ property, onUpdated }: Props) => {
+  const { profile } = useAuth();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -128,10 +131,7 @@ const EditPropertyDialog = ({ property, onUpdated }: Props) => {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label>Folder / Location Group</Label>
-            <Input value={locationGroup} onChange={(e) => setLocationGroup(e.target.value)} placeholder="e.g., Beachfront, Downtown, LT/Coson" />
-          </div>
+          <GroupPicker agencyId={profile?.agency_id ?? property.agency_id} value={locationGroup} onChange={setLocationGroup} />
           <div className="pt-2">
             <Button onClick={onSave} disabled={saving}>
               {saving ? "Saving..." : "Save changes"}
