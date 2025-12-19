@@ -19,8 +19,7 @@ export type InvoiceRow = {
 export type InvoiceWithMeta = InvoiceRow & {
   lease?: { id: string; end_date?: string; property?: { id: string; name: string; agency_id?: string } | null } | null;
   tenant?: { id: string; first_name: string | null; last_name: string | null } | null;
-  payments?: { amount: number; currency: "USD" | "DOP" }[] | null;
-  // Computed property for convenience
+  payments?: { amount: number; currency: "USD" | "DOP"; method?: string; exchange_rate?: number | null }[] | null;
   signed_pdf_url?: string | null;
 };
 
@@ -43,7 +42,6 @@ function normalizeInvoiceRow(row: any): InvoiceWithMeta {
     status: row.status,
     created_at: row.created_at,
     pdf_lang: row.pdf_lang === "es" ? "es" : "en",
-    // pdf_url now holds storage path (if any)
     pdf_url: row.pdf_url ?? null,
     lease: leaseRel
       ? {
@@ -55,7 +53,12 @@ function normalizeInvoiceRow(row: any): InvoiceWithMeta {
         }
       : null,
     tenant: tenantRel ? { id: tenantRel.id, first_name: tenantRel.first_name ?? null, last_name: tenantRel.last_name ?? null } : null,
-    payments: row.payments ?? [],
+    payments: (row.payments ?? []).map((p: any) => ({
+      amount: p.amount,
+      currency: p.currency,
+      method: p.method,
+      exchange_rate: typeof p.exchange_rate === "number" ? p.exchange_rate : p.exchange_rate == null ? null : Number(p.exchange_rate),
+    })),
     signed_pdf_url: null,
   };
 }
@@ -70,7 +73,7 @@ export async function fetchInvoices() {
         property:properties ( id, name, agency_id )
       ),
       tenant:profiles ( id, first_name, last_name ),
-      payments:payments ( amount, currency )
+      payments:payments ( amount, currency, method, exchange_rate )
     `)
   .order("due_date", { ascending: true });
 
@@ -133,7 +136,7 @@ export async function createInvoice(input: {
         property:properties ( id, name )
       ),
       tenant:profiles ( id, first_name, last_name ),
-      payments:payments ( amount, currency )
+      payments:payments ( amount, currency, method, exchange_rate )
     `)
     .single();
 
@@ -175,7 +178,7 @@ export async function updateInvoice(
         property:properties ( id, name )
       ),
       tenant:profiles ( id, first_name, last_name ),
-      payments:payments ( amount, currency )
+      payments:payments ( amount, currency, method, exchange_rate )
     `)
     .single();
 

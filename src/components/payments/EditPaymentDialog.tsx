@@ -22,6 +22,9 @@ const EditPaymentDialog = ({ payment, onUpdated }: Props) => {
   const [method, setMethod] = useState<string>(payment.method || "bank_transfer");
   const [receivedDate, setReceivedDate] = useState<string>(payment.received_date);
   const [reference, setReference] = useState<string>(payment.reference ?? "");
+  const [exchangeRate, setExchangeRate] = useState<string>(
+    typeof payment.exchange_rate === "number" ? String(payment.exchange_rate) : ""
+  );
 
   const reset = () => {
     setAmount(String(payment.amount));
@@ -48,6 +51,7 @@ const EditPaymentDialog = ({ payment, onUpdated }: Props) => {
         method,
         received_date: receivedDate,
         reference: reference.trim() !== "" ? reference.trim() : null,
+        exchange_rate: exchangeRate && !Number.isNaN(Number(exchangeRate)) ? Number(exchangeRate) : null,
       });
       toast.success("Payment updated");
       setOpen(false);
@@ -110,6 +114,18 @@ const EditPaymentDialog = ({ payment, onUpdated }: Props) => {
           <div className="space-y-2">
             <Label>Reference (optional)</Label>
             <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g., TXN-12345" />
+          </div>
+          <div className="space-y-2">
+            <Label>Exchange rate (optional)</Label>
+            <Input
+              type="number"
+              min={0}
+              step="0.0001"
+              value={exchangeRate}
+              onChange={(e) => setExchangeRate(e.target.value)}
+              placeholder="e.g., 58.50"
+            />
+            <div className="text-xs text-muted-foreground">Use when payment currency differs from invoice currency.</div>
           </div>
           <div className="pt-2">
             <Button onClick={onSave} disabled={saving}>

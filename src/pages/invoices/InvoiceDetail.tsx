@@ -138,6 +138,20 @@ const InvoiceDetail = () => {
     return lang === "es" ? `${m} ${y.slice(-2)}` : `${m} ${y}`;
   }, [inv.issue_date, lang]);
 
+  const methodsDisplay = (() => {
+    const list = (inv.payments ?? []).map((p: any) => p.method).filter(Boolean);
+    if (list.length === 0) return "—";
+    const uniq = Array.from(new Set(list));
+    return uniq.join(", ");
+  })();
+
+  const exchangeRateDisplay = (() => {
+    // Show the first available exchange rate from a payment where currency differs from invoice currency
+    const diffPay = (inv.payments ?? []).find((p: any) => p.exchange_rate && p.currency !== inv.currency);
+    if (!diffPay?.exchange_rate) return "—";
+    return String(diffPay.exchange_rate);
+  })();
+
   return (
     <div className="invoice-print p-6 max-w-3xl mx-auto bg-white text-black">
       {/* Header with bilingual title (aligned right) */}
@@ -231,10 +245,10 @@ const InvoiceDetail = () => {
           <div>{fmt(paid, inv.currency)}</div>
 
           <div className="font-medium mt-2">{lang === "es" ? "Tasa de Cambio" : "Exchange Rate"} :</div>
-          <div className="text-sm text-gray-600">—</div>
+          <div className="text-sm">{exchangeRateDisplay}</div>
 
           <div className="font-medium mt-2">{lang === "es" ? "Método de pago" : "Payment Method"} :</div>
-          <div className="text-sm text-gray-600">—</div>
+          <div className="text-sm">{methodsDisplay}</div>
         </div>
 
         <div className="space-y-2 bg-gray-50 rounded p-3">

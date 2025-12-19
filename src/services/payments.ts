@@ -12,6 +12,7 @@ export type PaymentRow = {
   reference: string | null;
   created_at: string;
   invoice_id?: string | null;
+  exchange_rate?: number | null;
 };
 
 export type PaymentWithMeta = PaymentRow & {
@@ -37,6 +38,7 @@ function normalizePaymentRow(row: any): PaymentWithMeta {
     reference: row.reference,
     created_at: row.created_at,
     invoice_id: row.invoice_id ?? null,
+    exchange_rate: typeof row.exchange_rate === "number" ? row.exchange_rate : row.exchange_rate == null ? null : Number(row.exchange_rate),
     lease: leaseRel
       ? {
           id: leaseRel.id,
@@ -53,7 +55,7 @@ export async function fetchPayments(params: { role: Role | null; userId: string 
   const { data, error } = await supabase
     .from("payments")
     .select(`
-      id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at, invoice_id,
+      id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at, invoice_id, exchange_rate,
       lease:leases ( id, property:properties ( id, name ) ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -66,7 +68,7 @@ export async function fetchPayments(params: { role: Role | null; userId: string 
 export async function fetchPaymentsByTenant(tenantId: string) {
   const { data, error } = await supabase
     .from("payments")
-    .select("id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at, invoice_id")
+    .select("id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at, invoice_id, exchange_rate")
     .eq("tenant_id", tenantId)
     .order("received_date", { ascending: true });
 
@@ -83,6 +85,7 @@ export async function createPayment(input: {
   received_date: string;
   reference?: string;
   invoice_id?: string;
+  exchange_rate?: number;
 }) {
   const payload = {
     lease_id: input.lease_id,
@@ -93,12 +96,13 @@ export async function createPayment(input: {
     received_date: input.received_date,
     reference: input.reference ?? null,
     invoice_id: input.invoice_id ?? null,
+    exchange_rate: typeof input.exchange_rate === "number" ? input.exchange_rate : null,
   };
 
   const { data, error } = await supabase
     .from("payments")
     .insert(payload)
-    .select("id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at, invoice_id")
+    .select("id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at, invoice_id, exchange_rate")
     .single();
 
   if (error) throw error;
@@ -114,6 +118,7 @@ export async function updatePayment(
     received_date: string;
     reference: string | null;
     invoice_id: string | null;
+    exchange_rate: number | null;
   }>
 ) {
   const payload: any = {};
@@ -123,13 +128,14 @@ export async function updatePayment(
   if (typeof input.received_date !== "undefined") payload.received_date = input.received_date;
   if (typeof input.reference !== "undefined") payload.reference = input.reference;
   if (typeof input.invoice_id !== "undefined") payload.invoice_id = input.invoice_id;
+  if (typeof input.exchange_rate !== "undefined") payload.exchange_rate = input.exchange_rate;
 
   const { data, error } = await supabase
     .from("payments")
     .update(payload)
     .eq("id", id)
     .select(`
-      id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at, invoice_id,
+      id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at, invoice_id, exchange_rate,
       lease:leases ( id, property:properties ( id, name ) ),
       tenant:profiles ( id, first_name, last_name )
     `)

@@ -32,6 +32,7 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [reference, setReference] = useState("");
   const [invoiceId, setInvoiceId] = useState("");
+  const [exchangeRate, setExchangeRate] = useState<string>("");
 
   const { data: pendingInvoices } = useQuery({
     queryKey: ["payment-pending-invoices", leaseId],
@@ -59,6 +60,7 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
         received_date: date,
         reference: reference || undefined,
         invoice_id: invoiceId || undefined,
+        exchange_rate: exchangeRate && !Number.isNaN(Number(exchangeRate)) ? Number(exchangeRate) : undefined,
       });
       toast.success("Payment recorded");
       setOpen(false);
@@ -70,6 +72,7 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
       setDate(new Date().toISOString().slice(0, 10));
       setReference("");
       setInvoiceId("");
+      setExchangeRate("");
       onCreated?.();
     } catch (e: any) {
       console.error("Create payment failed:", e);
@@ -165,6 +168,21 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
                   <SelectItem value="DOP">DOP</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+          {/* Manual exchange rate (optional) */}
+          <div className="space-y-2">
+            <Label>Exchange rate (optional)</Label>
+            <Input
+              type="number"
+              min={0}
+              step="0.0001"
+              value={exchangeRate}
+              onChange={(e) => setExchangeRate(e.target.value)}
+              placeholder="e.g., 58.50"
+            />
+            <div className="text-xs text-muted-foreground">
+              Use when paying in a different currency than the invoice (e.g., DOP per USD).
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
