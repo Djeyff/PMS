@@ -1,22 +1,22 @@
 import React from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { fetchInvoices } from "@/services/invoices";
+import { fetchInvoiceById, fetchInvoicesByTenant } from "@/services/invoices";
 import { Button } from "@/components/ui/button";
 import { fetchAgencyById } from "@/services/agencies";
 import { getLogoPublicUrl } from "@/services/branding";
-import { fetchInvoicesByTenant } from "@/services/invoices";
 import { fetchPaymentsByTenant } from "@/services/payments";
 import { getInvoiceSignedUrlByInvoiceId } from "@/services/invoices";
 
 const InvoiceDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const { data, isLoading } = useQuery({
-    queryKey: ["invoice-detail"],
-    queryFn: fetchInvoices,
+
+  const { data: inv, isLoading } = useQuery({
+    queryKey: ["invoice-detail", id],
+    queryFn: () => fetchInvoiceById(id!),
+    enabled: !!id,
   });
 
-  const inv = (data ?? []).find((i: any) => i.id === id);
   const agencyId = inv?.lease?.property?.agency_id ?? null;
 
   const { data: tenantInvoices } = useQuery({

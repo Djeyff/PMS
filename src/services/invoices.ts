@@ -238,6 +238,27 @@ export async function getInvoiceSignedUrl(_storagePath: string, _expiresInSecond
   throw new Error("Use getInvoiceSignedUrlByInvoiceId(invoiceId) instead");
 }
 
+export async function fetchInvoiceById(id: string) {
+  if (!id) throw new Error("Missing invoice id");
+
+  const { data, error } = await supabase
+    .from("invoices")
+    .select(`
+      id, lease_id, tenant_id, number, issue_date, due_date, currency, total_amount, status, created_at, pdf_lang, pdf_url,
+      lease:leases (
+        id, end_date,
+        property:properties ( id, name, agency_id )
+      ),
+      tenant:profiles ( id, first_name, last_name ),
+      payments:payments ( amount, currency, method, exchange_rate )
+    `)
+    .eq("id", id)
+    .single();
+
+  if (error) throw error;
+  return normalizeInvoiceRow(data);
+}
+
 export async function generateInvoicePDF(invoiceId: string, lang: "en" | "es", opts: { sendEmail?: boolean; sendWhatsApp?: boolean } = {}) {
   const { data: sess } = await supabase.auth.getSession();
   const token = sess.session?.access_token;
