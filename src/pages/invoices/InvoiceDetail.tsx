@@ -213,7 +213,7 @@ const InvoiceDetail = () => {
             ) : null}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline">{lang === "es" ? "Generar PDF" : "Generate PDF"}</Button>
+                <Button variant="secondary">{lang === "es" ? "Generar PDF" : "Generate PDF"}</Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 <DropdownMenuItem
