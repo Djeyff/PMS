@@ -1,9 +1,6 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ]
+  "buildCommand": "pnpm install --no-frozen-lockfile && pnpm run build",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD ./",
+  "framework": "vite",
+  "outputDirectory": "dist"
 }
