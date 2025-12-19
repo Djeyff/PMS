@@ -22,6 +22,7 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
     { to: "/payments", label: "Payments", icon: CreditCard, roles: ["agency_admin", "owner", "tenant"] as Role[] },
     { to: "/maintenance", label: "Maintenance", icon: Wrench, roles: ["agency_admin", "owner", "tenant"] as Role[] },
     { to: "/reports", label: "Reports", icon: BarChart3, roles: ["agency_admin", "owner"] as Role[] },
+    { to: "/contracts", label: "Contracts", icon: FileText, roles: ["agency_admin"] as Role[] },
     { to: "/outstanding", label: "Outstanding", icon: History, roles: ["agency_admin"] as Role[] },
     { to: "/logs", label: "Activity Log", icon: History, roles: ["agency_admin"] as Role[] },
     { to: "/users", label: "Users", icon: Users, roles: ["agency_admin"] as Role[] },

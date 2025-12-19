@@ -30,6 +30,7 @@ import AuthQuerySync from "./components/auth/AuthQuerySync";
 import TenantOverdue from "./pages/tenants/TenantOverdue";
 import Outstanding from "./pages/Outstanding";
 import ActivityLog from "./pages/ActivityLog";
+import Contracts from "./pages/Contracts";
 
 const queryClient = new QueryClient();
 
@@ -217,6 +218,16 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <Pending />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/contracts"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin"]}>
+                        <Contracts />
+                      </RoleGate>
                     </ProtectedRoute>
                   }
                 />
