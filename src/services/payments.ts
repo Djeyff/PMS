@@ -36,6 +36,7 @@ function normalizePaymentRow(row: any): PaymentWithMeta {
     received_date: row.received_date,
     reference: row.reference,
     created_at: row.created_at,
+    invoice_id: row.invoice_id ?? null,
     lease: leaseRel
       ? {
           id: leaseRel.id,
@@ -102,6 +103,40 @@ export async function createPayment(input: {
 
   if (error) throw error;
   return data as PaymentRow;
+}
+
+export async function updatePayment(
+  id: string,
+  input: Partial<{
+    amount: number;
+    currency: "USD" | "DOP";
+    method: string;
+    received_date: string;
+    reference: string | null;
+    invoice_id: string | null;
+  }>
+) {
+  const payload: any = {};
+  if (typeof input.amount !== "undefined") payload.amount = input.amount;
+  if (typeof input.currency !== "undefined") payload.currency = input.currency;
+  if (typeof input.method !== "undefined") payload.method = input.method;
+  if (typeof input.received_date !== "undefined") payload.received_date = input.received_date;
+  if (typeof input.reference !== "undefined") payload.reference = input.reference;
+  if (typeof input.invoice_id !== "undefined") payload.invoice_id = input.invoice_id;
+
+  const { data, error } = await supabase
+    .from("payments")
+    .update(payload)
+    .eq("id", id)
+    .select(`
+      id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at, invoice_id,
+      lease:leases ( id, property:properties ( id, name ) ),
+      tenant:profiles ( id, first_name, last_name )
+    `)
+    .single();
+
+  if (error) throw error;
+  return normalizePaymentRow(data);
 }
 
 export async function deletePayment(id: string) {

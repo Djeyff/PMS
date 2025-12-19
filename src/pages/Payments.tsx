@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchPayments } from "@/services/payments";
 import PaymentForm from "@/components/payments/PaymentForm";
 import DeletePaymentDialog from "@/components/payments/DeletePaymentDialog";
+import EditPaymentDialog from "@/components/payments/EditPaymentDialog";
 
 const Payments = () => {
   const { role, user, profile } = useAuth();
@@ -88,6 +89,7 @@ const Payments = () => {
                         {canCreate && (
                           <TableCell>
                             <div className="flex gap-2">
+                              <EditPaymentDialog payment={p} onUpdated={() => refetch()} />
                               <DeletePaymentDialog
                                 id={p.id}
                                 summary={`${tenantName} • ${propName} • ${p.received_date} • ${fmt(Number(p.amount), p.currency)}`}

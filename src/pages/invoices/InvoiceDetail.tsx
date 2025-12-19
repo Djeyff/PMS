@@ -139,7 +139,7 @@ const InvoiceDetail = () => {
   }, [inv.issue_date, lang]);
 
   return (
-    <div className="p-6 max-w-3xl mx-auto bg-white text-black">
+    <div className="invoice-print p-6 max-w-3xl mx-auto bg-white text-black">
       {/* Header with bilingual title (aligned right) */}
       <div className="flex items-start justify-between mb-6">
         <div className="flex items-start gap-3">

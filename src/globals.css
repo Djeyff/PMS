@@ -99,3 +99,45 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Print rules */
+@media print {
+  /* Set page size to Letter and margins */
+  @page {
+    size: Letter;
+    margin: 0.5in;
+  }
+
+  /* Constrain invoice container */
+  .invoice-print {
+    /* Ensure width fits letter minus margins */
+    width: auto;
+    max-width: none;
+    padding: 0;
+  }
+
+  /* Remove backgrounds that may waste ink */
+  .invoice-print .bg-gray-50 {
+    background-color: transparent !important;
+  }
+
+  /* Hide interactive elements globally */
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  /* Hide buttons and links inside invoice header row (already uses print:hidden) */
+  .invoice-print button,
+  .invoice-print a[href^="javascript:"] {
+    /* Buttons are hidden by print:hidden but keep consistent */
+  }
+
+  /* Avoid splitting key blocks across pages */
+  .invoice-print .border,
+  .invoice-print .rounded,
+  .invoice-print .grid,
+  .invoice-print .flex {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
