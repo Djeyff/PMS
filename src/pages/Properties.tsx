@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthProvider";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchProperties } from "@/services/properties";
 import PropertyForm from "@/components/properties/PropertyForm";
 import EditPropertyDialog from "@/components/properties/EditPropertyDialog";
@@ -12,7 +12,11 @@ import DeletePropertyDialog from "@/components/properties/DeletePropertyDialog";
 import PropertyOwnersDialog from "@/components/properties/PropertyOwnersDialog";
 import LeaseForm from "@/components/leases/LeaseForm";
 import { Separator } from "@/components/ui/separator";
-import GroupPicker from "@/components/properties/GroupPicker";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { createLocationGroup } from "@/services/property-groups";
+import { toast } from "sonner";
 
 // sample data removed
 
@@ -37,6 +41,35 @@ const Properties = () => {
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [data]);
 
+  const qc = useQueryClient();
+  const [folderOpen, setFolderOpen] = React.useState(false);
+  const [folderName, setFolderName] = React.useState("");
+  const createFolder = useMutation({
+    mutationFn: async () => {
+      const name = folderName.trim();
+      if (!name) {
+        toast.error("Enter a folder name");
+        return Promise.reject(new Error("Missing name"));
+      }
+      if (!profile?.agency_id) {
+        toast.error("Set up your agency first");
+        return Promise.reject(new Error("Missing agency"));
+      }
+      return createLocationGroup({ agencyId: profile.agency_id, name });
+    },
+    onSuccess: () => {
+      toast.success("Folder created");
+      setFolderOpen(false);
+      setFolderName("");
+      qc.invalidateQueries({ queryKey: ["location-groups", profile?.agency_id] });
+    },
+    onError: (e: any) => {
+      if (e?.message !== "Missing name" && e?.message !== "Missing agency") {
+        toast.error(e?.message ?? "Failed to create folder");
+      }
+    },
+  });
+
   return (
     <AppShell>
       <div className="space-y-4">
@@ -45,14 +78,32 @@ const Properties = () => {
           <div className="flex items-center gap-3">
             {canCreate && profile?.agency_id ? <PropertyForm agencyId={profile.agency_id} onCreated={() => refetch()} /> : null}
             {canCreate && profile?.agency_id ? (
-              // Manage folders here; selecting just updates local state (no filter yet)
-              <div className="min-w-[320px]">
-                <GroupPicker
-                  agencyId={profile.agency_id}
-                  value={""}
-                  onChange={() => {}}
-                />
-              </div>
+              <Dialog open={folderOpen} onOpenChange={setFolderOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">Add Folder/Location</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create Folder / Location Group</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label>Folder name</Label>
+                      <Input
+                        value={folderName}
+                        onChange={(e) => setFolderName(e.target.value)}
+                        placeholder="e.g., Beachfront, Downtown, LT/Coson"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="secondary" onClick={() => setFolderOpen(false)}>Cancel</Button>
+                      <Button onClick={() => createFolder.mutate()} disabled={createFolder.isLoading}>
+                        {createFolder.isLoading ? "Creating..." : "Create"}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             ) : null}
           </div>
         </div>
