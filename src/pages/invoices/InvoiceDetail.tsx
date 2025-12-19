@@ -11,7 +11,7 @@ import { getInvoiceSignedUrlByInvoiceId } from "@/services/invoices";
 const InvoiceDetail = () => {
   const { id } = useParams<{ id: string }>();
 
-  const { data: inv, isLoading } = useQuery({
+  const { data: inv, isLoading, isError } = useQuery({
     queryKey: ["invoice-detail", id],
     queryFn: () => fetchInvoiceById(id!),
     enabled: !!id,
@@ -54,6 +54,7 @@ const InvoiceDetail = () => {
   }, [inv?.id, inv?.pdf_url]);
 
   if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>;
+  if (isError) return <div className="p-6">Failed to load invoice. <Link to="/invoices" className="underline text-blue-600">Back</Link></div>;
   if (!inv) return <div className="p-6">Invoice not found. <Link to="/invoices" className="underline text-blue-600">Back</Link></div>;
 
   const propName = inv.lease?.property?.name ?? inv.lease_id?.slice(0, 8);
@@ -118,10 +119,10 @@ const InvoiceDetail = () => {
     return sum;
   }, 0);
 
-  const balance = paidConverted - Number(inv.total_amount);
+  const balance = Number(inv.total_amount) - paidConverted;
   const today = new Date().toISOString().slice(0, 10);
   let displayStatus: string = inv.status;
-  if (balance >= 0) displayStatus = "paid";
+  if (balance <= 0) displayStatus = "paid";
   else if (inv.due_date < today && inv.status !== "void") displayStatus = "overdue";
   else if (paidConverted > 0) displayStatus = "partial";
 
@@ -249,7 +250,7 @@ const InvoiceDetail = () => {
       </div>
 
       {/* Payment summary + Balance block */}
-      <div className="grid grid-cols-1 md-grid-cols-2 gap-6 mt-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
         <div className="space-y-2 bg-gray-50 rounded p-3">
           <div className="font-medium">{lang === "es" ? "Total a pagar" : "Amount to be Paid"} :</div>
           <div className="text-lg font-semibold">{fmt(Number(inv.total_amount), inv.currency)}</div>
