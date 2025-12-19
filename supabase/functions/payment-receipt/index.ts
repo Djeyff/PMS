@@ -184,11 +184,15 @@ serve(async (req) => {
 
     // Build PDF
     const pdf = await PDFDocument.create();
-    const page = pdf.addPage([595.28, 841.89]); // A4
+    // Letter size: 8.5in x 11in = 612 x 792 points
+    const W = 612;
+    const H = 792;
+    const M = 36; // 0.5" margins
+    const page = pdf.addPage([W, H]);
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-    // Centered logo + agency name (like current invoice PDF screenshot style)
+    // Centered logo + agency name
     const logoBytes = await getLogoBytes();
     if (logoBytes) {
       try {
@@ -196,33 +200,32 @@ serve(async (req) => {
         const w = 140;
         const ratio = img.height / img.width;
         const h = w * ratio;
-        const x = (595.28 - w) / 2;
-        page.drawImage(img, { x, y: 760, width: w, height: h });
+        const x = (W - w) / 2;
+        const y = H - M - h;
+        page.drawImage(img, { x, y, width: w, height: h });
       } catch {}
     }
-    page.drawText(agencyName, { x: (595.28 - font.widthOfTextAtSize(agencyName, 14)) / 2, y: 730, size: 14, font: fontBold });
+    const agencyNameY = H - M - 18;
+    page.drawText(agencyName, { x: (W - font.widthOfTextAtSize(agencyName, 14)) / 2, y: agencyNameY, size: 14, font: fontBold });
     const addrParts = agencyAddress.split(",");
     const line1 = addrParts[0]?.trim() ?? "";
     const line2 = addrParts.slice(1).join(", ").trim();
-    page.drawText(line1, { x: (595.28 - font.widthOfTextAtSize(line1, 10)) / 2, y: 716, size: 10, font });
-    if (line2) page.drawText(line2, { x: (595.28 - font.widthOfTextAtSize(line2, 10)) / 2, y: 702, size: 10, font });
+    page.drawText(line1, { x: (W - font.widthOfTextAtSize(line1, 10)) / 2, y: agencyNameY - 14, size: 10, font });
+    if (line2) page.drawText(line2, { x: (W - font.widthOfTextAtSize(line2, 10)) / 2, y: agencyNameY - 28, size: 10, font });
 
     // Header titles (bilingual style)
-    page.drawText(t.receiptTitleTop, { x: 60, y: 660, size: 22, font: fontBold });
-    page.drawText(t.invoiceTitleSub, { x: 60, y: 642, size: 12, font });
+    page.drawText(t.receiptTitleTop, { x: M, y: agencyNameY - 56, size: 22, font: fontBold });
+    page.drawText(t.invoiceTitleSub, { x: M, y: agencyNameY - 74, size: 12, font });
 
-    // Info grid (left and right)
-    const leftX = 60;
-    const rightX = 330;
-    let y = 610;
+    // Info grid
+    const leftX = M;
+    const rightX = W - M - 240;
+    let y = agencyNameY - 104;
 
     page.drawText(`${t.billedTo}: ${tenantName}`, { x: leftX, y, size: 12, font }); y -= 16;
     page.drawText(`${t.property}: ${propertyName}`, { x: leftX, y, size: 12, font }); y -= 16;
 
-    page.drawText(`${t.date}: ${receivedDate}`, { x: rightX, y: 610, size: 12, font });
-
-    // Line separator
-    page.drawText("", { x: leftX, y: y - 8, size: 1, font });
+    page.drawText(`${t.date}: ${receivedDate}`, { x: rightX, y: agencyNameY - 104, size: 12, font });
 
     // Summary block
     y -= 24;

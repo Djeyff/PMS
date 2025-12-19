@@ -11,6 +11,7 @@ import EditPaymentDialog from "@/components/payments/EditPaymentDialog";
 import { generatePaymentReceiptPDF } from "@/services/payment-pdf";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 const Payments = () => {
   const { role, user, profile } = useAuth();
@@ -92,25 +93,49 @@ const Payments = () => {
                         {/* Always allow viewing a receipt */}
                         <TableCell>
                           <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={async () => {
-                                try {
-                                  const out = await generatePaymentReceiptPDF(p.id, "en");
-                                  if (out.url) {
-                                    window.open(out.url, "_blank");
-                                    toast.success("Payment receipt generated");
-                                  } else {
-                                    toast.info("Receipt generated but no URL returned");
-                                  }
-                                } catch (e: any) {
-                                  toast.error(e?.message ?? "Failed to open receipt");
-                                }
-                              }}
-                            >
-                              View
-                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="sm" variant="outline">
+                                  View
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent>
+                                <DropdownMenuItem
+                                  onClick={async () => {
+                                    try {
+                                      const out = await generatePaymentReceiptPDF(p.id, "en");
+                                      if (out.url) {
+                                        window.open(out.url, "_blank");
+                                        toast.success("Payment receipt generated in English");
+                                      } else {
+                                        toast.info("Receipt generated but no URL returned");
+                                      }
+                                    } catch (e: any) {
+                                      toast.error(e?.message ?? "Failed to open receipt");
+                                    }
+                                  }}
+                                >
+                                  English
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={async () => {
+                                    try {
+                                      const out = await generatePaymentReceiptPDF(p.id, "es");
+                                      if (out.url) {
+                                        window.open(out.url, "_blank");
+                                        toast.success("Recibo generado en Español");
+                                      } else {
+                                        toast.info("Recibo generado pero sin URL");
+                                      }
+                                    } catch (e: any) {
+                                      toast.error(e?.message ?? "Error al abrir el recibo");
+                                    }
+                                  }}
+                                >
+                                  Spanish
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                             {canCreate && (
                               <>
                                 <EditPaymentDialog payment={p} onUpdated={() => refetch()} />
