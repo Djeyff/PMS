@@ -33,6 +33,7 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [reference, setReference] = useState("");
   const [invoiceId, setInvoiceId] = useState("");
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
   const [exchangeRate, setExchangeRate] = useState<string>("");
 
   const { data: pendingInvoices } = useQuery({
@@ -42,8 +43,10 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
   });
 
   const canSubmit = useMemo(() => {
-    return leaseId && tenantId && amount !== "" && Number(amount) >= 0 && date;
-  }, [leaseId, tenantId, amount, date]);
+    const baseOk = leaseId && tenantId && date;
+    if (selectedInvoiceIds.length > 0) return baseOk;
+    return baseOk && amount !== "" && Number(amount) >= 0;
+  }, [leaseId, tenantId, amount, date, selectedInvoiceIds.length]);
 
   const onSave = async () => {
     if (!canSubmit) {
@@ -52,20 +55,37 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
     }
     setSaving(true);
     try {
-      await createPayment({
-        lease_id: leaseId,
-        tenant_id: tenantId,
-        amount: Number(amount),
-        currency,
-        method,
-        received_date: date,
-        reference: reference || undefined,
-        invoice_id: invoiceId || undefined,
-        exchange_rate: exchangeRate && !Number.isNaN(Number(exchangeRate)) ? Number(exchangeRate) : undefined,
-      });
-      // Recompute invoice status if linked
-      if (invoiceId) {
-        await recomputeInvoiceStatus(invoiceId);
+      if (selectedInvoiceIds.length > 0) {
+        const invs = (pendingInvoices ?? []).filter((i: any) => selectedInvoiceIds.includes(i.id));
+        for (const inv of invs) {
+          await createPayment({
+            lease_id: leaseId,
+            tenant_id: tenantId,
+            amount: Number(inv.total_amount),
+            currency: inv.currency,
+            method,
+            received_date: date,
+            reference: reference || undefined,
+            invoice_id: inv.id,
+            exchange_rate: exchangeRate && !Number.isNaN(Number(exchangeRate)) ? Number(exchangeRate) : undefined,
+          });
+          await recomputeInvoiceStatus(inv.id);
+        }
+      } else {
+        await createPayment({
+          lease_id: leaseId,
+          tenant_id: tenantId,
+          amount: Number(amount),
+          currency,
+          method,
+          received_date: date,
+          reference: reference || undefined,
+          invoice_id: invoiceId || undefined,
+          exchange_rate: exchangeRate && !Number.isNaN(Number(exchangeRate)) ? Number(exchangeRate) : undefined,
+        });
+        if (invoiceId) {
+          await recomputeInvoiceStatus(invoiceId);
+        }
       }
       toast.success("Payment recorded");
       setOpen(false);
@@ -77,6 +97,7 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
       setDate(new Date().toISOString().slice(0, 10));
       setReference("");
       setInvoiceId("");
+      setSelectedInvoiceIds([]);
       setExchangeRate("");
       onCreated?.();
     } catch (e: any) {
@@ -137,24 +158,46 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
             );
           })()}
           {leaseId && (
-            <div className="space-y-2">
-              <Label>Pending Invoice (optional)</Label>
-              <Select value={invoiceId} onValueChange={setInvoiceId}>
-                <SelectTrigger className="min-w-[260px]">
-                  <SelectValue placeholder="Select invoice (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(pendingInvoices ?? []).map((inv: any) => {
-                    const tenantName =
-                      [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Tenant";
-                    return (
-                      <SelectItem key={inv.id} value={inv.id}>
-                        {inv.number} — {tenantName} — due {inv.due_date} — {new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(inv.total_amount)}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+            <div className="space-y-3">
+              <Label>Pending invoices (select one or multiple)</Label>
+              <div className="space-y-2">
+                {(pendingInvoices ?? []).map((inv: any) => {
+                  const tenantName = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Tenant";
+                  const label = `${inv.number ?? inv.id.slice(0,8)} — ${tenantName} — due ${inv.due_date} — ${new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(inv.total_amount)}`;
+                  const checked = selectedInvoiceIds.includes(inv.id);
+                  return (
+                    <label key={inv.id} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={checked}
+                        onChange={(e) => {
+                          setSelectedInvoiceIds((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(inv.id);
+                            else next.delete(inv.id);
+                            return Array.from(next);
+                          });
+                          setInvoiceId(""); // clear single-select when using multi-select
+                        }}
+                      />
+                      <span className="text-sm">{label}</span>
+                    </label>
+                  );
+                })}
+                {(pendingInvoices ?? []).length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No pending invoices for this lease.</div>
+                ) : null}
+              </div>
+              {selectedInvoiceIds.length > 0 ? (
+                <div className="text-xs text-muted-foreground">
+                  We'll record one payment per selected invoice using the invoice's full amount. Method, date, reference and exchange rate will apply to each.
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground">
+                  Or leave invoices unchecked to record an unlinked payment (uses the Amount field).
+                </div>
+              )}
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
