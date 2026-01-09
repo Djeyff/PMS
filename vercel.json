@@ -3,5 +3,8 @@
   "buildCommand": "pnpm run build",
   "ignoreCommand": "git diff --quiet HEAD^ HEAD ./",
   "framework": "vite",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

@@ -1,6 +1,5 @@
-const CACHE_NAME = "prop-manager-cache-v1";
+const CACHE_NAME = "prop-manager-cache-v2";
 const ASSETS = [
-  "/",
   "/index.html",
   "/manifest.webmanifest",
   "/favicon.ico",
@@ -28,7 +27,6 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Only handle same-origin
   if (url.origin !== self.location.origin) return;
 
   // Static assets: cache-first
@@ -43,12 +41,14 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // App shell / other routes: network-first with fallback to cache
+  // App shell / other routes: network-first with fallback to cached index.html
   event.respondWith(
     fetch(req).then((res) => {
       const resClone = res.clone();
       caches.open(CACHE_NAME).then((cache) => cache.put(req, resClone));
       return res;
-    }).catch(() => caches.match(req).then((cached) => cached || caches.match("/index.html")))
+    }).catch(() =>
+      caches.match(req).then((cached) => cached || caches.match("/index.html"))
+    )
   );
 });
