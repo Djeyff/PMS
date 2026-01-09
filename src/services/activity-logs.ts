@@ -250,3 +250,25 @@ export async function reinstateLeaseFromLog(logId: string) {
 
   return true;
 }
+
+// Reinstate a deleted tenant using the captured metadata via edge function
+export async function reinstateTenantFromLog(logId: string) {
+  const { data: sess } = await supabase.auth.getSession();
+  const token = sess.session?.access_token;
+  if (!token) throw new Error("Not authenticated");
+
+  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/reinstate-tenant";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ logId }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `Failed to reinstate tenant (${res.status})`);
+  }
+
+  const out = await res.json().catch(() => ({}));
+  return out?.id as string | null;
+}

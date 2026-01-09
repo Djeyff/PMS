@@ -131,7 +131,7 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
       <DialogTrigger asChild>
         <Button>{triggerLabel || "New Lease"}</Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[720px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Lease</DialogTitle>
         </DialogHeader>

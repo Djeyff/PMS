@@ -1,5 +1,10 @@
+// @ts-ignore: Deno runtime remote import
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+// @ts-ignore: Deno runtime remote import
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+// Minimal Deno declaration for web type-check
+declare const Deno: { env: { get(name: string): string | undefined } };
 
 function buildCorsHeaders(origin: string | null) {
   return {
@@ -79,7 +84,7 @@ serve(async (req) => {
     // Verify tenant belongs to the same agency
     const { data: tenantProfile, error: tenantErr } = await admin
       .from("profiles")
-      .select("agency_id, role")
+      .select("agency_id, role, first_name, last_name, phone")
       .eq("id", tenantId)
       .single();
 
@@ -99,13 +104,20 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: delErr.message || "Failed to delete user" }), { status: 400, headers: corsHeaders });
     }
 
-    // Audit log
+    // Try to fetch email from auth (may be missing after delete, so attempt before delete if needed)
+    // Note: For simplicity, we will not re-fetch after delete; email may be unavailable.
+    // Audit log with captured metadata
     await anon.from("activity_logs").insert({
       user_id: adminUserId,
       action: "delete_tenant",
       entity_type: "profile",
       entity_id: tenantId,
-      metadata: null,
+      metadata: {
+        first_name: tenantProfile.first_name ?? null,
+        last_name: tenantProfile.last_name ?? null,
+        phone: tenantProfile.phone ?? null,
+        // email omitted (profiles table does not store email)
+      },
     });
 
     return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } });

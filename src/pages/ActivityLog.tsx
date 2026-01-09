@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import MaintenanceHistoryInline from "@/components/activity/MaintenanceHistoryInline";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { reinstatePropertyFromLog, reinstateLeaseFromLog } from "@/services/activity-logs";
+import { reinstatePropertyFromLog, reinstateLeaseFromLog, reinstateTenantFromLog } from "@/services/activity-logs";
 
 const ActivityLog = () => {
   const { role, profile } = useAuth();
@@ -68,7 +68,7 @@ const ActivityLog = () => {
     return val;
   };
 
-  const onReinstate = async (logId: string, type: "payment" | "maintenance_request" | "property" | "lease", requestId?: string) => {
+  const onReinstate = async (logId: string, type: "payment" | "maintenance_request" | "property" | "lease" | "tenant", requestId?: string) => {
     try {
       if (type === "payment") {
         await reinstatePaymentFromLog(logId);
@@ -85,10 +85,14 @@ const ActivityLog = () => {
         await reinstatePropertyFromLog(logId);
         await logAction({ action: "reinstate_property", entity_type: "property", entity_id: null, metadata: { from_log_id: logId } });
         toast.success("Property reinstated");
-      } else {
+      } else if (type === "lease") {
         await reinstateLeaseFromLog(logId);
         await logAction({ action: "reinstate_lease", entity_type: "lease", entity_id: null, metadata: { from_log_id: logId } });
         toast.success("Lease reinstated");
+      } else {
+        await reinstateTenantFromLog(logId);
+        await logAction({ action: "reinstate_tenant", entity_type: "profile", entity_id: null, metadata: { from_log_id: logId } });
+        toast.success("Tenant reinstated");
       }
       refetch();
     } catch (e: any) {
@@ -128,6 +132,7 @@ const ActivityLog = () => {
                       <SelectItem value="invoice">Invoice</SelectItem>
                       <SelectItem value="lease">Lease</SelectItem>
                       <SelectItem value="property">Property</SelectItem>
+                      <SelectItem value="profile">Profile</SelectItem>
                     </SelectContent>
                   </Select>
                   <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -151,6 +156,7 @@ const ActivityLog = () => {
                       const canReinstateMaint = x.action === "delete_maintenance_request" && x.entity_type === "maintenance_request";
                       const canReinstateProperty = x.action === "delete_property" && x.entity_type === "property";
                       const canReinstateLease = x.action === "delete_lease" && x.entity_type === "lease";
+                      const canReinstateTenant = x.action === "delete_tenant" && x.entity_type === "profile";
                       const isMaint = x.entity_type === "maintenance_request";
                       const showHistory = !!openHistory[x.id];
                       const reqId = x.entity_id as string | undefined;
@@ -191,6 +197,9 @@ const ActivityLog = () => {
                               ) : null}
                               {canReinstateLease ? (
                                 <Button size="sm" onClick={() => onReinstate(x.id, "lease")}>Reinstate</Button>
+                              ) : null}
+                              {canReinstateTenant ? (
+                                <Button size="sm" onClick={() => onReinstate(x.id, "tenant")}>Reinstate</Button>
                               ) : null}
                             </div>
                           </TableCell>
