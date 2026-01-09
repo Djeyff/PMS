@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Role } from "@/contexts/AuthProvider";
+import { logAction } from "@/services/activity-logs";
 
 export type Property = {
   id: string;
@@ -109,7 +110,24 @@ export async function updateProperty(
 }
 
 export async function deleteProperty(id: string) {
+  // FETCH existing property to capture metadata for reinstatement
+  const { data: existing, error: selErr } = await supabase
+    .from("properties")
+    .select("id, agency_id, name, type, city, bedrooms, status, location_group")
+    .eq("id", id)
+    .single();
+  if (selErr) throw selErr;
+
   const { error } = await supabase.from("properties").delete().eq("id", id);
   if (error) throw error;
+
+  // Log deletion with useful metadata
+  await logAction({
+    action: "delete_property",
+    entity_type: "property",
+    entity_id: id,
+    metadata: existing ?? null,
+  });
+
   return true;
 }

@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Role } from "@/contexts/AuthProvider";
+import { logAction } from "@/services/activity-logs";
 
 export type LeaseRow = {
   id: string;
@@ -188,7 +189,29 @@ export async function updateLease(
 }
 
 export async function deleteLease(id: string) {
+  // FETCH existing lease to capture metadata for reinstatement
+  const { data: existing, error: selErr } = await supabase
+    .from("leases")
+    .select(`
+      id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
+      auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute,
+      contract_kdrive_folder_url, contract_kdrive_file_url,
+      annual_increase_enabled, annual_increase_percent
+    `)
+    .eq("id", id)
+    .single();
+  if (selErr) throw selErr;
+
   const { error } = await supabase.from("leases").delete().eq("id", id);
   if (error) throw error;
+
+  // Log deletion with full metadata
+  await logAction({
+    action: "delete_lease",
+    entity_type: "lease",
+    entity_id: id,
+    metadata: existing ?? null,
+  });
+
   return true;
 }

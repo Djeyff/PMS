@@ -162,3 +162,91 @@ export async function reinstateMaintenanceRequestFromLog(logId: string) {
 
   return true;
 }
+
+// Reinstate a deleted property using captured metadata
+export async function reinstatePropertyFromLog(logId: string) {
+  const { data: log, error } = await supabase
+    .from("activity_logs")
+    .select("id, action, entity_type, entity_id, metadata")
+    .eq("id", logId)
+    .single();
+  if (error) throw error;
+  if (!log || log.action !== "delete_property" || log.entity_type !== "property") {
+    throw new Error("This log entry is not a deletable property action.");
+  }
+  const m = (log as any).metadata || {};
+  const originalId = (log as any).entity_id as string | null;
+
+  const payload: any = {
+    agency_id: m.agency_id,
+    name: m.name,
+    type: m.type,
+    city: m.city ?? null,
+    bedrooms: typeof m.bedrooms === "number" ? m.bedrooms : null,
+    status: m.status ?? "active",
+    location_group: m.location_group ?? null,
+  };
+
+  if (!payload.agency_id || !payload.name || !payload.type) {
+    throw new Error("Missing required property fields in log metadata.");
+  }
+  if (originalId) payload.id = originalId;
+
+  const { error: insErr } = await supabase
+    .from("properties")
+    .insert(payload)
+    .select("id")
+    .single();
+  if (insErr) throw insErr;
+
+  return true;
+}
+
+// Reinstate a deleted lease using captured metadata
+export async function reinstateLeaseFromLog(logId: string) {
+  const { data: log, error } = await supabase
+    .from("activity_logs")
+    .select("id, action, entity_type, entity_id, metadata")
+    .eq("id", logId)
+    .single();
+  if (error) throw error;
+  if (!log || log.action !== "delete_lease" || log.entity_type !== "lease") {
+    throw new Error("This log entry is not a deletable lease action.");
+  }
+  const m = (log as any).metadata || {};
+  const originalId = (log as any).entity_id as string | null;
+
+  const payload: any = {
+    property_id: m.property_id,
+    tenant_id: m.tenant_id,
+    start_date: m.start_date,
+    end_date: m.end_date,
+    rent_amount: Number(m.rent_amount || 0),
+    rent_currency: m.rent_currency,
+    deposit_amount: typeof m.deposit_amount === "number" ? m.deposit_amount : null,
+    status: m.status ?? "active",
+    auto_invoice_enabled: !!m.auto_invoice_enabled,
+    auto_invoice_day: typeof m.auto_invoice_day === "number" ? m.auto_invoice_day : 5,
+    auto_invoice_interval_months: typeof m.auto_invoice_interval_months === "number" ? m.auto_invoice_interval_months : 1,
+    auto_invoice_hour: typeof m.auto_invoice_hour === "number" ? m.auto_invoice_hour : 9,
+    auto_invoice_minute: typeof m.auto_invoice_minute === "number" ? m.auto_invoice_minute : 0,
+    contract_kdrive_folder_url: m.contract_kdrive_folder_url ?? null,
+    contract_kdrive_file_url: m.contract_kdrive_file_url ?? null,
+    annual_increase_enabled: !!m.annual_increase_enabled,
+    annual_increase_percent: typeof m.annual_increase_percent === "number" ? m.annual_increase_percent : null,
+  };
+
+  if (!payload.property_id || !payload.tenant_id || !payload.start_date || !payload.end_date || !payload.rent_currency) {
+    throw new Error("Missing required lease fields in log metadata.");
+  }
+  if (originalId) payload.id = originalId;
+
+  const { error: insErr } = await supabase
+    .from("leases")
+    .insert(payload)
+    .select("id")
+    .single();
+  if (insErr) throw insErr;
+
+  return true;
+}
