@@ -12,6 +12,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import Money from "@/components/Money";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { generateInvoicePDF } from "@/services/invoices";
 import { toast } from "sonner";
 import { runAutoInvoice } from "@/services/auto-invoice";
@@ -53,6 +54,16 @@ const Invoices = () => {
     });
   }, [data]);
 
+  const [sortOrder, setSortOrder] = React.useState<"desc" | "asc">("desc");
+  const sortedRows = useMemo(() => {
+    const copy = [...rows];
+    copy.sort((a: any, b: any) => {
+      const cmp = a.issue_date.localeCompare(b.issue_date);
+      return sortOrder === "desc" ? -cmp : cmp;
+    });
+    return copy;
+  }, [rows, sortOrder]);
+
   const isMobile = useIsMobile();
 
   return (
@@ -60,27 +71,38 @@ const Invoices = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Invoices</h1>
-          {isAdmin ? (
-            <div className="flex items-center gap-2">
-              <InvoiceForm onCreated={() => refetch()} />
-              <Button
-                variant="outline"
-                onClick={async () => {
-                  try {
-                    const res = await runAutoInvoice(true);
-                    if (res.sent > 0) toast.success(`Auto-invoice ran: ${res.sent} invoice(s) created`);
-                    else toast.info("Auto-invoice ran: no invoices matched the schedule");
-                    if (res.errors?.length) toast.error(res.errors[0]);
-                    refetch();
-                  } catch (e: any) {
-                    toast.error(e?.message ?? "Failed to run auto-invoice");
-                  }
-                }}
-              >
-                Run Auto-Invoice
-              </Button>
+          <div className="flex items-center gap-2">
+            <div className="w-[180px]">
+              <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "desc" | "asc")}>
+                <SelectTrigger aria-label="Sort by issue date"><SelectValue placeholder="Sort by issue date" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="desc">Newest first</SelectItem>
+                  <SelectItem value="asc">Oldest first</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          ) : null}
+            {isAdmin ? (
+              <div className="flex items-center gap-2">
+                <InvoiceForm onCreated={() => refetch()} />
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const res = await runAutoInvoice(true);
+                      if (res.sent > 0) toast.success(`Auto-invoice ran: ${res.sent} invoice(s) created`);
+                      else toast.info("Auto-invoice ran: no invoices matched the schedule");
+                      if (res.errors?.length) toast.error(res.errors[0]);
+                      refetch();
+                    } catch (e: any) {
+                      toast.error(e?.message ?? "Failed to run auto-invoice");
+                    }
+                  }}
+                >
+                  Run Auto-Invoice
+                </Button>
+              </div>
+            ) : null}
+          </div>
         </div>
         <Card>
           <CardHeader>
@@ -93,7 +115,7 @@ const Invoices = () => {
               <div className="text-sm text-muted-foreground">No invoices yet.</div>
             ) : isMobile ? (
               <div>
-                {rows.map((inv: any) => (
+                {sortedRows.map((inv: any) => (
                   <InvoiceListItemMobile key={inv.id} inv={inv} onRefetch={() => refetch()} />
                 ))}
               </div>
@@ -115,7 +137,7 @@ const Invoices = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {rows.map((inv: any) => {
+                    {sortedRows.map((inv: any) => {
                       const propName = inv.lease?.property?.name ?? inv.lease_id?.slice(0, 8);
                       const tenantName = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || inv.tenant_id?.slice(0, 6);
                       const fmt = (amt: number, cur: string) =>

@@ -26,12 +26,13 @@ export async function inviteTenant(input: { email?: string; first_name?: string;
   return body;
 }
 
-export async function updateTenantProfile(tenantId: string, fields: { first_name?: string | null; last_name?: string | null }) {
+export async function updateTenantProfile(tenantId: string, fields: { first_name?: string | null; last_name?: string | null; phone?: string | null }) {
   const { data, error } = await supabase
     .from("profiles")
     .update({ 
       first_name: fields.first_name ?? null, 
-      last_name: fields.last_name ?? null 
+      last_name: fields.last_name ?? null,
+      phone: typeof fields.phone === "string" ? fields.phone : fields.phone ?? null
     })
     .eq("id", tenantId)
     .select("id")

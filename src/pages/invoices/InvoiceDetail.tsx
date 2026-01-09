@@ -261,6 +261,9 @@ const InvoiceDetail = () => {
           <div className="text-gray-600">{lang === "es" ? "Facturado a" : "Billed to"}</div>
           <div className="font-medium">{tenantName}</div>
 
+          <div className="text-gray-600">{lang === "es" ? "Teléfono" : "Phone"}</div>
+          <div className="font-medium">{inv.tenant?.phone ?? "—"}</div>
+
           <div className="text-gray-600">{lang === "es" ? "Para" : "For"}</div>
           <div className="font-medium">{propName}</div>
 

@@ -18,7 +18,7 @@ export type InvoiceRow = {
 
 export type InvoiceWithMeta = InvoiceRow & {
   lease?: { id: string; end_date?: string; property?: { id: string; name: string; agency_id?: string } | null } | null;
-  tenant?: { id: string; first_name: string | null; last_name: string | null } | null;
+  tenant?: { id: string; first_name: string | null; last_name: string | null; phone?: string | null } | null;
   payments?: { amount: number; currency: "USD" | "DOP"; method?: string; exchange_rate?: number | null }[] | null;
   signed_pdf_url?: string | null;
 };
@@ -52,7 +52,7 @@ function normalizeInvoiceRow(row: any): InvoiceWithMeta {
             : null,
         }
       : null,
-    tenant: tenantRel ? { id: tenantRel.id, first_name: tenantRel.first_name ?? null, last_name: tenantRel.last_name ?? null } : null,
+    tenant: tenantRel ? { id: tenantRel.id, first_name: tenantRel.first_name ?? null, last_name: tenantRel.last_name ?? null, phone: tenantRel.phone ?? null } : null,
     payments: (row.payments ?? []).map((p: any) => ({
       amount: p.amount,
       currency: p.currency,
@@ -72,10 +72,10 @@ export async function fetchInvoices() {
         id, end_date,
         property:properties ( id, name, agency_id )
       ),
-      tenant:profiles ( id, first_name, last_name ),
+      tenant:profiles ( id, first_name, last_name, phone ),
       payments:payments ( amount, currency, method, exchange_rate )
     `)
-  .order("due_date", { ascending: true });
+  .order("issue_date", { ascending: false });
 
   if (error) throw error;
   return (data ?? []).map(normalizeInvoiceRow);
@@ -159,7 +159,7 @@ export async function createInvoice(input: {
         id, end_date,
         property:properties ( id, name )
       ),
-      tenant:profiles ( id, first_name, last_name ),
+      tenant:profiles ( id, first_name, last_name, phone ),
       payments:payments ( amount, currency, method, exchange_rate )
     `)
     .single();
@@ -201,7 +201,7 @@ export async function updateInvoice(
         id, end_date,
         property:properties ( id, name )
       ),
-      tenant:profiles ( id, first_name, last_name ),
+      tenant:profiles ( id, first_name, last_name, phone ),
       payments:payments ( amount, currency, method, exchange_rate )
     `)
     .single();
@@ -273,7 +273,7 @@ export async function fetchInvoiceById(id: string) {
         id, end_date,
         property:properties ( id, name, agency_id )
       ),
-      tenant:profiles ( id, first_name, last_name ),
+      tenant:profiles ( id, first_name, last_name, phone ),
       payments:payments ( amount, currency, method, exchange_rate )
     `)
     .eq("id", id)

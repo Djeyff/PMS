@@ -7,7 +7,7 @@ import { updateTenantProfile } from "@/services/tenants";
 import { toast } from "sonner";
 
 type Props = {
-  tenant: { id: string; first_name: string | null; last_name: string | null };
+  tenant: { id: string; first_name: string | null; last_name: string | null; phone?: string | null };
   onUpdated?: () => void;
 };
 
@@ -17,16 +17,18 @@ const EditTenantDialog = ({ tenant, onUpdated }: Props) => {
 
   const [first, setFirst] = useState(tenant.first_name ?? "");
   const [last, setLast] = useState(tenant.last_name ?? "");
+  const [phone, setPhone] = useState(tenant.phone ?? "");
 
   const reset = () => {
     setFirst(tenant.first_name ?? "");
     setLast(tenant.last_name ?? "");
+    setPhone(tenant.phone ?? "");
   };
 
   const onSave = async () => {
     setSaving(true);
     try {
-      await updateTenantProfile(tenant.id, { first_name: first || null, last_name: last || null });
+      await updateTenantProfile(tenant.id, { first_name: first || null, last_name: last || null, phone: phone || null });
       toast.success("Tenant updated");
       setOpen(false);
       onUpdated?.();
@@ -55,6 +57,10 @@ const EditTenantDialog = ({ tenant, onUpdated }: Props) => {
           <div className="space-y-2">
             <Label>Last name</Label>
             <Input value={last} onChange={(e) => setLast(e.target.value)} placeholder="Last name" />
+          </div>
+          <div className="space-y-2">
+            <Label>Phone</Label>
+            <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 555 123 4567" />
           </div>
           <div className="pt-2">
             <Button onClick={onSave} disabled={saving}>{saving ? "Saving..." : "Save changes"}</Button>
