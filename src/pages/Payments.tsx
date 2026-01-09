@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { useIsMobile } from "@/hooks/use-mobile";
 import PaymentListItemMobile from "@/components/payments/PaymentListItemMobile";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const Payments = () => {
   const { role, user, profile } = useAuth();
@@ -24,13 +25,43 @@ const Payments = () => {
     queryFn: () => fetchPayments({ role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
   });
 
+  // NEW: Month selector state and options
+  const [monthValue, setMonthValue] = useState<string>("all");
+
+  const monthOptions = useMemo(() => {
+    const opts: Array<{ value: string; label: string; start: string; end: string }> = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const year = d.getFullYear();
+      const monthIndex = d.getMonth();
+      const start = new Date(year, monthIndex, 1);
+      const end = new Date(year, monthIndex + 1, 0);
+      const startStr = start.toISOString().slice(0, 10);
+      const endStr = end.toISOString().slice(0, 10);
+      const label = start.toLocaleString(undefined, { month: "long", year: "numeric" });
+      const capLabel = label.charAt(0).toUpperCase() + label.slice(1);
+      const value = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+      opts.push({ value, label: capLabel, start: startStr, end: endStr });
+    }
+    return opts;
+  }, []);
+
+  const filteredPayments = useMemo(() => {
+    const rows = data ?? [];
+    if (monthValue === "all") return rows;
+    const found = monthOptions.find((m) => m.value === monthValue);
+    if (!found) return rows;
+    return rows.filter((p: any) => p.received_date >= found.start && p.received_date <= found.end);
+  }, [data, monthValue, monthOptions]);
+
   const canCreate = role === "agency_admin";
 
   const totals = useMemo(() => {
-    const usd = (data ?? []).filter(p => p.currency === "USD").reduce((s, p) => s + Number(p.amount || 0), 0);
-    const dop = (data ?? []).filter(p => p.currency === "DOP").reduce((s, p) => s + Number(p.amount || 0), 0);
+    const usd = filteredPayments.filter(p => p.currency === "USD").reduce((s, p) => s + Number(p.amount || 0), 0);
+    const dop = filteredPayments.filter(p => p.currency === "DOP").reduce((s, p) => s + Number(p.amount || 0), 0);
     return { usd, dop };
-  }, [data]);
+  }, [filteredPayments]);
 
   const fmt = (amt: number, cur: string) => new Intl.NumberFormat(undefined, { style: "currency", currency: cur }).format(amt);
 
@@ -56,6 +87,24 @@ const Payments = () => {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Payments</h1>
           {canCreate ? <PaymentForm onCreated={() => refetch()} /> : null}
+        </div>
+
+        {/* NEW: Month selector */}
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <div className="text-sm text-muted-foreground">Month</div>
+            <Select value={monthValue} onValueChange={setMonthValue}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Select month" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {monthOptions.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
@@ -84,11 +133,11 @@ const Payments = () => {
           <CardContent>
             {isLoading ? (
               <div className="text-sm text-muted-foreground">Loading...</div>
-            ) : (data?.length ?? 0) === 0 ? (
+            ) : (filteredPayments.length ?? 0) === 0 ? (
               <div className="text-sm text-muted-foreground">No payments yet.</div>
             ) : isMobile ? (
               <div>
-                {(data ?? []).map((p: any) => (
+                {filteredPayments.map((p: any) => (
                   <PaymentListItemMobile key={p.id} payment={p} onRefetch={() => refetch()} />
                 ))}
               </div>
@@ -106,7 +155,7 @@ const Payments = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(data ?? []).map((p: any) => {
+                    {filteredPayments.map((p: any) => {
                       const propName = p.lease?.property?.name ?? "—";
                       const tenantName = [p.tenant?.first_name, p.tenant?.last_name].filter(Boolean).join(" ") || "—";
                       return (
