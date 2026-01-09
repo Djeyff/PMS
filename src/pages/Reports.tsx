@@ -49,8 +49,41 @@ const Reports = () => {
   const startDefault = new Date(); startDefault.setMonth(startDefault.getMonth() - 1);
   const [startDate, setStartDate] = useState<string>(startDefault.toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState<string>(today);
+  const [quickMonth, setQuickMonth] = useState<string>("custom");
   const [tenantFilter, setTenantFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
+
+  // Build last 12 months list (closest first)
+  const monthOptions = useMemo(() => {
+    const opts: Array<{ value: string; label: string; start: string; end: string }> = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const year = d.getFullYear();
+      const monthIndex = d.getMonth(); // 0-based
+      const start = new Date(year, monthIndex, 1);
+      const end = new Date(year, monthIndex + 1, 0); // last day of month
+      const startStr = start.toISOString().slice(0, 10);
+      const endStr = end.toISOString().slice(0, 10);
+      const label = start.toLocaleString(undefined, { month: "long", year: "numeric" });
+      // Capitalize month name in locales that use lowercase
+      const capLabel = label.charAt(0).toUpperCase() + label.slice(1);
+      const value = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+      opts.push({ value, label: capLabel, start: startStr, end: endStr });
+    }
+    return opts;
+  }, []);
+
+  // When quick month changes, set date range
+  const onQuickMonthChange = (val: string) => {
+    setQuickMonth(val);
+    if (val === "custom") return;
+    const found = monthOptions.find((m) => m.value === val);
+    if (found) {
+      setStartDate(found.start);
+      setEndDate(found.end);
+    }
+  };
 
   // Data
   const { data: properties } = useQuery({
@@ -229,6 +262,20 @@ const Reports = () => {
     <AppShell>
       <div className="space-y-6">
         <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <div className="text-sm text-muted-foreground">Quick month</div>
+            <Select value={quickMonth} onValueChange={onQuickMonthChange}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Select month" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="custom">Custom range</SelectItem>
+                {monthOptions.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div>
             <div className="text-sm text-muted-foreground">Start</div>
             <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-[180px]" />
