@@ -57,21 +57,43 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
     try {
       if (selectedInvoiceIds.length > 0) {
         const invs = (pendingInvoices ?? []).filter((i: any) => selectedInvoiceIds.includes(i.id));
+        const rateNum = exchangeRate && !Number.isNaN(Number(exchangeRate)) ? Number(exchangeRate) : null;
+
         for (const inv of invs) {
+          const invTotal = Number(inv.total_amount);
+          const invCur = inv.currency as "USD" | "DOP";
+          const payCur = currency; // use user-selected currency
+
+          // Compute payment amount in the selected currency
+          let payAmt = invTotal;
+          if (payCur !== invCur) {
+            if (!rateNum || rateNum <= 0) {
+              toast.error("Please enter a valid exchange rate for cross-currency payments.");
+              setSaving(false);
+              return;
+            }
+            if (invCur === "USD" && payCur === "DOP") {
+              payAmt = Math.round(invTotal * rateNum * 100) / 100; // USD → DOP
+            } else if (invCur === "DOP" && payCur === "USD") {
+              payAmt = Math.round((invTotal / rateNum) * 100) / 100; // DOP → USD
+            }
+          }
+
           await createPayment({
             lease_id: leaseId,
             tenant_id: tenantId,
-            amount: Number(inv.total_amount),
-            currency: inv.currency,
+            amount: payAmt,
+            currency: payCur,
             method,
             received_date: date,
             reference: reference || undefined,
             invoice_id: inv.id,
-            exchange_rate: exchangeRate && !Number.isNaN(Number(exchangeRate)) ? Number(exchangeRate) : undefined,
+            exchange_rate: rateNum ?? undefined,
           });
           await recomputeInvoiceStatus(inv.id);
         }
       } else {
+        // Original single/unlinked payment flow
         await createPayment({
           lease_id: leaseId,
           tenant_id: tenantId,
