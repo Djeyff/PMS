@@ -46,11 +46,35 @@ const TenantOverdue = () => {
       totals: { totalInvoices: number; totalPayments: number; balance: number };
     }> = { USD: { overdue: [], ledger: [], totals: { totalInvoices: 0, totalPayments: 0, balance: 0 } }, DOP: { overdue: [], ledger: [], totals: { totalInvoices: 0, totalPayments: 0, balance: 0 } } };
 
+    // Quick lookup for invoice currency by id
+    const invoiceById = new Map<string, { currency: "USD" | "DOP"; total_amount: number; issue_date: string; due_date: string }>();
+    (invoices ?? []).forEach((i: any) => {
+      invoiceById.set(i.id, { currency: i.currency, total_amount: Number(i.total_amount || 0), issue_date: i.issue_date, due_date: i.due_date });
+    });
+
+    // Helper: convert a payment amount to a target currency via per-payment exchange_rate
+    const convertToCurrency = (amt: number, from: "USD" | "DOP", to: "USD" | "DOP", rate: number | null) => {
+      if (from === to) return amt;
+      if (!rate || !isFinite(rate) || rate <= 0) return 0;
+      if (from === "DOP" && to === "USD") return amt / rate;
+      if (from === "USD" && to === "DOP") return amt * rate;
+      return 0;
+    };
+
     currencies.forEach((cur) => {
       const invs = (invoices ?? []).filter((i: any) => i.currency === cur);
-      const pays = (payments ?? []).filter((p: any) => p.currency === cur);
 
-      // Build ledger entries with property/tenant
+      // Payments relevant to this currency: same-currency OR cross-currency linked to an invoice in this currency
+      const paysRelevant = (payments ?? []).filter((p: any) => {
+        if (p.currency === cur) return true;
+        if (p.invoice_id) {
+          const ref = invoiceById.get(p.invoice_id);
+          return ref ? ref.currency === cur : false;
+        }
+        return false;
+      });
+
+      // Build ledger entries (amounts always in current tab currency)
       const entries: LedgerEntry[] = [
         ...invs.map((i: any) => ({
           date: i.issue_date,
@@ -61,15 +85,21 @@ const TenantOverdue = () => {
           property: i.lease?.property?.name ?? null,
           tenant: [i.tenant?.first_name ?? "", i.tenant?.last_name ?? ""].filter(Boolean).join(" ") || null,
         })),
-        ...pays.map((p: any) => ({
-          date: p.received_date,
-          type: "payment" as const,
-          description: p.reference ?? p.method,
-          amount: Number(p.amount || 0),
-          currency: cur,
-          property: p.lease?.property?.name ?? null,
-          tenant: [p.tenant?.first_name ?? "", p.tenant?.last_name ?? ""].filter(Boolean).join(" ") || null,
-        })),
+        ...paysRelevant.map((p: any) => {
+          const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : null;
+          const amtInCur = p.currency === cur
+            ? Number(p.amount || 0)
+            : convertToCurrency(Number(p.amount || 0), p.currency, cur, rate);
+          return {
+            date: p.received_date,
+            type: "payment" as const,
+            description: p.reference ?? p.method,
+            amount: amtInCur,
+            currency: cur,
+            property: p.lease?.property?.name ?? null,
+            tenant: [p.tenant?.first_name ?? "", p.tenant?.last_name ?? ""].filter(Boolean).join(" ") || null,
+          };
+        }),
       ].sort((a, b) => a.date.localeCompare(b.date) || (a.type === "invoice" ? -1 : 1));
 
       let running = 0;
@@ -79,16 +109,24 @@ const TenantOverdue = () => {
       });
 
       const totalInvoices = invs.reduce((s: number, i: any) => s + Number(i.total_amount || 0), 0);
-      const totalPayments = pays.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+      const totalPayments = paysRelevant.reduce((s: number, p: any) => {
+        const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : null;
+        if (p.currency === cur) return s + Number(p.amount || 0);
+        return s + convertToCurrency(Number(p.amount || 0), p.currency, cur, rate);
+      }, 0);
       const balance = totalPayments - totalInvoices;
 
-      // Overdue invoices with property/tenant
+      // Overdue invoices with paid and outstanding in current currency (include converted cross-currency payments)
       const paidByInvoice = new Map<string, number>();
-      pays.forEach((p: any) => {
-        if (p.invoice_id) {
-          paidByInvoice.set(p.invoice_id, (paidByInvoice.get(p.invoice_id) ?? 0) + Number(p.amount || 0));
-        }
+      paysRelevant.forEach((p: any) => {
+        if (!p.invoice_id) return;
+        const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : null;
+        const addAmt = p.currency === cur
+          ? Number(p.amount || 0)
+          : convertToCurrency(Number(p.amount || 0), p.currency, cur, rate);
+        paidByInvoice.set(p.invoice_id, (paidByInvoice.get(p.invoice_id) ?? 0) + addAmt);
       });
+
       const overdue = invs
         .filter((i: any) => i.due_date < today)
         .map((i: any) => {
