@@ -31,6 +31,7 @@ import TenantOverdue from "./pages/tenants/TenantOverdue";
 import Outstanding from "./pages/Outstanding";
 import ActivityLog from "./pages/ActivityLog";
 import Contracts from "./pages/Contracts";
+import ManagerReport from "./pages/ManagerReport";
 
 const queryClient = new QueryClient();
 
@@ -218,6 +219,14 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <Pending />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/manager-report"
+                  element={
+                    <ProtectedRoute>
+                      <ManagerReport />
                     </ProtectedRoute>
                   }
                 />
