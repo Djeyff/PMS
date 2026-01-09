@@ -151,6 +151,8 @@ export async function updateLease(
     contract_kdrive_file_url: string | null;
     annual_increase_enabled: boolean;
     annual_increase_percent: number | null;
+    // ADDED: allow assigning tenant
+    tenant_id: string | null;
   }>
 ) {
   const payload: any = {};
@@ -169,6 +171,8 @@ export async function updateLease(
   if (typeof input.contract_kdrive_file_url !== "undefined") payload.contract_kdrive_file_url = input.contract_kdrive_file_url;
   if (typeof input.annual_increase_enabled !== "undefined") payload.annual_increase_enabled = input.annual_increase_enabled;
   if (typeof input.annual_increase_percent !== "undefined") payload.annual_increase_percent = input.annual_increase_percent;
+  // ADDED: map tenant assignment
+  if (typeof input.tenant_id !== "undefined") payload.tenant_id = input.tenant_id;
 
   const { data, error } = await supabase
     .from("leases")

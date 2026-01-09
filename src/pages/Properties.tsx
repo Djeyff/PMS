@@ -11,6 +11,7 @@ import EditPropertyDialog from "@/components/properties/EditPropertyDialog";
 import DeletePropertyDialog from "@/components/properties/DeletePropertyDialog";
 import PropertyOwnersDialog from "@/components/properties/PropertyOwnersDialog";
 import LeaseForm from "@/components/leases/LeaseForm";
+import AssignTenantDialog from "@/components/properties/AssignTenantDialog";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -185,7 +186,7 @@ const Properties = () => {
                                 <div className="flex gap-2">
                                   <EditPropertyDialog property={p} onUpdated={() => refetch()} />
                                   <PropertyOwnersDialog propertyId={p.id} />
-                                  <LeaseForm propertyId={p.id} triggerLabel="Assign Tenant" onCreated={() => refetch()} />
+                                  <AssignTenantDialog propertyId={p.id} onAssigned={() => refetch()} />
                                   <DeletePropertyDialog id={p.id} name={p.name} onDeleted={() => refetch()} />
                                 </div>
                               </TableCell>
