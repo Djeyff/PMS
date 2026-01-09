@@ -141,3 +141,9 @@
     page-break-inside: avoid;
   }
 }
+
+/* Dark theme fixes for native date input calendar indicator */
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.2);
+  opacity: 0.8;
+}
