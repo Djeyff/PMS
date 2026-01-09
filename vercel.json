@@ -1,5 +1,6 @@
 {
-  "buildCommand": "pnpm install --no-frozen-lockfile && pnpm run build",
+  "installCommand": "npm ci --no-audit --no-fund",
+  "buildCommand": "npm run build",
   "ignoreCommand": "git diff --quiet HEAD^ HEAD ./",
   "framework": "vite",
   "outputDirectory": "dist"
