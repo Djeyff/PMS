@@ -66,6 +66,15 @@ const Invoices = () => {
 
   const isMobile = useIsMobile();
 
+  const getStatusStyle = (status: string) => {
+    const s = String(status).toLowerCase();
+    if (s === "overdue") return { cls: "text-red-600", label: "Overdue" };
+    if (s === "partial") return { cls: "text-orange-600", label: "Partial" };
+    if (s === "paid") return { cls: "text-green-600", label: "Paid" };
+    if (s === "sent" || s === "void") return { cls: "text-black", label: s[0].toUpperCase() + s.slice(1) };
+    return { cls: "text-black", label: s.replace("_", " ") };
+  };
+
   return (
     <AppShell>
       <div className="space-y-4">
@@ -152,7 +161,12 @@ const Invoices = () => {
                           <TableCell>{fmt(Number(inv.total_amount), inv.currency)}</TableCell>
                           <TableCell>{fmt(inv.paid, inv.currency)}</TableCell>
                           <TableCell>{fmt(inv.balance, inv.currency)}</TableCell>
-                          <TableCell className="capitalize">{String(inv.displayStatus).replace("_", " ")}</TableCell>
+                          <TableCell>
+                            {(() => {
+                              const s = getStatusStyle(inv.displayStatus);
+                              return <span className={`${s.cls} font-medium`}>{s.label}</span>;
+                            })()}
+                          </TableCell>
                           {isAdmin && (
                             <TableCell>
                               <div className="flex gap-2">
