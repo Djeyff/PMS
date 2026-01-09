@@ -41,19 +41,20 @@ function fmt(amount: number, currency: "USD" | "DOP") {
 }
 
 function monthList(limit = 12) {
+  const pad2 = (n: number) => String(n).padStart(2, "0");
   const opts: Array<{ value: string; label: string; start: string; end: string }> = [];
   const now = new Date();
   for (let i = 0; i < limit; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const year = d.getFullYear();
     const monthIndex = d.getMonth();
-    const start = new Date(year, monthIndex, 1);
-    const end = new Date(year, monthIndex + 1, 0);
-    const startStr = start.toISOString().slice(0, 10);
-    const endStr = end.toISOString().slice(0, 10);
-    const label = start.toLocaleString(undefined, { month: "long", year: "numeric" });
+    const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+    // Build local YYYY-MM-DD strings to avoid UTC timezone shifts from toISOString()
+    const startStr = `${year}-${pad2(monthIndex + 1)}-01`;
+    const endStr = `${year}-${pad2(monthIndex + 1)}-${pad2(lastDay)}`;
+    const label = d.toLocaleString(undefined, { month: "long", year: "numeric" });
     const capLabel = label.charAt(0).toUpperCase() + label.slice(1);
-    const value = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+    const value = `${year}-${pad2(monthIndex + 1)}`;
     opts.push({ value, label: capLabel, start: startStr, end: endStr });
   }
   return opts;
@@ -84,6 +85,13 @@ const ManagerReport = () => {
   const months = useMemo(() => monthList(12), []);
   const [monthValue, setMonthValue] = useState<string>(months[0]?.value ?? "");
   const currentMonth = useMemo(() => months.find((m) => m.value === monthValue) ?? months[0], [months, monthValue]);
+
+  // NEW: manual generate state
+  const [generated, setGenerated] = useState<boolean>(false);
+  useEffect(() => {
+    // Reset when month changes
+    setGenerated(false);
+  }, [monthValue]);
 
   const [avgRateInput, setAvgRateInput] = useState<string>(""); // user-editable average USD/DOP for the month
   const [suggestedRate, setSuggestedRate] = useState<number | null>(null);
@@ -202,6 +210,13 @@ const ManagerReport = () => {
     toast({ title: "Applied", description: "Suggested average USD/DOP rate applied." });
   };
 
+  // NEW: handler to generate report manually
+  const handleGenerate = () => {
+    if (!currentMonth) return;
+    setGenerated(true);
+    toast({ title: "Report generated", description: `Generated for ${currentMonth.label} (${currentMonth.start} to ${currentMonth.end}).` });
+  };
+
   return (
     <AppShell>
       <div className="space-y-6">
@@ -237,134 +252,157 @@ const ManagerReport = () => {
               If available, suggested average is computed from your exchange_rates data for the selected month.
             </div>
           </div>
+          {/* NEW: Generate controls */}
+          <div className="ml-auto flex items-end gap-2">
+            <Button size="sm" onClick={handleGenerate}>Generate report</Button>
+            {generated && (
+              <Button size="sm" variant="outline" onClick={() => setGenerated(false)}>
+                Reset
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Warning if rate missing but USD exists */}
-        {(usdTotal > 0 && Number.isNaN(rateNum)) && (
+        {/* Show warnings only once generated */}
+        {generated && (usdTotal > 0 && Number.isNaN(rateNum)) && (
           <div className="text-sm text-destructive">
             Enter the average USD/DOP rate to include USD transactions in the 5% fee calculation.
           </div>
         )}
-        {/* Info if fee exceeds DOP cash */}
-        {(managerFeeDop > totals.dopCash && managerFeeDop > 0) && (
+        {generated && (managerFeeDop > totals.dopCash && managerFeeDop > 0) && (
           <div className="text-sm text-muted-foreground">
             Fee exceeds available DOP cash; only {fmt(actualFeeDeducted, "DOP")} will be deducted this month.
           </div>
         )}
 
-        <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+        {/* NEW: Gate report output behind 'generated' */}
+        {!generated ? (
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Cash totals</CardTitle></CardHeader>
-            <CardContent>
-              <div className="text-base font-medium flex flex-col">
-                <span>{fmt(totals.usdCash, "USD")} USD</span>
-                <span>{fmt(totals.dopCash, "DOP")} DOP</span>
-              </div>
+            <CardHeader>
+              <CardTitle>Report not generated</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Select a month and click "Generate report" to compute totals and owner breakdown.
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Transfer totals</CardTitle></CardHeader>
-            <CardContent>
-              <div className="text-base font-medium flex flex-col">
-                <span>{fmt(totals.usdTransfer, "USD")} USD</span>
-                <span>{fmt(totals.dopTransfer, "DOP")} DOP</span>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Manager fee (5% of all transactions)</CardTitle></CardHeader>
-            <CardContent>
-              <div className="text-xs text-muted-foreground mb-1">
-                Fee base: {fmt(dopTotal, "DOP")} DOP + {usdTotal.toFixed(2)} USD × {Number.isNaN(rateNum) ? "rate ?" : rateNum} = {fmt(feeBaseDop, "DOP")}
-              </div>
-              <div className="text-2xl font-bold">{fmt(managerFeeDop, "DOP")}</div>
-              <div className="text-xs text-muted-foreground mt-1">Deducted from DOP cash: {fmt(actualFeeDeducted, "DOP")}</div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Owner Breakdown</CardTitle>
-            <div className="flex items-center gap-2 print:hidden">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const rows = ownerRowsWithFee.map((r) => {
-                    const feeShare = (r.cashDop ?? 0) - (r.cashDopAfterFee ?? r.cashDop ?? 0);
-                    return [
-                      r.name,
-                      r.cashUsd.toFixed(2),
-                      r.cashDop.toFixed(2),
-                      feeShare.toFixed(2),
-                      (r.cashDopAfterFee ?? r.cashDop).toFixed(2),
-                      r.transferUsd.toFixed(2),
-                      r.transferDop.toFixed(2),
-                    ];
-                  });
-                  exportCSV("manager_owner_breakdown.csv",
-                    ["Owner", "Cash USD", "Cash DOP", "Fee share (DOP)", "Cash DOP after fee", "Transfer USD", "Transfer DOP"],
-                    rows
-                  );
-                }}
-              >
-                Export CSV
-              </Button>
-              <Button size="sm" onClick={() => window.print()}>
-                Print
-              </Button>
+        ) : (
+          <>
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Cash totals</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="text-base font-medium flex flex-col">
+                    <span>{fmt(totals.usdCash, "USD")} USD</span>
+                    <span>{fmt(totals.dopCash, "DOP")} DOP</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Transfer totals</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="text-base font-medium flex flex-col">
+                    <span>{fmt(totals.usdTransfer, "USD")} USD</span>
+                    <span>{fmt(totals.dopTransfer, "DOP")} DOP</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Manager fee (5% of all transactions)</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="text-xs text-muted-foreground mb-1">
+                    Fee base: {fmt(dopTotal, "DOP")} DOP + {usdTotal.toFixed(2)} USD × {Number.isNaN(rateNum) ? "rate ?" : rateNum} = {fmt(feeBaseDop, "DOP")}
+                  </div>
+                  <div className="text-2xl font-bold">{fmt(managerFeeDop, "DOP")}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Deducted from DOP cash: {fmt(actualFeeDeducted, "DOP")}</div>
+                </CardContent>
+              </Card>
             </div>
-          </CardHeader>
-          <CardContent>
-            {loadingPayments ? (
-              <div className="text-sm text-muted-foreground">Loading...</div>
-            ) : ownerRowsWithFee.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No payments found for this month.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Owner</TableHead>
-                      <TableHead>Cash USD</TableHead>
-                      <TableHead>Cash DOP</TableHead>
-                      <TableHead>Fee share (DOP)</TableHead>
-                      <TableHead>Cash DOP (after fee)</TableHead>
-                      <TableHead>Transfer USD</TableHead>
-                      <TableHead>Transfer DOP</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ownerRowsWithFee.map((r) => {
-                      const feeShare = (r.cashDop ?? 0) - (r.cashDopAfterFee ?? r.cashDop ?? 0);
-                      return (
-                        <TableRow key={r.ownerId}>
-                          <TableCell className="font-medium">{r.name}</TableCell>
-                          <TableCell>{fmt(r.cashUsd, "USD")}</TableCell>
-                          <TableCell>{fmt(r.cashDop, "DOP")}</TableCell>
-                          <TableCell>{fmt(feeShare, "DOP")}</TableCell>
-                          <TableCell>{fmt(r.cashDopAfterFee ?? r.cashDop, "DOP")}</TableCell>
-                          <TableCell>{fmt(r.transferUsd, "USD")}</TableCell>
-                          <TableCell>{fmt(r.transferDop, "DOP")}</TableCell>
-                        </TableRow>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Owner Breakdown</CardTitle>
+                <div className="flex items-center gap-2 print:hidden">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const rows = ownerRowsWithFee.map((r) => {
+                        const feeShare = (r.cashDop ?? 0) - (r.cashDopAfterFee ?? r.cashDop ?? 0);
+                        return [
+                          r.name,
+                          r.cashUsd.toFixed(2),
+                          r.cashDop.toFixed(2),
+                          feeShare.toFixed(2),
+                          (r.cashDopAfterFee ?? r.cashDop).toFixed(2),
+                          r.transferUsd.toFixed(2),
+                          r.transferDop.toFixed(2),
+                        ];
+                      });
+                      exportCSV("manager_owner_breakdown.csv",
+                        ["Owner", "Cash USD", "Cash DOP", "Fee share (DOP)", "Cash DOP after fee", "Transfer USD", "Transfer DOP"],
+                        rows
                       );
-                    })}
-                    <TableRow>
-                      <TableCell className="font-semibold">Totals</TableCell>
-                      <TableCell className="font-semibold">{fmt(totals.usdCash, "USD")}</TableCell>
-                      <TableCell className="font-semibold">{fmt(totals.dopCash, "DOP")}</TableCell>
-                      <TableCell className="font-semibold">{fmt(actualFeeDeducted, "DOP")}</TableCell>
-                      <TableCell className="font-semibold">{fmt(dopCashAfterFeeTotal, "DOP")}</TableCell>
-                      <TableCell className="font-semibold">{fmt(totals.usdTransfer, "USD")}</TableCell>
-                      <TableCell className="font-semibold">{fmt(totals.dopTransfer, "DOP")}</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    }}
+                  >
+                    Export CSV
+                  </Button>
+                  <Button size="sm" onClick={() => window.print()}>
+                    Print
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {loadingPayments ? (
+                  <div className="text-sm text-muted-foreground">Loading...</div>
+                ) : ownerRowsWithFee.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No payments found for this month.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Owner</TableHead>
+                          <TableHead>Cash USD</TableHead>
+                          <TableHead>Cash DOP</TableHead>
+                          <TableHead>Fee share (DOP)</TableHead>
+                          <TableHead>Cash DOP (after fee)</TableHead>
+                          <TableHead>Transfer USD</TableHead>
+                          <TableHead>Transfer DOP</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {ownerRowsWithFee.map((r) => {
+                          const feeShare = (r.cashDop ?? 0) - (r.cashDopAfterFee ?? r.cashDop ?? 0);
+                          return (
+                            <TableRow key={r.ownerId}>
+                              <TableCell className="font-medium">{r.name}</TableCell>
+                              <TableCell>{fmt(r.cashUsd, "USD")}</TableCell>
+                              <TableCell>{fmt(r.cashDop, "DOP")}</TableCell>
+                              <TableCell>{fmt(feeShare, "DOP")}</TableCell>
+                              <TableCell>{fmt(r.cashDopAfterFee ?? r.cashDop, "DOP")}</TableCell>
+                              <TableCell>{fmt(r.transferUsd, "USD")}</TableCell>
+                              <TableCell>{fmt(r.transferDop, "DOP")}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        <TableRow>
+                          <TableCell className="font-semibold">Totals</TableCell>
+                          <TableCell className="font-semibold">{fmt(totals.usdCash, "USD")}</TableCell>
+                          <TableCell className="font-semibold">{fmt(totals.dopCash, "DOP")}</TableCell>
+                          <TableCell className="font-semibold">{fmt(actualFeeDeducted, "DOP")}</TableCell>
+                          <TableCell className="font-semibold">{fmt(dopCashAfterFeeTotal, "DOP")}</TableCell>
+                          <TableCell className="font-semibold">{fmt(totals.usdTransfer, "USD")}</TableCell>
+                          <TableCell className="font-semibold">{fmt(totals.dopTransfer, "DOP")}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
 
         <Card>
           <CardHeader>
