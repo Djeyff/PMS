@@ -64,14 +64,15 @@ const TenantOverdue = () => {
     currencies.forEach((cur) => {
       const invs = (invoices ?? []).filter((i: any) => i.currency === cur);
 
-      // Payments relevant to this currency: same-currency OR cross-currency linked to an invoice in this currency
+      // Payments relevant to this currency:
+      // - Unlinked payments: show in their native currency tab
+      // - Linked payments: show only in the tab of the invoice's currency
       const paysRelevant = (payments ?? []).filter((p: any) => {
-        if (p.currency === cur) return true;
         if (p.invoice_id) {
           const ref = invoiceById.get(p.invoice_id);
           return ref ? ref.currency === cur : false;
         }
-        return false;
+        return p.currency === cur;
       });
 
       // Build ledger entries (amounts always in current tab currency)
