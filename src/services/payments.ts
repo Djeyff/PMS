@@ -76,6 +76,21 @@ export async function fetchPaymentsByTenant(tenantId: string) {
   return (data ?? []).map((row: any) => row as PaymentRow);
 }
 
+export async function fetchPaymentsByTenantWithRelations(tenantId: string) {
+  const { data, error } = await supabase
+    .from("payments")
+    .select(`
+      id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at, invoice_id, exchange_rate,
+      lease:leases ( id, property:properties ( id, name ) ),
+      tenant:profiles ( id, first_name, last_name )
+    `)
+    .eq("tenant_id", tenantId)
+    .order("received_date", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []).map(normalizePaymentRow);
+}
+
 export async function createPayment(input: {
   lease_id: string;
   tenant_id: string;

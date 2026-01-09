@@ -94,6 +94,30 @@ export async function fetchInvoicesByTenant(tenantId: string) {
   >;
 }
 
+export async function fetchInvoicesByTenantWithRelations(tenantId: string) {
+  const { data, error } = await supabase
+    .from("invoices")
+    .select(`
+      id, tenant_id, lease_id, number, issue_date, due_date, currency, total_amount, status, created_at,
+      lease:leases ( id, property:properties ( id, name ) ),
+      tenant:profiles ( id, first_name, last_name )
+    `)
+    .eq("tenant_id", tenantId)
+    .order("issue_date", { ascending: true });
+
+  if (error) throw error;
+
+  // Flatten relational arrays
+  return (data ?? []).map((row: any) => {
+    let leaseRel: any = Array.isArray(row.lease) ? row.lease[0] : row.lease ?? null;
+    if (leaseRel && Array.isArray(leaseRel.property)) {
+      leaseRel = { ...leaseRel, property: leaseRel.property[0] ?? null };
+    }
+    const tenantRel = Array.isArray(row.tenant) ? row.tenant[0] : row.tenant ?? null;
+    return { ...row, lease: leaseRel, tenant: tenantRel };
+  });
+}
+
 function autoNumber(): string {
   const d = new Date();
   const y = d.getFullYear();

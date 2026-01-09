@@ -5,8 +5,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { fetchInvoicesByTenant } from "@/services/invoices";
-import { fetchPaymentsByTenant } from "@/services/payments";
+import { fetchInvoicesByTenantWithRelations } from "@/services/invoices";
+import { fetchPaymentsByTenantWithRelations } from "@/services/payments";
 import { Button } from "@/components/ui/button";
 
 type LedgerEntry = {
@@ -15,6 +15,8 @@ type LedgerEntry = {
   description: string;
   amount: number; // positive = payment, negative = invoice
   currency: "USD" | "DOP";
+  property?: string | null;
+  tenant?: string | null;
 };
 
 const fmt = (amt: number, cur: string) =>
@@ -25,13 +27,13 @@ const TenantOverdue = () => {
   const tenantId = id!;
 
   const { data: invoices, isLoading: invLoading } = useQuery({
-    queryKey: ["tenant-invoices", tenantId],
-    queryFn: () => fetchInvoicesByTenant(tenantId),
+    queryKey: ["tenant-invoices-rel", tenantId],
+    queryFn: () => fetchInvoicesByTenantWithRelations(tenantId),
   });
 
   const { data: payments, isLoading: payLoading } = useQuery({
-    queryKey: ["tenant-payments", tenantId],
-    queryFn: () => fetchPaymentsByTenant(tenantId),
+    queryKey: ["tenant-payments-rel", tenantId],
+    queryFn: () => fetchPaymentsByTenantWithRelations(tenantId),
   });
 
   const currencies: Array<"USD" | "DOP"> = ["USD", "DOP"];
@@ -39,20 +41,36 @@ const TenantOverdue = () => {
 
   const contentByCurrency = useMemo(() => {
     const out: Record<"USD" | "DOP", {
-      overdue: Array<{ id: string; number: string | null; issue_date: string; due_date: string; total: number; paid: number; outstanding: number }>;
+      overdue: Array<{ id: string; number: string | null; issue_date: string; due_date: string; total: number; paid: number; outstanding: number; property_name: string; tenant_name: string }>;
       ledger: Array<LedgerEntry & { balance: number }>;
       totals: { totalInvoices: number; totalPayments: number; balance: number };
     }> = { USD: { overdue: [], ledger: [], totals: { totalInvoices: 0, totalPayments: 0, balance: 0 } }, DOP: { overdue: [], ledger: [], totals: { totalInvoices: 0, totalPayments: 0, balance: 0 } } };
 
     currencies.forEach((cur) => {
-      const invs = (invoices ?? []).filter((i) => i.currency === cur);
-      const pays = (payments ?? []).filter((p) => p.currency === cur);
+      const invs = (invoices ?? []).filter((i: any) => i.currency === cur);
+      const pays = (payments ?? []).filter((p: any) => p.currency === cur);
 
-      // Build ledger entries
+      // Build ledger entries with property/tenant
       const entries: LedgerEntry[] = [
-        ...invs.map((i) => ({ date: i.issue_date, type: "invoice" as const, description: i.number ?? i.id.slice(0, 8), amount: -Number(i.total_amount || 0), currency: cur })),
-        ...pays.map((p) => ({ date: p.received_date, type: "payment" as const, description: p.reference ?? p.method, amount: Number(p.amount || 0), currency: cur })),
-      ].sort((a, b) => a.date.localeCompare(b.date) || (a.type === "invoice" ? -1 : 1)); // invoices before payments on same day
+        ...invs.map((i: any) => ({
+          date: i.issue_date,
+          type: "invoice" as const,
+          description: i.number ?? i.id.slice(0, 8),
+          amount: -Number(i.total_amount || 0),
+          currency: cur,
+          property: i.lease?.property?.name ?? null,
+          tenant: [i.tenant?.first_name ?? "", i.tenant?.last_name ?? ""].filter(Boolean).join(" ") || null,
+        })),
+        ...pays.map((p: any) => ({
+          date: p.received_date,
+          type: "payment" as const,
+          description: p.reference ?? p.method,
+          amount: Number(p.amount || 0),
+          currency: cur,
+          property: p.lease?.property?.name ?? null,
+          tenant: [p.tenant?.first_name ?? "", p.tenant?.last_name ?? ""].filter(Boolean).join(" ") || null,
+        })),
+      ].sort((a, b) => a.date.localeCompare(b.date) || (a.type === "invoice" ? -1 : 1));
 
       let running = 0;
       const ledgerWithBalance = entries.map((e) => {
@@ -60,25 +78,36 @@ const TenantOverdue = () => {
         return { ...e, balance: running };
       });
 
-      const totalInvoices = invs.reduce((s, i) => s + Number(i.total_amount || 0), 0);
-      const totalPayments = pays.reduce((s, p) => s + Number(p.amount || 0), 0);
+      const totalInvoices = invs.reduce((s: number, i: any) => s + Number(i.total_amount || 0), 0);
+      const totalPayments = pays.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
       const balance = totalPayments - totalInvoices;
 
-      // Overdue invoices: due_date < today and outstanding < 0
+      // Overdue invoices with property/tenant
       const paidByInvoice = new Map<string, number>();
-      pays.forEach((p) => {
+      pays.forEach((p: any) => {
         if (p.invoice_id) {
           paidByInvoice.set(p.invoice_id, (paidByInvoice.get(p.invoice_id) ?? 0) + Number(p.amount || 0));
         }
       });
       const overdue = invs
-        .filter((i) => i.due_date < today)
-        .map((i) => {
+        .filter((i: any) => i.due_date < today)
+        .map((i: any) => {
           const paid = paidByInvoice.get(i.id) ?? 0;
           const outstanding = paid - Number(i.total_amount || 0);
-          return { id: i.id, number: i.number ?? null, issue_date: i.issue_date, due_date: i.due_date, total: Number(i.total_amount || 0), paid, outstanding };
+          const tenantName = [i.tenant?.first_name ?? "", i.tenant?.last_name ?? ""].filter(Boolean).join(" ");
+          return {
+            id: i.id,
+            number: i.number ?? null,
+            issue_date: i.issue_date,
+            due_date: i.due_date,
+            total: Number(i.total_amount || 0),
+            paid,
+            outstanding,
+            property_name: i.lease?.property?.name ?? "—",
+            tenant_name: tenantName || "—",
+          };
         })
-        .filter((row) => row.outstanding < 0);
+        .filter((row: any) => row.outstanding < 0);
 
       out[cur] = { overdue, ledger: ledgerWithBalance, totals: { totalInvoices, totalPayments, balance } };
     });
@@ -182,6 +211,8 @@ const TenantOverdue = () => {
                             <TableHeader>
                               <TableRow>
                                 <TableHead>No.</TableHead>
+                                <TableHead>Property</TableHead>
+                                <TableHead>Tenant</TableHead>
                                 <TableHead>Issue</TableHead>
                                 <TableHead>Due</TableHead>
                                 <TableHead className="text-right">Total</TableHead>
@@ -190,9 +221,11 @@ const TenantOverdue = () => {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {section.overdue.map((row) => (
+                              {section.overdue.map((row: any) => (
                                 <TableRow key={row.id}>
                                   <TableCell className="font-mono text-xs">{row.number ?? row.id.slice(0, 8)}</TableCell>
+                                  <TableCell>{row.property_name}</TableCell>
+                                  <TableCell>{row.tenant_name}</TableCell>
                                   <TableCell>{row.issue_date}</TableCell>
                                   <TableCell>{row.due_date}</TableCell>
                                   <TableCell className="text-right">{fmt(row.total, cur)}</TableCell>
@@ -219,16 +252,20 @@ const TenantOverdue = () => {
                               <TableRow>
                                 <TableHead>Date</TableHead>
                                 <TableHead>Type</TableHead>
+                                <TableHead>Property</TableHead>
+                                <TableHead>Tenant</TableHead>
                                 <TableHead>Description</TableHead>
                                 <TableHead className="text-right">Amount</TableHead>
                                 <TableHead className="text-right">Outstanding</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {section.ledger.map((e, idx) => (
+                              {section.ledger.map((e: any, idx: number) => (
                                 <TableRow key={idx}>
                                   <TableCell>{e.date}</TableCell>
                                   <TableCell className="capitalize">{e.type}</TableCell>
+                                  <TableCell>{e.property ?? "—"}</TableCell>
+                                  <TableCell>{e.tenant ?? "—"}</TableCell>
                                   <TableCell>{e.description}</TableCell>
                                   <TableCell className="text-right">{fmt(e.amount, cur)}</TableCell>
                                   <TableCell className="text-right font-medium">{fmt(e.balance, cur)}</TableCell>
