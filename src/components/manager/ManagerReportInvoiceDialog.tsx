@@ -149,7 +149,7 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl invoice-print bg-white text-black p-6">
+      <DialogContent className="max-w-3xl invoice-print bg-white text-black p-6 rounded-md overflow-hidden">
         <DialogHeader>
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-3">
@@ -168,7 +168,7 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
           </div>
         </DialogHeader>
 
-        <div className="border rounded-md divide-y mt-4">
+        <div className="border rounded-md divide-y mt-4 bg-white">
           <div className="p-3">
             <div className="text-xs font-medium mb-1">Cash totals</div>
             <div className="space-y-1 text-sm">
@@ -192,14 +192,11 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
               <div className="font-semibold">
                 {fmt(managerFeeDop, "DOP")} ({feePct.toFixed(2)}%)
               </div>
-              <div className="text-xs text-gray-600">
-                Deducted from DOP cash: {fmt(actualFeeDeducted, "DOP")}
-              </div>
             </div>
           </div>
         </div>
 
-        <div className="border rounded-md mt-4">
+        <div className="border rounded-md mt-4 bg-white">
           <Table>
             <TableHeader>
               <TableRow>

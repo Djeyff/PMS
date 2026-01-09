@@ -398,7 +398,6 @@ const ManagerReport = () => {
                     Fee base: {fmt(dopTotal, "DOP")} DOP + {usdTotal.toFixed(2)} USD × {Number.isNaN(rateNum) ? "rate ?" : rateNum} = {fmt(feeBaseDop, "DOP")}
                   </div>
                   <div className="text-2xl font-bold">{fmt(managerFeeDop, "DOP")}</div>
-                  <div className="text-xs text-muted-foreground mt-1">Deducted from DOP cash: {fmt(actualFeeDeducted, "DOP")}</div>
                 </CardContent>
               </Card>
             </div>
