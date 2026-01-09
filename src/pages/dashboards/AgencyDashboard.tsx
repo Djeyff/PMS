@@ -85,6 +85,32 @@ const AgencyDashboard = () => {
     return (invoices ?? []).filter((inv: any) => inv.due_date < today && inv.status !== "paid" && inv.status !== "void").length;
   })();
 
+  const overdueAmounts = (() => {
+    const today = new Date().toISOString().slice(0, 10);
+    let usd = 0;
+    let dop = 0;
+    (invoices ?? []).forEach((inv: any) => {
+      if (inv.due_date >= today || inv.status === "paid" || inv.status === "void") return;
+      const currency = inv.currency as "USD" | "DOP";
+      const total = Number(inv.total_amount || 0);
+      const paidConverted = (inv.payments ?? []).reduce((sum: number, p: any) => {
+        const amt = Number(p.amount || 0);
+        if (p.currency === currency) return sum + amt;
+        const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : null;
+        if (!rate || rate <= 0) return sum;
+        if (currency === "USD" && p.currency === "DOP") return sum + amt / rate; // DOP -> USD
+        if (currency === "DOP" && p.currency === "USD") return sum + amt * rate; // USD -> DOP
+        return sum;
+      }, 0);
+      const remaining = Math.max(0, total - paidConverted);
+      if (remaining > 0) {
+        if (currency === "USD") usd += remaining;
+        else dop += remaining;
+      }
+    });
+    return { usd, dop };
+  })();
+
   const pendingInvoices = (() => {
     const list = (invoices ?? [])
       .filter((inv: any) => inv.status === "sent" || inv.status === "partial" || inv.status === "overdue")
@@ -139,7 +165,13 @@ const AgencyDashboard = () => {
             <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(monthlyByMethod.cashDop)} DOP</span>
           </div>
         </Stat>
-        <Stat title="Overdue Invoices" value={String(overdueCount)} />
+        <Stat title="Overdue Invoices">
+          <div className="flex flex-col text-base font-normal">
+            <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(overdueAmounts.usd)} USD</span>
+            <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(overdueAmounts.dop)} DOP</span>
+            <span className="text-xs text-muted-foreground mt-1">Count: {overdueCount}</span>
+          </div>
+        </Stat>
         <Stat title="Open Maintenance" value={String(maintenance?.length ?? 0)} />
       </div>
       <div className="grid gap-4 grid-cols-1">
