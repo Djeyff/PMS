@@ -71,8 +71,9 @@ const Invoices = () => {
     if (s === "overdue") return { cls: "text-red-600", label: "Overdue" };
     if (s === "partial") return { cls: "text-orange-600", label: "Partial" };
     if (s === "paid") return { cls: "text-green-600", label: "Paid" };
-    if (s === "sent" || s === "void") return { cls: "text-black", label: s[0].toUpperCase() + s.slice(1) };
-    return { cls: "text-black", label: s.replace("_", " ") };
+    // Ensure visibility in dark theme: white text, black in light theme
+    if (s === "sent" || s === "void") return { cls: "text-black dark:text-white", label: s[0].toUpperCase() + s.slice(1) };
+    return { cls: "text-black dark:text-white", label: s.replace("_", " ") };
   };
 
   return (
