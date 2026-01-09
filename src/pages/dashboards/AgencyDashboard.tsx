@@ -101,7 +101,9 @@ const AgencyDashboard = () => {
       if (!l?.end_date) return false;
       const end = parseISO(l.end_date);
       const diff = differenceInCalendarDays(end, now);
-      return diff >= 0 && diff <= 45;
+      const isExpiringSoon = diff >= 0 && diff <= 45;
+      const isExpiredNotTerminated = diff < 0 && String(l.status) !== "terminated";
+      return isExpiringSoon || isExpiredNotTerminated;
     });
     return list.sort((a: any, b: any) => (a.end_date < b.end_date ? -1 : 1)).slice(0, 6);
   })();
@@ -180,7 +182,12 @@ const AgencyDashboard = () => {
                           .join(" ") || (l.tenant_id ? l.tenant_id.slice(0, 6) : "Tenant")}
                       </span>
                     </div>
-                    <div className="text-sm text-muted-foreground">{format(parseISO(l.end_date), "yyyy-MM-dd")}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {format(parseISO(l.end_date), "yyyy-MM-dd")}
+                      {differenceInCalendarDays(parseISO(l.end_date), new Date()) < 0 && String(l.status) !== "terminated" ? (
+                        <span className="ml-2 text-red-600 text-xs">Expired</span>
+                      ) : null}
+                    </div>
                   </li>
                 ))}
               </ul>
