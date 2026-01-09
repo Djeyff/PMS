@@ -130,26 +130,25 @@ const Reports = () => {
 
   // Invoice aging
   const aging = useMemo(() => {
-    const todayStr = endDate; // consider endDate as "today" for report
+    const todayStr = endDate; // consider endDate as "today" for report view
     const pendings = (invoices ?? []).filter((inv: any) => inv.status !== "paid" && inv.status !== "void");
     const inRange = pendings.filter((inv: any) => inv.due_date <= todayStr);
     const bucket = { current: 0, "1-30": 0, "31-60": 0, "61+": 0 };
+    const totalsByBucket: Record<"current" | "1-30" | "31-60" | "61+", { USD: number; DOP: number }> = {
+      current: { USD: 0, DOP: 0 },
+      "1-30": { USD: 0, DOP: 0 },
+      "31-60": { USD: 0, DOP: 0 },
+      "61+": { USD: 0, DOP: 0 },
+    };
     inRange.forEach((inv: any) => {
       const days = Math.max(0, Math.floor((Date.parse(todayStr) - Date.parse(inv.due_date)) / (24 * 3600 * 1000)));
-      if (days === 0) bucket.current += 1;
-      else if (days <= 30) bucket["1-30"] += 1;
-      else if (days <= 60) bucket["31-60"] += 1;
-      else bucket["61+"] += 1;
+      const key: "current" | "1-30" | "31-60" | "61+" =
+        days === 0 ? "current" : days <= 30 ? "1-30" : days <= 60 ? "31-60" : "61+";
+      bucket[key] += 1;
+      const cur = inv.currency as "USD" | "DOP";
+      totalsByBucket[key][cur] += Number(inv.total_amount || 0);
     });
-    // Totals by currency
-    const totals = (invoices ?? [])
-      .filter((inv: any) => inv.status !== "paid" && inv.status !== "void")
-      .reduce((acc: any, inv: any) => {
-        const cur = inv.currency;
-        acc[cur] = (acc[cur] ?? 0) + Number(inv.total_amount || 0);
-        return acc;
-      }, {} as Record<string, number>);
-    return { bucket, totals };
+    return { bucket, totalsByBucket };
   }, [invoices, endDate]);
 
   // Owner payouts (weighted by ownership)
@@ -285,14 +284,14 @@ const Reports = () => {
             <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Bank Transfer</CardTitle></CardHeader>
             <CardContent className="text-base font-normal">
               <div className="text-lg font-semibold">{fmtMoney(revenue.bankUsd, "USD")} USD</div>
-              <div className="text-muted-foreground text-sm">{fmtMoney(revenue.bankDop, "DOP")} DOP</div>
+              <div className="text-lg font-semibold">{fmtMoney(revenue.bankDop, "DOP")} DOP</div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Cash</CardTitle></CardHeader>
             <CardContent className="text-base font-normal">
               <div className="text-lg font-semibold">{fmtMoney(revenue.cashUsd, "USD")} USD</div>
-              <div className="text-muted-foreground text-sm">{fmtMoney(revenue.cashDop, "DOP")} DOP</div>
+              <div className="text-lg font-semibold">{fmtMoney(revenue.cashDop, "DOP")} DOP</div>
             </CardContent>
           </Card>
         </div>
@@ -305,10 +304,10 @@ const Reports = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => exportCSV("invoice_aging.csv", ["Bucket", "Count", "Total USD", "Total DOP"], [
-                  ["Current", String(aging.bucket.current), String(aging.totals["USD"] ?? 0), String(aging.totals["DOP"] ?? 0)],
-                  ["1-30", String(aging.bucket["1-30"]), "", ""],
-                  ["31-60", String(aging.bucket["31-60"]), "", ""],
-                  ["61+", String(aging.bucket["61+"]), "", ""],
+                  ["Current", String(aging.bucket.current), (aging.totalsByBucket.current.USD ?? 0).toFixed(2), (aging.totalsByBucket.current.DOP ?? 0).toFixed(2)],
+                  ["1-30", String(aging.bucket["1-30"]), (aging.totalsByBucket["1-30"].USD ?? 0).toFixed(2), (aging.totalsByBucket["1-30"].DOP ?? 0).toFixed(2)],
+                  ["31-60", String(aging.bucket["31-60"]), (aging.totalsByBucket["31-60"].USD ?? 0).toFixed(2), (aging.totalsByBucket["31-60"].DOP ?? 0).toFixed(2)],
+                  ["61+", String(aging.bucket["61+"]), (aging.totalsByBucket["61+"].USD ?? 0).toFixed(2), (aging.totalsByBucket["61+"].DOP ?? 0).toFixed(2)],
                 ])}
               >
                 Export CSV
@@ -328,26 +327,26 @@ const Reports = () => {
                   <TableRow>
                     <TableCell>Current</TableCell>
                     <TableCell>{aging.bucket.current}</TableCell>
-                    <TableCell>{fmtMoney(aging.totals["USD"] ?? 0, "USD")}</TableCell>
-                    <TableCell>{fmtMoney(aging.totals["DOP"] ?? 0, "DOP")}</TableCell>
+                    <TableCell>{fmtMoney(aging.totalsByBucket.current.USD ?? 0, "USD")}</TableCell>
+                    <TableCell>{fmtMoney(aging.totalsByBucket.current.DOP ?? 0, "DOP")}</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell>1-30</TableCell>
                     <TableCell>{aging.bucket["1-30"]}</TableCell>
-                    <TableCell>—</TableCell>
-                    <TableCell>—</TableCell>
+                    <TableCell>{fmtMoney(aging.totalsByBucket["1-30"].USD ?? 0, "USD")}</TableCell>
+                    <TableCell>{fmtMoney(aging.totalsByBucket["1-30"].DOP ?? 0, "DOP")}</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell>31-60</TableCell>
                     <TableCell>{aging.bucket["31-60"]}</TableCell>
-                    <TableCell>—</TableCell>
-                    <TableCell>—</TableCell>
+                    <TableCell>{fmtMoney(aging.totalsByBucket["31-60"].USD ?? 0, "USD")}</TableCell>
+                    <TableCell>{fmtMoney(aging.totalsByBucket["31-60"].DOP ?? 0, "DOP")}</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell>61+</TableCell>
                     <TableCell>{aging.bucket["61+"]}</TableCell>
-                    <TableCell>—</TableCell>
-                    <TableCell>—</TableCell>
+                    <TableCell>{fmtMoney(aging.totalsByBucket["61+"].USD ?? 0, "USD")}</TableCell>
+                    <TableCell>{fmtMoney(aging.totalsByBucket["61+"].DOP ?? 0, "DOP")}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>

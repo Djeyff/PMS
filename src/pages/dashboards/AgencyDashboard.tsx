@@ -130,13 +130,13 @@ const AgencyDashboard = () => {
         <Stat title="Bank Transfer">
           <div className="flex flex-col text-base font-normal">
             <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(monthlyByMethod.bankUsd)} USD</span>
-            <span className="text-muted-foreground text-sm">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(monthlyByMethod.bankDop)} DOP</span>
+            <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(monthlyByMethod.bankDop)} DOP</span>
           </div>
         </Stat>
         <Stat title="Cash">
           <div className="flex flex-col text-base font-normal">
             <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(monthlyByMethod.cashUsd)} USD</span>
-            <span className="text-muted-foreground text-sm">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(monthlyByMethod.cashDop)} DOP</span>
+            <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(monthlyByMethod.cashDop)} DOP</span>
           </div>
         </Stat>
         <Stat title="Overdue Invoices" value={String(overdueCount)} />
