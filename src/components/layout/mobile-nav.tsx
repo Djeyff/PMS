@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Building2, Users, FileText, Wrench, Receipt, CreditCard, Settings, BarChart3, History } from "lucide-react";
+import { Home, Building2, Users, FileText, Wrench, Receipt, CreditCard, Settings, BarChart3, History, UserCog } from "lucide-react";
 import { useAuth } from "@/contexts/AuthProvider";
 
 type NavItem = {
@@ -22,6 +22,7 @@ const navItems: NavItem[] = [
   { to: "/payments", label: "Payments", icon: CreditCard, roles: ["agency_admin", "owner", "tenant"] },
   { to: "/maintenance", label: "Maintenance", icon: Wrench, roles: ["agency_admin", "owner", "tenant"] },
   { to: "/reports", label: "Reports", icon: BarChart3, roles: ["agency_admin", "owner"] },
+  { to: "/manager-report", label: "Manager Report", icon: UserCog, roles: ["agency_admin"] },
   { to: "/contracts", label: "Contracts", icon: FileText, roles: ["agency_admin"] },
   { to: "/outstanding", label: "Outstanding", icon: History, roles: ["agency_admin"] },
   { to: "/logs", label: "Activity Log", icon: History, roles: ["agency_admin"] },
