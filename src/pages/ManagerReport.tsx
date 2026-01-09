@@ -22,6 +22,20 @@ type OwnerRow = {
   cashDopAfterFee?: number;
 };
 
+// Utility to export CSV
+function exportCSV(filename: string, headers: string[], rows: (string | number)[][]) {
+  const csv = [headers.join(","), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function fmt(amount: number, currency: "USD" | "DOP") {
   return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
 }
@@ -139,32 +153,45 @@ const ManagerReport = () => {
     return Array.from(map.values());
   }, [ownerships, filteredPayments]);
 
-  // Manager fee: 5% of total DOP cash for the month (not per owner); then allocate deduction pro-rata across owners by their DOP cash share
-  const managerFeeDop = useMemo(() => {
-    const totalDopCash = ownerRows.reduce((s, r) => s + r.cashDop, 0);
-    const fee = totalDopCash * 0.05;
-    return fee;
-  }, [ownerRows]);
-
-  const ownerRowsWithFee = useMemo(() => {
-    const totalDopCash = ownerRows.reduce((s, r) => s + r.cashDop, 0);
-    if (totalDopCash <= 0) return ownerRows.map((r) => ({ ...r, cashDopAfterFee: r.cashDop }));
-    return ownerRows.map((r) => {
-      const share = r.cashDop / totalDopCash;
-      const deducted = managerFeeDop * share;
-      return { ...r, cashDopAfterFee: Math.max(0, r.cashDop - deducted) };
-    });
-  }, [ownerRows, managerFeeDop]);
-
-  // Totals summary
+  // Totals summary (by method and currency only)
   const totals = useMemo(() => {
     const usdCash = ownerRows.reduce((s, r) => s + r.cashUsd, 0);
     const dopCash = ownerRows.reduce((s, r) => s + r.cashDop, 0);
     const usdTransfer = ownerRows.reduce((s, r) => s + r.transferUsd, 0);
     const dopTransfer = ownerRows.reduce((s, r) => s + r.transferDop, 0);
-    const dopCashAfterFee = ownerRowsWithFee.reduce((s, r) => s + (r.cashDopAfterFee ?? r.cashDop), 0);
-    return { usdCash, dopCash, usdTransfer, dopTransfer, managerFeeDop, dopCashAfterFee };
-  }, [ownerRows, ownerRowsWithFee, managerFeeDop]);
+    return { usdCash, dopCash, usdTransfer, dopTransfer };
+  }, [ownerRows]);
+
+  // Compute manager fee (5% of ALL transactions, USD converted to DOP with avg rate)
+  const rateNum = useMemo(() => {
+    const n = Number(avgRateInput);
+    return Number.isFinite(n) && n > 0 ? n : NaN;
+  }, [avgRateInput]);
+
+  const usdTotal = totals.usdCash + totals.usdTransfer;
+  const dopTotal = totals.dopCash + totals.dopTransfer;
+  const feeBaseDop = (Number.isNaN(rateNum) ? 0 : usdTotal * rateNum) + dopTotal;
+  const managerFeeDop = feeBaseDop * 0.05;
+
+  // Deduct fee from DOP cash pro-rata; cap deduction at available DOP cash
+  const actualFeeDeducted = Math.min(managerFeeDop, totals.dopCash);
+
+  const ownerRowsWithFee = useMemo(() => {
+    const totalDopCash = totals.dopCash;
+    if (totalDopCash <= 0 || actualFeeDeducted <= 0) {
+      return ownerRows.map((r) => ({ ...r, cashDopAfterFee: r.cashDop }));
+    }
+    return ownerRows.map((r) => {
+      const share = r.cashDop / totalDopCash;
+      const deducted = actualFeeDeducted * share;
+      return { ...r, cashDopAfterFee: Math.max(0, r.cashDop - deducted) };
+    });
+  }, [ownerRows, totals.dopCash, actualFeeDeducted]);
+
+  const dopCashAfterFeeTotal = useMemo(
+    () => ownerRowsWithFee.reduce((s, r) => s + (r.cashDopAfterFee ?? r.cashDop), 0),
+    [ownerRowsWithFee]
+  );
 
   const applySuggestedRate = () => {
     if (suggestedRate == null) {
@@ -212,6 +239,19 @@ const ManagerReport = () => {
           </div>
         </div>
 
+        {/* Warning if rate missing but USD exists */}
+        {(usdTotal > 0 && Number.isNaN(rateNum)) && (
+          <div className="text-sm text-destructive">
+            Enter the average USD/DOP rate to include USD transactions in the 5% fee calculation.
+          </div>
+        )}
+        {/* Info if fee exceeds DOP cash */}
+        {(managerFeeDop > totals.dopCash && managerFeeDop > 0) && (
+          <div className="text-sm text-muted-foreground">
+            Fee exceeds available DOP cash; only {fmt(actualFeeDeducted, "DOP")} will be deducted this month.
+          </div>
+        )}
+
         <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Cash totals</CardTitle></CardHeader>
@@ -232,9 +272,13 @@ const ManagerReport = () => {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Manager fee (5% of DOP cash)</CardTitle></CardHeader>
-            <CardContent className="text-2xl font-bold">
-              {fmt(totals.managerFeeDop, "DOP")}
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Manager fee (5% of all transactions)</CardTitle></CardHeader>
+            <CardContent>
+              <div className="text-xs text-muted-foreground mb-1">
+                Fee base: {fmt(dopTotal, "DOP")} DOP + {usdTotal.toFixed(2)} USD × {Number.isNaN(rateNum) ? "rate ?" : rateNum} = {fmt(feeBaseDop, "DOP")}
+              </div>
+              <div className="text-2xl font-bold">{fmt(managerFeeDop, "DOP")}</div>
+              <div className="text-xs text-muted-foreground mt-1">Deducted from DOP cash: {fmt(actualFeeDeducted, "DOP")}</div>
             </CardContent>
           </Card>
         </div>
@@ -242,8 +286,34 @@ const ManagerReport = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Owner Breakdown</CardTitle>
-            <div className="text-sm text-muted-foreground">
-              Cash after fee shows DOP cash minus manager fee proportionally allocated by each owner's DOP cash share.
+            <div className="flex items-center gap-2 print:hidden">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const rows = ownerRowsWithFee.map((r) => {
+                    const feeShare = (r.cashDop ?? 0) - (r.cashDopAfterFee ?? r.cashDop ?? 0);
+                    return [
+                      r.name,
+                      r.cashUsd.toFixed(2),
+                      r.cashDop.toFixed(2),
+                      feeShare.toFixed(2),
+                      (r.cashDopAfterFee ?? r.cashDop).toFixed(2),
+                      r.transferUsd.toFixed(2),
+                      r.transferDop.toFixed(2),
+                    ];
+                  });
+                  exportCSV("manager_owner_breakdown.csv",
+                    ["Owner", "Cash USD", "Cash DOP", "Fee share (DOP)", "Cash DOP after fee", "Transfer USD", "Transfer DOP"],
+                    rows
+                  );
+                }}
+              >
+                Export CSV
+              </Button>
+              <Button size="sm" onClick={() => window.print()}>
+                Print
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -259,27 +329,33 @@ const ManagerReport = () => {
                       <TableHead>Owner</TableHead>
                       <TableHead>Cash USD</TableHead>
                       <TableHead>Cash DOP</TableHead>
+                      <TableHead>Fee share (DOP)</TableHead>
                       <TableHead>Cash DOP (after fee)</TableHead>
                       <TableHead>Transfer USD</TableHead>
                       <TableHead>Transfer DOP</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {ownerRowsWithFee.map((r) => (
-                      <TableRow key={r.ownerId}>
-                        <TableCell className="font-medium">{r.name}</TableCell>
-                        <TableCell>{fmt(r.cashUsd, "USD")}</TableCell>
-                        <TableCell>{fmt(r.cashDop, "DOP")}</TableCell>
-                        <TableCell>{fmt(r.cashDopAfterFee ?? r.cashDop, "DOP")}</TableCell>
-                        <TableCell>{fmt(r.transferUsd, "USD")}</TableCell>
-                        <TableCell>{fmt(r.transferDop, "DOP")}</TableCell>
-                      </TableRow>
-                    ))}
+                    {ownerRowsWithFee.map((r) => {
+                      const feeShare = (r.cashDop ?? 0) - (r.cashDopAfterFee ?? r.cashDop ?? 0);
+                      return (
+                        <TableRow key={r.ownerId}>
+                          <TableCell className="font-medium">{r.name}</TableCell>
+                          <TableCell>{fmt(r.cashUsd, "USD")}</TableCell>
+                          <TableCell>{fmt(r.cashDop, "DOP")}</TableCell>
+                          <TableCell>{fmt(feeShare, "DOP")}</TableCell>
+                          <TableCell>{fmt(r.cashDopAfterFee ?? r.cashDop, "DOP")}</TableCell>
+                          <TableCell>{fmt(r.transferUsd, "USD")}</TableCell>
+                          <TableCell>{fmt(r.transferDop, "DOP")}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                     <TableRow>
                       <TableCell className="font-semibold">Totals</TableCell>
                       <TableCell className="font-semibold">{fmt(totals.usdCash, "USD")}</TableCell>
                       <TableCell className="font-semibold">{fmt(totals.dopCash, "DOP")}</TableCell>
-                      <TableCell className="font-semibold">{fmt(totals.dopCashAfterFee, "DOP")}</TableCell>
+                      <TableCell className="font-semibold">{fmt(actualFeeDeducted, "DOP")}</TableCell>
+                      <TableCell className="font-semibold">{fmt(dopCashAfterFeeTotal, "DOP")}</TableCell>
                       <TableCell className="font-semibold">{fmt(totals.usdTransfer, "USD")}</TableCell>
                       <TableCell className="font-semibold">{fmt(totals.dopTransfer, "DOP")}</TableCell>
                     </TableRow>
@@ -296,9 +372,9 @@ const ManagerReport = () => {
           </CardHeader>
           <CardContent>
             <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
-              <li>Manager fee is fixed at 5% of total DOP cash for the selected month.</li>
-              <li>Use Avg USD/DOP rate to help with accounting; it does not change fee calculation (fee is DOP-based).</li>
-              <li>Owner amounts are computed pro‑rata from each property’s ownership percent.</li>
+              <li>Manager fee is 5% of all transactions for the selected month (USD converted to DOP using the average rate).</li>
+              <li>The fee is deducted from DOP cash only, proportionally to each owner's DOP cash share.</li>
+              <li>If the fee exceeds available DOP cash, only the available DOP cash is deducted.</li>
               <li>Transfers refer to bank_transfer; other methods are categorized as cash.</li>
             </ul>
           </CardContent>
