@@ -97,7 +97,7 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
       <DialogTrigger asChild>
         <Button variant="secondary" size="sm">Edit</Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[720px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Lease</DialogTitle>
         </DialogHeader>

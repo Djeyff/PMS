@@ -18,6 +18,7 @@ const AddTenantDialog = ({ onCreated, triggerLabel = "Add Tenant" }: Props) => {
   const [email, setEmail] = useState("");
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
+  const [phone, setPhone] = useState("");
 
   const onSave = async () => {
     if (!email && !first && !last) {
@@ -31,12 +32,14 @@ const AddTenantDialog = ({ onCreated, triggerLabel = "Add Tenant" }: Props) => {
         email: email || undefined,
         first_name: first || undefined,
         last_name: last || undefined,
+        phone: phone || undefined,
       });
       toast.success("Tenant added");
       setOpen(false);
       setEmail("");
       setFirst("");
       setLast("");
+      setPhone("");
       onCreated?.(id);
     } catch (e: any) {
       console.error("Invite tenant failed:", e);
@@ -69,6 +72,10 @@ const AddTenantDialog = ({ onCreated, triggerLabel = "Add Tenant" }: Props) => {
               <Label>Last name (optional)</Label>
               <Input value={last} onChange={(e) => setLast(e.target.value)} placeholder="Last name" />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Phone (optional)</Label>
+            <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 555 123 4567 (optional)" />
           </div>
           <div className="pt-2">
             <Button onClick={onSave} disabled={saving}>

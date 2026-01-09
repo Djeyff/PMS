@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 const INVITE_FN_URL = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/invite-tenant";
 const DELETE_FN_URL = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/delete-tenant";
 
-export async function inviteTenant(input: { email?: string; first_name?: string; last_name?: string }) {
+export async function inviteTenant(input: { email?: string; first_name?: string; last_name?: string; phone?: string }) {
   const { data: sess } = await supabase.auth.getSession();
   const token = sess.session?.access_token;
   if (!token) throw new Error("Not authenticated");

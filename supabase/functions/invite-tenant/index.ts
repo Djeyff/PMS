@@ -1,5 +1,10 @@
+// @ts-ignore: Deno runtime remote import
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+// @ts-ignore: Deno runtime remote import
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+// minimal Deno declaration for web build type-check
+declare const Deno: { env: { get(name: string): string | undefined } };
 
 function buildCorsHeaders(origin: string | null) {
   return {
@@ -55,6 +60,7 @@ serve(async (req) => {
     const email: string | undefined = body?.email;
     const first_name: string | undefined = body?.first_name;
     const last_name: string | undefined = body?.last_name;
+    const phone: string | undefined = body?.phone;
 
     // Service client (bypass RLS)
     const admin = createClient(supabaseUrl, serviceKey);
@@ -108,7 +114,7 @@ serve(async (req) => {
     const { error: upsertErr } = await admin
       .from("profiles")
       .upsert(
-        { id: newUserId, role: "tenant", agency_id: agencyId, first_name: first_name ?? null, last_name: last_name ?? null },
+        { id: newUserId, role: "tenant", agency_id: agencyId, first_name: first_name ?? null, last_name: last_name ?? null, phone: phone ?? null },
         { onConflict: "id" }
       );
     if (upsertErr) {
@@ -124,7 +130,7 @@ serve(async (req) => {
       action: "invite_tenant",
       entity_type: "profile",
       entity_id: newUserId,
-      metadata: { first_name, last_name, email: email ?? null },
+      metadata: { first_name, last_name, email: email ?? null, phone: phone ?? null },
     });
 
     return new Response(JSON.stringify({ id: newUserId }), {
