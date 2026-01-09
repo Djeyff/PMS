@@ -121,16 +121,52 @@ const InvoiceDetail = () => {
   const fmt = (amt: number, cur: string) => new Intl.NumberFormat(fmtLocale, { style: "currency", currency: cur }).format(amt);
 
   // Compute paid using currency conversion (exchange_rate), then balance
-  const paidConverted = (inv.payments ?? []).reduce((sum: number, p: any) => {
+  const payments = (inv.payments ?? []);
+  const paidConverted = payments.reduce((sum: number, p: any) => {
     const amt = Number(p.amount || 0);
     if (p.currency === inv.currency) return sum + amt;
-    // Convert using exchange_rate when available
     const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : null;
     if (!rate || rate <= 0) return sum;
     if (inv.currency === "USD" && p.currency === "DOP") return sum + amt / rate; // DOP → USD
     if (inv.currency === "DOP" && p.currency === "USD") return sum + amt * rate; // USD → DOP
     return sum;
   }, 0);
+
+  // Prepare original-currency paid display with exchange rate
+  const dopPayments = payments.filter((p: any) => p.currency === "DOP");
+  const usdPayments = payments.filter((p: any) => p.currency === "USD");
+  const dopTotal = dopPayments.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+  const usdTotal = usdPayments.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+
+  const dopRates = Array.from(new Set(dopPayments.map((p: any) => (typeof p.exchange_rate === "number" ? p.exchange_rate : null)).filter((r) => r)));
+  const usdRates = Array.from(new Set(usdPayments.map((p: any) => (typeof p.exchange_rate === "number" ? p.exchange_rate : null)).filter((r) => r)));
+
+  const dopConvertedToUSD = dopPayments.reduce((s: number, p: any) => {
+    const amt = Number(p.amount || 0);
+    const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : null;
+    if (!rate || rate <= 0) return s;
+    return s + amt / rate;
+  }, 0);
+
+  const usdConvertedToDOP = usdPayments.reduce((s: number, p: any) => {
+    const amt = Number(p.amount || 0);
+    const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : null;
+    if (!rate || rate <= 0) return s;
+    return s + amt * rate;
+  }, 0);
+
+  const paidDisplayText = (() => {
+    if (inv.currency === "USD" && dopTotal > 0) {
+      const rateLabel = dopRates.length === 1 ? String(dopRates[0]) : dopRates.length > 1 ? dopRates.join(", ") : "—";
+      return `${fmt(dopTotal, "DOP")} @ ${rateLabel} ≈ ${fmt(dopConvertedToUSD, "USD")}`;
+    }
+    if (inv.currency === "DOP" && usdTotal > 0) {
+      const rateLabel = usdRates.length === 1 ? String(usdRates[0]) : usdRates.length > 1 ? usdRates.join(", ") : "—";
+      return `${fmt(usdTotal, "USD")} @ ${rateLabel} ≈ ${fmt(usdConvertedToDOP, "DOP")}`;
+    }
+    // Same-currency payments
+    return fmt(paidConverted, inv.currency);
+  })();
 
   const balance = Number(inv.total_amount) - paidConverted;
   const today = new Date().toISOString().slice(0, 10);
@@ -139,17 +175,36 @@ const InvoiceDetail = () => {
   else if (inv.due_date < today && inv.status !== "void") displayStatus = "overdue";
   else if (paidConverted > 0) displayStatus = "partial";
 
-  // Compute previous and overall tenant balances in the invoice currency
+  // Helper to convert any payment to the invoice currency
+  const convertToInvoiceCurrency = (amt: number, cur: "USD" | "DOP", rate: number | null, invCur: "USD" | "DOP") => {
+    if (cur === invCur) return amt;
+    if (!rate || rate <= 0) return 0;
+    if (invCur === "USD" && cur === "DOP") return amt / rate;
+    if (invCur === "DOP" && cur === "USD") return amt * rate;
+    return 0;
+  };
+
+  // Compute previous and overall tenant balances in the invoice currency (convert cross-currency payments)
   const invCurrency = inv.currency;
   const invIssue = inv.issue_date;
   const prevInvoices = (tenantInvoices ?? []).filter((i: any) => i.currency === invCurrency && i.issue_date < invIssue && i.id !== inv.id);
   const prevTotals = prevInvoices.reduce((s: number, i: any) => s + Number(i.total_amount || 0), 0);
-  const prevPayments = (tenantPayments ?? []).filter((p: any) => p.currency === invCurrency && p.received_date < invIssue).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-  const previousBalance = prevPayments - prevTotals;
 
-  const allTotalsToDate = (tenantInvoices ?? []).filter((i: any) => i.currency === invCurrency && i.issue_date <= invIssue).reduce((s: number, i: any) => s + Number(i.total_amount || 0), 0);
-  const allPaymentsToDate = (tenantPayments ?? []).filter((p: any) => p.currency === invCurrency && p.received_date <= invIssue).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-  const overallBalance = allPaymentsToDate - allTotalsToDate;
+  const prevPaymentsConverted = (tenantPayments ?? [])
+    .filter((p: any) => p.received_date < invIssue)
+    .reduce((s: number, p: any) => s + convertToInvoiceCurrency(Number(p.amount || 0), p.currency, typeof p.exchange_rate === "number" ? p.exchange_rate : null, invCurrency), 0);
+
+  const previousBalance = prevPaymentsConverted - prevTotals;
+
+  const allTotalsToDate = (tenantInvoices ?? [])
+    .filter((i: any) => i.currency === invCurrency && i.issue_date <= invIssue)
+    .reduce((s: number, i: any) => s + Number(i.total_amount || 0), 0);
+
+  const allPaymentsToDateConverted = (tenantPayments ?? [])
+    .filter((p: any) => p.received_date <= invIssue)
+    .reduce((s: number, p: any) => s + convertToInvoiceCurrency(Number(p.amount || 0), p.currency, typeof p.exchange_rate === "number" ? p.exchange_rate : null, invCurrency), 0);
+
+  const overallBalance = allPaymentsToDateConverted - allTotalsToDate;
 
   // Branding
   const agencyName = agency?.name ?? "Las Terrenas Properties";
@@ -320,7 +375,7 @@ const InvoiceDetail = () => {
           <div className="text-lg font-semibold">{fmt(Number(inv.total_amount), inv.currency)}</div>
 
           <div className="font-medium mt-2">{lang === "es" ? "Pagado" : "Paid"} :</div>
-          <div>{fmt(paidConverted, inv.currency)}</div>
+          <div>{paidDisplayText}</div>
 
           <div className="font-medium mt-2">{lang === "es" ? "Tasa de Cambio" : "Exchange Rate"} :</div>
           <div className="text-sm">{exchangeRateDisplay}</div>
