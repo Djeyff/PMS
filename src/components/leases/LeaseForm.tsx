@@ -49,6 +49,10 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
   const [kdriveFolderUrl, setKdriveFolderUrl] = useState<string>("");
   const [kdriveFileUrl, setKdriveFileUrl] = useState<string>("");
 
+  // ADDED: annual increase option
+  const [annualIncreaseEnabled, setAnnualIncreaseEnabled] = useState<boolean>(false);
+  const [annualIncreasePercent, setAnnualIncreasePercent] = useState<string>("");
+
   useEffect(() => {
     if (open && propPropertyId) {
       setPropertyId(propPropertyId);
@@ -62,9 +66,10 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
       startDate &&
       endDate &&
       rentAmount !== "" &&
-      Number(rentAmount) >= 0
+      Number(rentAmount) >= 0 &&
+      (!annualIncreaseEnabled || (annualIncreasePercent !== "" && Number(annualIncreasePercent) >= 0))
     );
-  }, [propertyId, tenantId, startDate, endDate, rentAmount]);
+  }, [propertyId, tenantId, startDate, endDate, rentAmount, annualIncreaseEnabled, annualIncreasePercent]);
 
   const onSave = async () => {
     if (!canSubmit) {
@@ -88,6 +93,9 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
         auto_invoice_minute: autoMinute,
         contract_kdrive_folder_url: kdriveFolderUrl.trim() !== "" ? kdriveFolderUrl.trim() : null,
         contract_kdrive_file_url: kdriveFileUrl.trim() !== "" ? kdriveFileUrl.trim() : null,
+        // ADDED: annual increase
+        annual_increase_enabled: annualIncreaseEnabled,
+        annual_increase_percent: annualIncreaseEnabled ? Number(annualIncreasePercent) : undefined,
       });
       toast.success("Lease created");
       setOpen(false);
@@ -105,6 +113,9 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
       setAutoMinute(new Date().getMinutes());
       setKdriveFolderUrl("");
       setKdriveFileUrl("");
+      // RESET: annual increase
+      setAnnualIncreaseEnabled(false);
+      setAnnualIncreasePercent("");
       onCreated?.();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to create lease");
@@ -196,6 +207,33 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
             <Label>Deposit Amount (optional)</Label>
             <Input type="number" min={0} value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="e.g., 1200" />
           </div>
+
+          {/* ADDED: Annual increase controls */}
+          <div className="space-y-3 border rounded-md p-3">
+            <div className="flex items-center justify-between py-1">
+              <Label className="flex-1">Annual increase on contract anniversary</Label>
+              <Switch checked={annualIncreaseEnabled} onCheckedChange={setAnnualIncreaseEnabled} />
+            </div>
+            {annualIncreaseEnabled && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Increase percent (%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={annualIncreasePercent}
+                    onChange={(e) => setAnnualIncreasePercent(e.target.value)}
+                    placeholder="e.g., 5"
+                  />
+                </div>
+                <div className="text-sm text-muted-foreground self-end">
+                  Applied each year on the lease start date anniversary.
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="space-y-3">
             <div className="flex items-center justify-between py-2">
               <Label className="flex-1">Auto-invoice</Label>

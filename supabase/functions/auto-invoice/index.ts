@@ -51,6 +51,15 @@ function monthsBetween(startDate: string, refDate: Date) {
   return (refDate.getFullYear() - s.getFullYear()) * 12 + (refDate.getMonth() - s.getMonth());
 }
 
+// ADDED: years since last anniversary (birthday)
+function yearsSinceAnniversary(startDate: string, refDate: Date) {
+  const s = new Date(startDate);
+  let years = refDate.getFullYear() - s.getFullYear();
+  const anniversaryThisYear = new Date(refDate.getFullYear(), s.getMonth(), s.getDate());
+  if (refDate < anniversaryThisYear) years--;
+  return Math.max(0, years);
+}
+
 serve(async (req) => {
   const origin = req.headers.get("Origin");
   const corsHeaders = buildCorsHeaders(origin);
@@ -151,6 +160,7 @@ serve(async (req) => {
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, status,
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute,
+      annual_increase_enabled, annual_increase_percent,
       property:properties ( id, name, agency_id ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -225,7 +235,17 @@ serve(async (req) => {
 
     const tenantName = [l.tenant?.first_name ?? "", l.tenant?.last_name ?? ""].filter(Boolean).join(" ") || "—";
     const propertyName = l.property?.name ?? (l.property_id?.slice(0, 8) || "Propiedad");
-    const amount = Number(l.rent_amount || 0);
+
+    // ADDED: compute amount with annual increase after anniversary
+    let amount = Number(l.rent_amount || 0);
+    const percent = typeof l.annual_increase_percent === "number" ? Number(l.annual_increase_percent) : 0;
+    if (l.annual_increase_enabled && percent > 0) {
+      const years = yearsSinceAnniversary(l.start_date, today);
+      if (years > 0) {
+        const factor = Math.pow(1 + percent / 100, years);
+        amount = Math.round((amount * factor + Number.EPSILON) * 100) / 100; // round to 2 decimals
+      }
+    }
     const currency = l.rent_currency;
 
     const invoiceNumber = autoNumber();

@@ -33,6 +33,12 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
   const [kdriveFolderUrl, setKdriveFolderUrl] = useState<string>(lease.contract_kdrive_folder_url ?? "");
   const [kdriveFileUrl, setKdriveFileUrl] = useState<string>(lease.contract_kdrive_file_url ?? "");
 
+  // ADDED: annual increase
+  const [annualIncreaseEnabled, setAnnualIncreaseEnabled] = useState<boolean>(!!lease.annual_increase_enabled);
+  const [annualIncreasePercent, setAnnualIncreasePercent] = useState<string>(
+    typeof lease.annual_increase_percent === "number" ? String(lease.annual_increase_percent) : ""
+  );
+
   const reset = () => {
     setStartDate(lease.start_date);
     setEndDate(lease.end_date);
@@ -47,6 +53,9 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
     setAutoMinute(typeof lease.auto_invoice_minute === "number" ? lease.auto_invoice_minute : 0);
     setKdriveFolderUrl(lease.contract_kdrive_folder_url ?? "");
     setKdriveFileUrl(lease.contract_kdrive_file_url ?? "");
+    // RESET: annual increase
+    setAnnualIncreaseEnabled(!!lease.annual_increase_enabled);
+    setAnnualIncreasePercent(typeof lease.annual_increase_percent === "number" ? String(lease.annual_increase_percent) : "");
   };
 
   const onSave = async () => {
@@ -66,6 +75,11 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
         auto_invoice_minute: autoMinute,
         contract_kdrive_folder_url: kdriveFolderUrl.trim() !== "" ? kdriveFolderUrl.trim() : null,
         contract_kdrive_file_url: kdriveFileUrl.trim() !== "" ? kdriveFileUrl.trim() : null,
+        // ADDED: annual increase
+        annual_increase_enabled: annualIncreaseEnabled,
+        annual_increase_percent: annualIncreaseEnabled
+          ? (annualIncreasePercent === "" ? null : Number(annualIncreasePercent))
+          : null,
       });
       toast.success("Lease updated");
       setOpen(false);
@@ -135,6 +149,32 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
               </SelectContent>
             </Select>
           </div>
+
+          {/* ADDED: Annual increase controls */}
+          <div className="space-y-3 border rounded-md p-3">
+            <div className="flex items-center justify-between py-1">
+              <Label className="flex-1">Annual increase on contract anniversary</Label>
+              <Switch checked={annualIncreaseEnabled} onCheckedChange={setAnnualIncreaseEnabled} />
+            </div>
+            {annualIncreaseEnabled && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Increase percent (%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={annualIncreasePercent}
+                    onChange={(e) => setAnnualIncreasePercent(e.target.value)}
+                  />
+                </div>
+                <div className="text-sm text-muted-foreground self-end">
+                  Applied each year on the lease start date anniversary.
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center justify-between">
             <Label className="flex-1">Auto-invoice</Label>
             <Switch checked={autoInvoiceEnabled} onCheckedChange={setAutoInvoiceEnabled} />

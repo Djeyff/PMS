@@ -19,6 +19,8 @@ export type LeaseRow = {
   auto_invoice_minute?: number;
   contract_kdrive_folder_url?: string | null;
   contract_kdrive_file_url?: string | null;
+  annual_increase_enabled?: boolean;
+  annual_increase_percent?: number | null;
 };
 
 export type LeaseWithMeta = LeaseRow & {
@@ -47,6 +49,8 @@ function normalizeLeaseRow(row: any): LeaseWithMeta {
     auto_invoice_minute: typeof row.auto_invoice_minute === "number" ? row.auto_invoice_minute : 0,
     contract_kdrive_folder_url: row.contract_kdrive_folder_url ?? null,
     contract_kdrive_file_url: row.contract_kdrive_file_url ?? null,
+    annual_increase_enabled: row.annual_increase_enabled ?? false,
+    annual_increase_percent: typeof row.annual_increase_percent === "number" ? row.annual_increase_percent : null,
     property: property ? { id: property.id, name: property.name } : null,
     tenant: tenant ? { id: tenant.id, first_name: tenant.first_name ?? null, last_name: tenant.last_name ?? null } : null,
   };
@@ -62,6 +66,7 @@ export async function fetchLeases(params: { role: Role | null; userId: string | 
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute,
       contract_kdrive_folder_url, contract_kdrive_file_url,
+      annual_increase_enabled, annual_increase_percent,
       property:properties ( id, name ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -87,6 +92,8 @@ export async function createLease(input: {
   auto_invoice_minute?: number;
   contract_kdrive_folder_url?: string | null;
   contract_kdrive_file_url?: string | null;
+  annual_increase_enabled?: boolean;
+  annual_increase_percent?: number;
 }) {
   const payload = {
     property_id: input.property_id,
@@ -104,6 +111,8 @@ export async function createLease(input: {
     auto_invoice_minute: typeof input.auto_invoice_minute === "number" ? input.auto_invoice_minute : 0,
     contract_kdrive_folder_url: input.contract_kdrive_folder_url ?? null,
     contract_kdrive_file_url: input.contract_kdrive_file_url ?? null,
+    annual_increase_enabled: !!input.annual_increase_enabled,
+    annual_increase_percent: typeof input.annual_increase_percent === "number" ? input.annual_increase_percent : null,
   };
 
   const { data, error } = await supabase
@@ -113,6 +122,7 @@ export async function createLease(input: {
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute,
       contract_kdrive_folder_url, contract_kdrive_file_url,
+      annual_increase_enabled, annual_increase_percent,
       property:properties ( id, name ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -138,6 +148,8 @@ export async function updateLease(
     auto_invoice_minute: number;
     contract_kdrive_folder_url: string | null;
     contract_kdrive_file_url: string | null;
+    annual_increase_enabled: boolean;
+    annual_increase_percent: number | null;
   }>
 ) {
   const payload: any = {};
@@ -154,6 +166,8 @@ export async function updateLease(
   if (typeof input.auto_invoice_minute !== "undefined") payload.auto_invoice_minute = input.auto_invoice_minute;
   if (typeof input.contract_kdrive_folder_url !== "undefined") payload.contract_kdrive_folder_url = input.contract_kdrive_folder_url;
   if (typeof input.contract_kdrive_file_url !== "undefined") payload.contract_kdrive_file_url = input.contract_kdrive_file_url;
+  if (typeof input.annual_increase_enabled !== "undefined") payload.annual_increase_enabled = input.annual_increase_enabled;
+  if (typeof input.annual_increase_percent !== "undefined") payload.annual_increase_percent = input.annual_increase_percent;
 
   const { data, error } = await supabase
     .from("leases")
@@ -163,6 +177,7 @@ export async function updateLease(
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute,
       contract_kdrive_folder_url, contract_kdrive_file_url,
+      annual_increase_enabled, annual_increase_percent,
       property:properties ( id, name ),
       tenant:profiles ( id, first_name, last_name )
     `)
