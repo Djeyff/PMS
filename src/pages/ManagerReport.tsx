@@ -11,6 +11,8 @@ import { fetchPayments } from "@/services/payments";
 import { fetchAgencyOwnerships } from "@/services/property-owners";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
+import { listManagerReports, createManagerReport } from "@/services/manager-reports";
+import EditManagerReportDialog from "@/components/manager/EditManagerReportDialog";
 
 type OwnerRow = {
   ownerId: string;
@@ -49,7 +51,6 @@ function monthList(limit = 12) {
     const year = d.getFullYear();
     const monthIndex = d.getMonth();
     const lastDay = new Date(year, monthIndex + 1, 0).getDate();
-    // Build local YYYY-MM-DD strings to avoid UTC timezone shifts from toISOString()
     const startStr = `${year}-${pad2(monthIndex + 1)}-01`;
     const endStr = `${year}-${pad2(monthIndex + 1)}-${pad2(lastDay)}`;
     const label = d.toLocaleString(undefined, { month: "long", year: "numeric" });
@@ -102,6 +103,13 @@ const ManagerReport = () => {
     queryFn: () => fetchPayments({ role, userId: user?.id ?? null, agencyId }),
   });
 
+  // NEW: Saved reports list
+  const { data: savedReports, refetch: refetchSaved } = useQuery({
+    queryKey: ["mgr-saved-reports", agencyId],
+    enabled: !!agencyId && isAdmin,
+    queryFn: () => listManagerReports(agencyId!),
+  });
+
   const { data: ownerships } = useQuery({
     queryKey: ["mgr-ownerships", agencyId],
     enabled: !!agencyId && isAdmin,
@@ -125,7 +133,12 @@ const ManagerReport = () => {
   const filteredPayments = useMemo(() => {
     const rows = payments ?? [];
     if (!currentMonth) return rows;
-    return rows.filter((p: any) => p.received_date >= currentMonth.start && p.received_date <= currentMonth.end);
+    const s = currentMonth.start;
+    const e = currentMonth.end;
+    return rows.filter((p: any) => {
+      const d = String(p.received_date ?? "").slice(0, 10); // guard against timestamps
+      return d >= s && d <= e;
+    });
   }, [payments, currentMonth]);
 
   // Build owner breakdown (pro-rata by ownership percent for each property)
@@ -161,14 +174,22 @@ const ManagerReport = () => {
     return Array.from(map.values());
   }, [ownerships, filteredPayments]);
 
-  // Totals summary (by method and currency only)
+  // Totals summary computed directly from payments (independent of ownership)
   const totals = useMemo(() => {
-    const usdCash = ownerRows.reduce((s, r) => s + r.cashUsd, 0);
-    const dopCash = ownerRows.reduce((s, r) => s + r.cashDop, 0);
-    const usdTransfer = ownerRows.reduce((s, r) => s + r.transferUsd, 0);
-    const dopTransfer = ownerRows.reduce((s, r) => s + r.transferDop, 0);
+    const usdCash = filteredPayments
+      .filter((p: any) => String(p.method).toLowerCase() !== "bank_transfer" && p.currency === "USD")
+      .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+    const dopCash = filteredPayments
+      .filter((p: any) => String(p.method).toLowerCase() !== "bank_transfer" && p.currency === "DOP")
+      .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+    const usdTransfer = filteredPayments
+      .filter((p: any) => String(p.method).toLowerCase() === "bank_transfer" && p.currency === "USD")
+      .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+    const dopTransfer = filteredPayments
+      .filter((p: any) => String(p.method).toLowerCase() === "bank_transfer" && p.currency === "DOP")
+      .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
     return { usdCash, dopCash, usdTransfer, dopTransfer };
-  }, [ownerRows]);
+  }, [filteredPayments]);
 
   // Compute manager fee (5% of ALL transactions, USD converted to DOP with avg rate)
   const rateNum = useMemo(() => {
@@ -217,6 +238,39 @@ const ManagerReport = () => {
     toast({ title: "Report generated", description: `Generated for ${currentMonth.label} (${currentMonth.start} to ${currentMonth.end}).` });
   };
 
+  // NEW: Save current generated report
+  const handleSaveReport = async () => {
+    if (!generated || !currentMonth || !agencyId) return;
+    if (usdTotal > 0 && Number.isNaN(rateNum)) {
+      toast({ title: "Average rate required", description: "Enter a valid USD/DOP average rate to save.", variant: "destructive" });
+      return;
+    }
+    const fee_base_dop = (Number.isNaN(rateNum) ? 0 : usdTotal * rateNum) + dopTotal;
+    const fee_dop = fee_base_dop * 0.05;
+    const fee_deducted_dop = Math.min(fee_dop, totals.dopCash);
+
+    await createManagerReport({
+      agency_id: agencyId!,
+      month: currentMonth.value,
+      start_date: currentMonth.start,
+      end_date: currentMonth.end,
+      avg_rate: Number.isNaN(rateNum) ? null : rateNum,
+      fee_percent: 5,
+      usd_cash_total: totals.usdCash,
+      dop_cash_total: totals.dopCash,
+      usd_transfer_total: totals.usdTransfer,
+      dop_transfer_total: totals.dopTransfer,
+      usd_total: usdTotal,
+      dop_total: dopTotal,
+      fee_base_dop,
+      fee_dop,
+      fee_deducted_dop,
+    });
+
+    toast({ title: "Report saved", description: `Saved ${currentMonth.label}.` });
+    refetchSaved();
+  };
+
   return (
     <AppShell>
       <div className="space-y-6">
@@ -256,9 +310,14 @@ const ManagerReport = () => {
           <div className="ml-auto flex items-end gap-2">
             <Button size="sm" onClick={handleGenerate}>Generate report</Button>
             {generated && (
-              <Button size="sm" variant="outline" onClick={() => setGenerated(false)}>
-                Reset
-              </Button>
+              <>
+                <Button size="sm" variant="outline" onClick={() => setGenerated(false)}>
+                  Reset
+                </Button>
+                <Button size="sm" variant="default" onClick={handleSaveReport}>
+                  Save report
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -404,22 +463,73 @@ const ManagerReport = () => {
           </>
         )}
 
+        {/* Saved Reports list */}
         <Card>
-          <CardHeader>
-            <CardTitle>Notes</CardTitle>
+          <CardHeader className="flex items-center justify-between">
+            <CardTitle>Saved Reports</CardTitle>
+            <div className="text-sm text-muted-foreground">Edit average rate or fee percent later and recalculate.</div>
           </CardHeader>
           <CardContent>
-            <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
-              <li>Manager fee is 5% of all transactions for the selected month (USD converted to DOP using the average rate).</li>
-              <li>The fee is deducted from DOP cash only, proportionally to each owner's DOP cash share.</li>
-              <li>If the fee exceeds available DOP cash, only the available DOP cash is deducted.</li>
-              <li>Transfers refer to bank_transfer; other methods are categorized as cash.</li>
-            </ul>
+            {!savedReports || savedReports.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No saved reports yet.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Month</TableHead>
+                      <TableHead>USD total</TableHead>
+                      <TableHead>DOP total</TableHead>
+                      <TableHead>Avg rate</TableHead>
+                      <TableHead>Fee %</TableHead>
+                      <TableHead>Fee base (DOP)</TableHead>
+                      <TableHead>Fee (DOP)</TableHead>
+                      <TableHead>Deducted (DOP)</TableHead>
+                      <TableHead className="print:hidden">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {savedReports.map((r) => (
+                      <SavedReportRow key={r.id} report={r} onEdited={() => refetchSaved()} />
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
     </AppShell>
   );
 };
+
+// Helper row component inside this file
+function SavedReportRow({ report, onEdited }: { report: any; onEdited: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <TableRow>
+      <TableCell>{report.month}</TableCell>
+      <TableCell>{fmt(Number(report.usd_total || 0), "USD")}</TableCell>
+      <TableCell>{fmt(Number(report.dop_total || 0), "DOP")}</TableCell>
+      <TableCell>{report.avg_rate != null ? Number(report.avg_rate).toFixed(6) : "—"}</TableCell>
+      <TableCell>{Number(report.fee_percent || 0).toFixed(2)}%</TableCell>
+      <TableCell>{fmt(Number(report.fee_base_dop || 0), "DOP")}</TableCell>
+      <TableCell>{fmt(Number(report.fee_dop || 0), "DOP")}</TableCell>
+      <TableCell>{fmt(Number(report.fee_deducted_dop || 0), "DOP")}</TableCell>
+      <TableCell className="print:hidden">
+        <Button variant="outline" size="sm" onClick={() => setOpen(true)}>Edit</Button>
+        <EditManagerReportDialog
+          report={report}
+          open={open}
+          onOpenChange={(v) => {
+            setOpen(v);
+            if (!v) onEdited();
+          }}
+          onSaved={() => onEdited()}
+        />
+      </TableCell>
+    </TableRow>
+  );
+}
 
 export default ManagerReport;
