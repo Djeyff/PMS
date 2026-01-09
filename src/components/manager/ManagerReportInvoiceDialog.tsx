@@ -9,6 +9,8 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchPayments } from "@/services/payments";
 import { fetchAgencyOwnerships } from "@/services/property-owners";
 import type { ManagerReportRow } from "@/services/manager-reports";
+import { fetchAgencyById } from "@/services/agencies";
+import { getLogoPublicUrl } from "@/services/branding";
 
 type Props = {
   report: ManagerReportRow;
@@ -34,6 +36,20 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
   const { role, user, profile } = useAuth();
   const agencyId = profile?.agency_id ?? null;
   const isAdmin = role === "agency_admin";
+
+  const { data: agency } = useQuery({
+    queryKey: ["mgr-invoice-agency", agencyId],
+    enabled: open && !!agencyId,
+    queryFn: () => fetchAgencyById(agencyId!),
+  });
+
+  const [logoUrl, setLogoUrl] = React.useState<string>("");
+  React.useEffect(() => {
+    if (!open) return;
+    getLogoPublicUrl().then((url) => {
+      setLogoUrl(url || "/assets/invoice-layout-reference.png");
+    }).catch(() => setLogoUrl("/assets/invoice-layout-reference.png"));
+  }, [open]);
 
   const { data: payments } = useQuery({
     queryKey: ["mgr-invoice-payments", role, user?.id, agencyId],
@@ -133,18 +149,26 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl invoice-print">
+      <DialogContent className="max-w-3xl invoice-print bg-white text-black p-6">
         <DialogHeader>
-          <DialogTitle className="text-base font-semibold">
-            Property Manager Report • {report.month}
-          </DialogTitle>
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-3">
+              {logoUrl ? <img src={logoUrl} alt="Agency logo" className="h-12 w-auto rounded" /> : null}
+              <div>
+                <div className="font-semibold">{agency?.name ?? "Las Terrenas Properties"}</div>
+                <div className="text-xs text-gray-600">
+                  {agency?.address ?? "278 calle Duarte, LTI building, Las Terrenas"}
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <DialogTitle className="text-base font-semibold">Property Manager Report • {report.month}</DialogTitle>
+              <div className="text-xs text-gray-600">{String(report.start_date).slice(0,10)} to {String(report.end_date).slice(0,10)}</div>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="text-sm text-muted-foreground mb-2">
-          {String(report.start_date).slice(0,10)} to {String(report.end_date).slice(0,10)}
-        </div>
-
-        <div className="border rounded-md divide-y">
+        <div className="border rounded-md divide-y mt-4">
           <div className="p-3">
             <div className="text-xs font-medium mb-1">Cash totals</div>
             <div className="space-y-1 text-sm">
@@ -168,14 +192,14 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
               <div className="font-semibold">
                 {fmt(managerFeeDop, "DOP")} ({feePct.toFixed(2)}%)
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-gray-600">
                 Deducted from DOP cash: {fmt(actualFeeDeducted, "DOP")}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="border rounded-md mt-3">
+        <div className="border rounded-md mt-4">
           <Table>
             <TableHeader>
               <TableRow>
@@ -216,8 +240,8 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
           </Table>
         </div>
 
-        <div className="mt-2 flex items-center justify-between">
-          <div className="text-xs text-muted-foreground">
+        <div className="mt-3 flex items-center justify-between">
+          <div className="text-xs text-gray-600">
             Note: "Unassigned" shows payments from properties without owner assignments.
           </div>
           <div className="print:hidden">
