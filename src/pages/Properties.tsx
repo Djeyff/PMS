@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createLocationGroup } from "@/services/property-groups";
 import { toast } from "sonner";
+import { fetchLeases } from "@/services/leases";
 
 // sample data removed
 
@@ -26,6 +27,12 @@ const Properties = () => {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["properties", role, user?.id, profile?.agency_id],
     queryFn: () => fetchProperties({ role: role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
+  });
+
+  const { data: leases } = useQuery({
+    queryKey: ["properties-leases", role, user?.id, profile?.agency_id],
+    enabled: !!role && !!profile?.agency_id,
+    queryFn: () => fetchLeases({ role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
   });
 
   const canCreate = role === "agency_admin";
@@ -40,6 +47,18 @@ const Properties = () => {
     });
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [data]);
+
+  // ADDED: build a set of occupied property IDs (has a lease active today)
+  const occupiedProps = React.useMemo(() => {
+    const set = new Set<string>();
+    const today = new Date().toISOString().slice(0, 10);
+    (leases ?? []).forEach((l: any) => {
+      if (l.start_date <= today && l.end_date >= today) {
+        set.add(l.property_id);
+      }
+    });
+    return set;
+  }, [leases]);
 
   const qc = useQueryClient();
   const [folderOpen, setFolderOpen] = React.useState(false);
@@ -152,7 +171,13 @@ const Properties = () => {
                           <TableRow key={p.id}>
                             <TableCell className="font-medium">{p.name}</TableCell>
                             <TableCell className="capitalize">{p.type}</TableCell>
-                            <TableCell className="capitalize">{p.status}</TableCell>
+                            <TableCell>
+                              {occupiedProps.has(p.id) ? (
+                                <span className="text-green-600 font-medium">Occupied</span>
+                              ) : (
+                                <span className="text-red-600 font-medium">Vacant</span>
+                              )}
+                            </TableCell>
                             <TableCell>{p.bedrooms ?? "-"}</TableCell>
                             <TableCell>{p.city ?? "-"}</TableCell>
                             {canCreate && (
