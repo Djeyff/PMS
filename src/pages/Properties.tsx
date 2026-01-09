@@ -49,12 +49,12 @@ const Properties = () => {
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [data]);
 
-  // ADDED: build a set of occupied property IDs (has a lease active today)
+  // ADDED: build a set of occupied property IDs:
+  // Occupied if any lease for the property has a tenant and is NOT terminated.
   const occupiedProps = React.useMemo(() => {
     const set = new Set<string>();
-    const today = new Date().toISOString().slice(0, 10);
     (leases ?? []).forEach((l: any) => {
-      if (l.start_date <= today && l.end_date >= today) {
+      if (l?.tenant_id && String(l.status) !== "terminated") {
         set.add(l.property_id);
       }
     });

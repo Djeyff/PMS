@@ -25,6 +25,18 @@ const Leases = () => {
     return name || "—";
   };
 
+  // ADDED: helper to display status with color coding
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const getDisplayStatus = (l: any): { label: string; cls: string } => {
+    const status = String(l.status);
+    if (status === "terminated") return { label: "Terminated", cls: "text-red-600" };
+    if (l.end_date && l.end_date < todayIso) return { label: "Expired", cls: "text-orange-600" };
+    if (status === "pending_renewal") return { label: "Pending renewal", cls: "text-orange-600" };
+    if (status === "active") return { label: "Active", cls: "text-green-600" };
+    if (status === "draft") return { label: "Draft", cls: "text-gray-600" };
+    return { label: status.replace("_", " "), cls: "text-gray-600" };
+  };
+
   return (
     <AppShell>
       <div className="space-y-4">
@@ -67,7 +79,12 @@ const Leases = () => {
                       <TableCell>
                         {new Intl.NumberFormat(undefined, { style: "currency", currency: l.rent_currency }).format(l.rent_amount)}
                       </TableCell>
-                      <TableCell className="capitalize">{String(l.status).replace("_", " ")}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const ds = getDisplayStatus(l);
+                          return <span className={`${ds.cls} font-medium`}>{ds.label}</span>;
+                        })()}
+                      </TableCell>
                       <TableCell>
                         {l.contract_kdrive_file_url ? (
                           <a href={l.contract_kdrive_file_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
