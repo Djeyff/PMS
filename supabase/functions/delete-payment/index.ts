@@ -1,5 +1,10 @@
+// @ts-ignore: Deno runtime remote import
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+// @ts-ignore: Deno runtime remote import
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+// ADDED: minimal Deno declaration so local TypeScript type-checking succeeds
+declare const Deno: { env: { get(name: string): string | undefined } };
 
 function buildCorsHeaders(origin: string | null) {
   return {
@@ -131,6 +136,46 @@ serve(async (req) => {
   const { error: delErr } = await service.from("payments").delete().eq("id", paymentId);
   if (delErr) {
     return new Response(JSON.stringify({ error: delErr.message }), { status: 500, headers: corsHeaders });
+  }
+
+  // If payment belonged to an invoice, recompute its status
+  if (pay.invoice_id) {
+    const { data: invRow, error: invLoadErr } = await service
+      .from("invoices")
+      .select(`
+        id, currency, total_amount, due_date, status,
+        payments:payments ( amount, currency, exchange_rate )
+      `)
+      .eq("id", pay.invoice_id)
+      .maybeSingle();
+
+    if (!invLoadErr && invRow) {
+      const currency = invRow.currency as "USD" | "DOP";
+      const total = Number(invRow.total_amount || 0);
+      const payments = Array.isArray(invRow.payments) ? invRow.payments : [];
+
+      const paidConverted = payments.reduce((sum: number, p: any) => {
+        const amt = Number(p.amount || 0);
+        if (p.currency === currency) return sum + amt;
+        const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : null;
+        if (!rate || rate <= 0) return sum;
+        if (currency === "USD" && p.currency === "DOP") return sum + amt / rate;
+        if (currency === "DOP" && p.currency === "USD") return sum + amt * rate;
+        return sum;
+      }, 0);
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      let newStatus =
+        paidConverted >= total ? "paid"
+        : paidConverted > 0 ? "partial"
+        : "sent";
+
+      if (invRow.due_date && invRow.due_date < todayStr && invRow.status !== "void" && paidConverted < total) {
+        newStatus = "overdue";
+      }
+
+      await service.from("invoices").update({ status: newStatus }).eq("id", invRow.id);
+    }
   }
 
   // Audit log

@@ -19,7 +19,7 @@ export type InvoiceRow = {
 export type InvoiceWithMeta = InvoiceRow & {
   lease?: { id: string; end_date?: string; property?: { id: string; name: string; agency_id?: string } | null } | null;
   tenant?: { id: string; first_name: string | null; last_name: string | null; phone?: string | null } | null;
-  payments?: { amount: number; currency: "USD" | "DOP"; method?: string; exchange_rate?: number | null }[] | null;
+  payments?: { amount: number; currency: "USD" | "DOP"; method?: string; exchange_rate?: number | null; received_date?: string }[] | null;
   signed_pdf_url?: string | null;
 };
 
@@ -58,6 +58,7 @@ function normalizeInvoiceRow(row: any): InvoiceWithMeta {
       currency: p.currency,
       method: p.method,
       exchange_rate: typeof p.exchange_rate === "number" ? p.exchange_rate : p.exchange_rate == null ? null : Number(p.exchange_rate),
+      received_date: p.received_date,
     })),
     signed_pdf_url: null,
   };
@@ -73,7 +74,7 @@ export async function fetchInvoices() {
         property:properties ( id, name, agency_id )
       ),
       tenant:profiles ( id, first_name, last_name, phone ),
-      payments:payments ( amount, currency, method, exchange_rate )
+      payments:payments ( amount, currency, method, exchange_rate, received_date )
     `)
   .order("issue_date", { ascending: false });
 
@@ -160,7 +161,7 @@ export async function createInvoice(input: {
         property:properties ( id, name )
       ),
       tenant:profiles ( id, first_name, last_name, phone ),
-      payments:payments ( amount, currency, method, exchange_rate )
+      payments:payments ( amount, currency, method, exchange_rate, received_date )
     `)
     .single();
 
@@ -202,7 +203,7 @@ export async function updateInvoice(
         property:properties ( id, name )
       ),
       tenant:profiles ( id, first_name, last_name, phone ),
-      payments:payments ( amount, currency, method, exchange_rate )
+      payments:payments ( amount, currency, method, exchange_rate, received_date )
     `)
     .single();
 
@@ -274,7 +275,7 @@ export async function fetchInvoiceById(id: string) {
         property:properties ( id, name, agency_id )
       ),
       tenant:profiles ( id, first_name, last_name, phone ),
-      payments:payments ( amount, currency, method, exchange_rate )
+      payments:payments ( amount, currency, method, exchange_rate, received_date )
     `)
     .eq("id", id)
     .single();
@@ -327,7 +328,7 @@ export async function recomputeInvoiceStatus(invoiceId: string) {
   const { data, error } = await supabase
     .from("invoices")
     .select(`
-      id, currency, total_amount,
+      id, currency, total_amount, due_date, status,
       payments:payments ( amount, currency, exchange_rate )
     `)
     .eq("id", invoiceId)
@@ -346,8 +347,10 @@ export async function recomputeInvoiceStatus(invoiceId: string) {
     return sum;
   }, 0);
 
+  const todayStr = new Date().toISOString().slice(0, 10);
   const newStatus =
     paidConverted >= total ? "paid"
+    : data.due_date < todayStr ? "overdue"
     : paidConverted > 0 ? "partial"
     : "sent";
 

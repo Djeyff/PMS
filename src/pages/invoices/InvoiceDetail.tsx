@@ -61,7 +61,10 @@ const InvoiceDetail = () => {
     const localeLang = inv?.pdf_lang === "es" ? "es" : "en";
     if (!iso) return "—";
     const d = new Date(iso);
-    const m = d.toLocaleString(localeLang === "es" ? "es-ES" : "en-US", { month: "long" });
+    let m = d.toLocaleString(localeLang === "es" ? "es-ES" : "en-US", { month: "long" });
+    if (localeLang === "es") {
+      m = m.charAt(0).toUpperCase() + m.slice(1);
+    }
     const y = String(d.getFullYear());
     return localeLang === "es" ? `${m} ${y.slice(-2)}` : `${m} ${y}`;
   }, [inv?.issue_date, inv?.pdf_lang]);
@@ -247,6 +250,15 @@ const InvoiceDetail = () => {
     return String(diffPay.exchange_rate);
   })();
 
+  const paymentDatesText = (() => {
+    const dates = (payments ?? [])
+      .map((p: any) => p.received_date)
+      .filter((d: any) => typeof d === "string")
+      .sort();
+    if (dates.length === 0) return "—";
+    return dates.join(", ");
+  })();
+
   return (
     <div className="invoice-print p-6 max-w-3xl mx-auto bg-white text-black">
       {/* Header with bilingual title (aligned right) */}
@@ -379,6 +391,9 @@ const InvoiceDetail = () => {
 
           <div className="font-medium mt-2">{lang === "es" ? "Pagado" : "Paid"} :</div>
           <div>{paidDisplayText}</div>
+          <div className="text-sm text-gray-700">
+            {lang === "es" ? "Fecha de pago" : "Payment date"} : {paymentDatesText}
+          </div>
 
           <div className="font-medium mt-2">{lang === "es" ? "Tasa de Cambio" : "Exchange Rate"} :</div>
           <div className="text-sm">{exchangeRateDisplay}</div>
