@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { listManagerReports, createManagerReport } from "@/services/manager-reports";
 import EditManagerReportDialog from "@/components/manager/EditManagerReportDialog";
+import ManagerReportInvoiceDialog from "@/components/manager/ManagerReportInvoiceDialog";
 
 type OwnerRow = {
   ownerId: string;
@@ -148,27 +149,39 @@ const ManagerReport = () => {
 
     filteredPayments.forEach((p: any) => {
       const propId = p.lease?.property?.id || p.lease?.property_id || null;
-      if (!propId) return;
-
       const ownersForProp = ownerships.filter((o) => o.property_id === propId);
-      ownersForProp.forEach((o) => {
-        const percent = o.ownership_percent == null ? 100 : Math.max(0, Math.min(100, Number(o.ownership_percent)));
-        const shareAmt = (Number(p.amount || 0) * percent) / 100;
-        const ownerId = o.owner_id;
-        const ownerName = [o.owner?.first_name ?? "", o.owner?.last_name ?? ""].filter(Boolean).join(" ") || "—";
 
-        const row = map.get(ownerId) ?? { ownerId, name: ownerName, cashUsd: 0, cashDop: 0, transferUsd: 0, transferDop: 0 };
+      if (!ownersForProp || ownersForProp.length === 0) {
+        const row = map.get("__unassigned__") ?? { ownerId: "__unassigned__", name: "Unassigned", cashUsd: 0, cashDop: 0, transferUsd: 0, transferDop: 0 };
         const method = String(p.method || "").toLowerCase();
-        const isCash = method === "cash";
+        const isCash = method !== "bank_transfer";
         const isTransfer = method === "bank_transfer";
+        const amt = Number(p.amount || 0);
+        if (isCash && p.currency === "USD") row.cashUsd += amt;
+        if (isCash && p.currency === "DOP") row.cashDop += amt;
+        if (isTransfer && p.currency === "USD") row.transferUsd += amt;
+        if (isTransfer && p.currency === "DOP") row.transferDop += amt;
+        map.set("__unassigned__", row);
+      } else {
+        ownersForProp.forEach((o) => {
+          const percent = o.ownership_percent == null ? 100 : Math.max(0, Math.min(100, Number(o.ownership_percent)));
+          const shareAmt = (Number(p.amount || 0) * percent) / 100;
+          const ownerId = o.owner_id;
+          const ownerName = [o.owner?.first_name ?? "", o.owner?.last_name ?? ""].filter(Boolean).join(" ") || "—";
 
-        if (isCash && p.currency === "USD") row.cashUsd += shareAmt;
-        if (isCash && p.currency === "DOP") row.cashDop += shareAmt;
-        if (isTransfer && p.currency === "USD") row.transferUsd += shareAmt;
-        if (isTransfer && p.currency === "DOP") row.transferDop += shareAmt;
+          const row = map.get(ownerId) ?? { ownerId, name: ownerName, cashUsd: 0, cashDop: 0, transferUsd: 0, transferDop: 0 };
+          const method = String(p.method || "").toLowerCase();
+          const isCash = method !== "bank_transfer";
+          const isTransfer = method === "bank_transfer";
 
-        map.set(ownerId, row);
-      });
+          if (isCash && p.currency === "USD") row.cashUsd += shareAmt;
+          if (isCash && p.currency === "DOP") row.cashDop += shareAmt;
+          if (isTransfer && p.currency === "USD") row.transferUsd += shareAmt;
+          if (isTransfer && p.currency === "DOP") row.transferDop += shareAmt;
+
+          map.set(ownerId, row);
+        });
+      }
     });
 
     return Array.from(map.values());
@@ -485,6 +498,7 @@ const ManagerReport = () => {
                       <TableHead>Fee base (DOP)</TableHead>
                       <TableHead>Fee (DOP)</TableHead>
                       <TableHead>Deducted (DOP)</TableHead>
+                      <TableHead>Owners leftover (DOP)</TableHead>
                       <TableHead className="print:hidden">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -506,6 +520,8 @@ const ManagerReport = () => {
 // Helper row component inside this file
 function SavedReportRow({ report, onEdited }: { report: any; onEdited: () => void }) {
   const [open, setOpen] = useState(false);
+  const [openInvoice, setOpenInvoice] = useState(false);
+  const ownersLeftoverDop = Math.max(0, Number(report.dop_cash_total || 0) - Number(report.fee_deducted_dop || 0));
   return (
     <TableRow>
       <TableCell>{report.month}</TableCell>
@@ -516,8 +532,12 @@ function SavedReportRow({ report, onEdited }: { report: any; onEdited: () => voi
       <TableCell>{fmt(Number(report.fee_base_dop || 0), "DOP")}</TableCell>
       <TableCell>{fmt(Number(report.fee_dop || 0), "DOP")}</TableCell>
       <TableCell>{fmt(Number(report.fee_deducted_dop || 0), "DOP")}</TableCell>
+      <TableCell>{fmt(ownersLeftoverDop, "DOP")}</TableCell>
       <TableCell className="print:hidden">
-        <Button variant="outline" size="sm" onClick={() => setOpen(true)}>Edit</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setOpen(true)}>Edit</Button>
+          <Button size="sm" onClick={() => setOpenInvoice(true)}>Invoice-style</Button>
+        </div>
         <EditManagerReportDialog
           report={report}
           open={open}
@@ -526,6 +546,14 @@ function SavedReportRow({ report, onEdited }: { report: any; onEdited: () => voi
             if (!v) onEdited();
           }}
           onSaved={() => onEdited()}
+        />
+        <ManagerReportInvoiceDialog
+          report={report}
+          open={openInvoice}
+          onOpenChange={(v) => {
+            setOpenInvoice(v);
+            if (!v) onEdited();
+          }}
         />
       </TableCell>
     </TableRow>
