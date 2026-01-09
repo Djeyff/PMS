@@ -150,7 +150,7 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Allow vertical scroll and cap height */}
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto invoice-print bg-white text-black p-6 rounded-md">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto overflow-x-hidden invoice-print bg-white text-black p-6 rounded-md">
         <DialogHeader>
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-3">
@@ -239,7 +239,14 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
         </div>
 
         <div className="mt-3 flex items-center justify-end print:hidden">
-          <Button variant="outline" onClick={() => window.print()}>Print</Button>
+          <Button
+            // Use a solid dark button so it's readable on dark theme overlays
+            variant="default"
+            className="bg-neutral-800 text-white hover:bg-neutral-900"
+            onClick={() => window.print()}
+          >
+            Print
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
