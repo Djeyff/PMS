@@ -30,8 +30,8 @@ const Leases = () => {
   const getDisplayStatus = (l: any): { label: string; cls: string } => {
     const status = String(l.status);
     if (status === "terminated") return { label: "Terminated", cls: "text-red-600" };
-    if (l.end_date && l.end_date < todayIso) return { label: "Expired", cls: "text-orange-600" };
     if (status === "pending_renewal") return { label: "Pending renewal", cls: "text-orange-600" };
+    if (l.end_date && l.end_date < todayIso) return { label: "Expired", cls: "text-orange-600" };
     if (status === "active") return { label: "Active", cls: "text-green-600" };
     if (status === "draft") return { label: "Draft", cls: "text-gray-600" };
     return { label: status.replace("_", " "), cls: "text-gray-600" };

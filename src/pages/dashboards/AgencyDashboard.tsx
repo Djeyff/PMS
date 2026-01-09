@@ -55,14 +55,13 @@ const AgencyDashboard = () => {
   const occupancyPercent = (() => {
     const totalProps = properties?.length ?? 0;
     if (totalProps === 0) return 0;
-    const activeProps = new Set<string>();
+    const occupiedIds = new Set<string>();
     (leases ?? []).forEach((l: any) => {
-      const today = new Date().toISOString().slice(0, 10);
-      if (l.start_date <= today && l.end_date >= today) {
-        activeProps.add(l.property_id);
+      if (l?.tenant_id && String(l.status) !== "terminated") {
+        occupiedIds.add(l.property_id);
       }
     });
-    return Math.round((activeProps.size / totalProps) * 100);
+    return Math.round((occupiedIds.size / totalProps) * 100);
   })();
 
   const monthly = (() => {
@@ -155,7 +154,9 @@ const AgencyDashboard = () => {
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {format(parseISO(l.end_date), "yyyy-MM-dd")}
-                      {differenceInCalendarDays(parseISO(l.end_date), new Date()) < 0 && String(l.status) !== "terminated" ? (
+                      {String(l.status) === "pending_renewal" ? (
+                        <span className="ml-2 text-orange-600 text-xs">Pending renewal</span>
+                      ) : differenceInCalendarDays(parseISO(l.end_date), new Date()) < 0 && String(l.status) !== "terminated" ? (
                         <span className="ml-2 text-red-600 text-xs">Expired</span>
                       ) : null}
                     </div>
