@@ -11,9 +11,11 @@ import { fetchPayments } from "@/services/payments";
 import { fetchAgencyOwnerships } from "@/services/property-owners";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
-import { listManagerReports, createManagerReport } from "@/services/manager-reports";
+import { listManagerReports, createManagerReport, deleteManagerReport } from "@/services/manager-reports";
+import { logManagerReport } from "@/services/activity-logs";
 import EditManagerReportDialog from "@/components/manager/EditManagerReportDialog";
 import ManagerReportInvoiceDialog from "@/components/manager/ManagerReportInvoiceDialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 type OwnerRow = {
   ownerId: string;
@@ -262,7 +264,7 @@ const ManagerReport = () => {
     const fee_dop = fee_base_dop * 0.05;
     const fee_deducted_dop = Math.min(fee_dop, totals.dopCash);
 
-    await createManagerReport({
+    const saved = await createManagerReport({
       agency_id: agencyId!,
       month: currentMonth.value,
       start_date: currentMonth.start,
@@ -279,6 +281,16 @@ const ManagerReport = () => {
       fee_dop,
       fee_deducted_dop,
     });
+    if (user?.id) {
+      await logManagerReport("created", user.id, {
+        id: saved.id,
+        month: saved.month,
+        start_date: saved.start_date,
+        end_date: saved.end_date,
+        avg_rate: saved.avg_rate,
+        fee_percent: saved.fee_percent,
+      });
+    }
 
     toast({ title: "Report saved", description: `Saved ${currentMonth.label}.` });
     refetchSaved();
@@ -521,7 +533,32 @@ const ManagerReport = () => {
 function SavedReportRow({ report, onEdited }: { report: any; onEdited: () => void }) {
   const [open, setOpen] = useState(false);
   const [openInvoice, setOpenInvoice] = useState(false);
+  const [openDelete, setOpenDelete] = useState(false);
   const ownersLeftoverDop = Math.max(0, Number(report.dop_cash_total || 0) - Number(report.fee_deducted_dop || 0));
+  const { toast } = useToast();
+  const { user } = useAuth();
+
+  const confirmDelete = async () => {
+    try {
+      await deleteManagerReport(report.id);
+      if (user?.id) {
+        await logManagerReport("deleted", user.id, {
+          id: report.id,
+          month: report.month,
+          start_date: report.start_date,
+          end_date: report.end_date,
+          avg_rate: report.avg_rate,
+          fee_percent: report.fee_percent,
+        });
+      }
+      toast({ title: "Report deleted", description: `Deleted ${report.month}.` });
+      setOpenDelete(false);
+      onEdited();
+    } catch (e: any) {
+      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
+    }
+  };
+
   return (
     <TableRow>
       <TableCell>{report.month}</TableCell>
@@ -537,6 +574,7 @@ function SavedReportRow({ report, onEdited }: { report: any; onEdited: () => voi
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setOpen(true)}>Edit</Button>
           <Button size="sm" onClick={() => setOpenInvoice(true)}>Invoice-style</Button>
+          <Button variant="destructive" size="sm" onClick={() => setOpenDelete(true)}>Delete</Button>
         </div>
         <EditManagerReportDialog
           report={report}
@@ -555,6 +593,20 @@ function SavedReportRow({ report, onEdited }: { report: any; onEdited: () => voi
             if (!v) onEdited();
           }}
         />
+        <AlertDialog open={openDelete} onOpenChange={setOpenDelete}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete manager report?</AlertDialogTitle>
+            </AlertDialogHeader>
+            <div className="text-sm text-muted-foreground">
+              This removes the saved report for {report.month}. The action is logged in Activity Log. You can recreate it later by generating and saving again.
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </TableCell>
     </TableRow>
   );

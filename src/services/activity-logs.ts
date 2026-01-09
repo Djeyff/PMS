@@ -272,3 +272,29 @@ export async function reinstateTenantFromLog(logId: string) {
   const out = await res.json().catch(() => ({}));
   return out?.id as string | null;
 }
+
+// ADD: logManagerReport utility to record create/delete actions
+export async function logManagerReport(action: "created" | "deleted", userId: string, report: {
+  id?: string;
+  month: string;
+  start_date: string;
+  end_date: string;
+  avg_rate?: number | null;
+  fee_percent?: number;
+}) {
+  const { error } = await supabase.from("activity_logs").insert({
+    user_id: userId,
+    action: `manager_report_${action}`,
+    entity_type: "manager_report",
+    entity_id: report.id ?? null,
+    metadata: {
+      month: report.month,
+      start_date: report.start_date,
+      end_date: report.end_date,
+      avg_rate: report.avg_rate ?? null,
+      fee_percent: report.fee_percent ?? null,
+    }
+  } as any);
+  if (error) throw error;
+  return true;
+}

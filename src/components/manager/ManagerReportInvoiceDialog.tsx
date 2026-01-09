@@ -133,86 +133,95 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl invoice-print">
+      <DialogContent className="max-w-3xl invoice-print">
         <DialogHeader>
-          <DialogTitle>Property Manager Report • {report.month}</DialogTitle>
+          <DialogTitle className="text-base font-semibold">
+            Property Manager Report • {report.month}
+          </DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">{String(report.start_date).slice(0,10)} to {String(report.end_date).slice(0,10)}</div>
-            <div className="print:hidden flex items-center gap-2">
-              <Button variant="outline" onClick={() => window.print()}>Print</Button>
+
+        <div className="text-sm text-muted-foreground mb-2">
+          {String(report.start_date).slice(0,10)} to {String(report.end_date).slice(0,10)}
+        </div>
+
+        <div className="border rounded-md divide-y">
+          <div className="p-3">
+            <div className="text-xs font-medium mb-1">Cash totals</div>
+            <div className="space-y-1 text-sm">
+              <div>{fmt(totals.usdCash, "USD")} USD</div>
+              <div>{fmt(totals.dopCash, "DOP")} DOP</div>
             </div>
           </div>
-
-          <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
-            <div className="border rounded p-3">
-              <div className="text-xs text-muted-foreground">Cash totals</div>
-              <div className="mt-1">
-                <div>{fmt(totals.usdCash, "USD")} USD</div>
-                <div>{fmt(totals.dopCash, "DOP")} DOP</div>
-              </div>
+          <div className="p-3">
+            <div className="text-xs font-medium mb-1">Transfer totals</div>
+            <div className="space-y-1 text-sm">
+              <div>{fmt(totals.usdTransfer, "USD")} USD</div>
+              <div>{fmt(totals.dopTransfer, "DOP")} DOP</div>
             </div>
-            <div className="border rounded p-3">
-              <div className="text-xs text-muted-foreground">Transfer totals</div>
-              <div className="mt-1">
-                <div>{fmt(totals.usdTransfer, "USD")} USD</div>
-                <div>{fmt(totals.dopTransfer, "DOP")} DOP</div>
-              </div>
-            </div>
-            <div className="border rounded p-3">
-              <div className="text-xs text-muted-foreground">Manager fee</div>
-              <div className="mt-1 text-sm">
+          </div>
+          <div className="p-3">
+            <div className="text-xs font-medium mb-1">Manager fee</div>
+            <div className="space-y-1 text-sm">
+              <div>
                 Base: {fmt(dopTotal, "DOP")} + {usdTotal.toFixed(2)} USD × {Number.isNaN(rateNum) ? "rate ?" : rateNum} = {fmt(feeBaseDop, "DOP")}
               </div>
-              <div className="mt-1 font-semibold">{fmt(managerFeeDop, "DOP")} ({feePct.toFixed(2)}%)</div>
-              <div className="text-xs text-muted-foreground">Deducted from DOP cash: {fmt(actualFeeDeducted, "DOP")}</div>
+              <div className="font-semibold">
+                {fmt(managerFeeDop, "DOP")} ({feePct.toFixed(2)}%)
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Deducted from DOP cash: {fmt(actualFeeDeducted, "DOP")}
+              </div>
             </div>
           </div>
+        </div>
 
-          <div className="border rounded">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Owner</TableHead>
-                  <TableHead>Cash USD</TableHead>
-                  <TableHead>Cash DOP</TableHead>
-                  <TableHead>Fee share (DOP)</TableHead>
-                  <TableHead>Cash DOP after fee</TableHead>
-                  <TableHead>Transfer USD</TableHead>
-                  <TableHead>Transfer DOP</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {ownerRowsWithFee.map((r) => {
-                  const feeShare = (r.cashDop ?? 0) - (r.cashDopAfterFee ?? r.cashDop ?? 0);
-                  return (
-                    <TableRow key={r.ownerId}>
-                      <TableCell className="font-medium">{r.name}</TableCell>
-                      <TableCell>{fmt(r.cashUsd, "USD")}</TableCell>
-                      <TableCell>{fmt(r.cashDop, "DOP")}</TableCell>
-                      <TableCell>{fmt(feeShare, "DOP")}</TableCell>
-                      <TableCell>{fmt(r.cashDopAfterFee ?? r.cashDop, "DOP")}</TableCell>
-                      <TableCell>{fmt(r.transferUsd, "USD")}</TableCell>
-                      <TableCell>{fmt(r.transferDop, "DOP")}</TableCell>
-                    </TableRow>
-                  );
-                })}
-                <TableRow>
-                  <TableCell className="font-semibold">Totals</TableCell>
-                  <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.cashUsd, 0), "USD")}</TableCell>
-                  <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.cashDop, 0), "DOP")}</TableCell>
-                  <TableCell className="font-semibold">{fmt(actualFeeDeducted, "DOP")}</TableCell>
-                  <TableCell className="font-semibold">{fmt(dopCashAfterFeeTotal, "DOP")}</TableCell>
-                  <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.transferUsd, 0), "USD")}</TableCell>
-                  <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.transferDop, 0), "DOP")}</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
+        <div className="border rounded-md mt-3">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Owner</TableHead>
+                <TableHead>Cash USD</TableHead>
+                <TableHead>Cash DOP</TableHead>
+                <TableHead>Fee share (DOP)</TableHead>
+                <TableHead>Cash DOP after fee</TableHead>
+                <TableHead>Transfer USD</TableHead>
+                <TableHead>Transfer DOP</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {ownerRowsWithFee.map((r) => {
+                const feeShare = (r.cashDop ?? 0) - (r.cashDopAfterFee ?? r.cashDop ?? 0);
+                return (
+                  <TableRow key={r.ownerId}>
+                    <TableCell className="font-medium">{r.name}</TableCell>
+                    <TableCell>{fmt(r.cashUsd, "USD")}</TableCell>
+                    <TableCell>{fmt(r.cashDop, "DOP")}</TableCell>
+                    <TableCell>{fmt(feeShare, "DOP")}</TableCell>
+                    <TableCell>{fmt(r.cashDopAfterFee ?? r.cashDop, "DOP")}</TableCell>
+                    <TableCell>{fmt(r.transferUsd, "USD")}</TableCell>
+                    <TableCell>{fmt(r.transferDop, "DOP")}</TableCell>
+                  </TableRow>
+                );
+              })}
+              <TableRow>
+                <TableCell className="font-semibold">Totals</TableCell>
+                <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.cashUsd, 0), "USD")}</TableCell>
+                <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.cashDop, 0), "DOP")}</TableCell>
+                <TableCell className="font-semibold">{fmt(actualFeeDeducted, "DOP")}</TableCell>
+                <TableCell className="font-semibold">{fmt(dopCashAfterFeeTotal, "DOP")}</TableCell>
+                <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.transferUsd, 0), "USD")}</TableCell>
+                <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.transferDop, 0), "DOP")}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
 
+        <div className="mt-2 flex items-center justify-between">
           <div className="text-xs text-muted-foreground">
-            Note: “Unassigned” shows payments from properties without owner assignments.
+            Note: "Unassigned" shows payments from properties without owner assignments.
+          </div>
+          <div className="print:hidden">
+            <Button variant="outline" onClick={() => window.print()}>Print</Button>
           </div>
         </div>
       </DialogContent>

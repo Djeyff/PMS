@@ -52,3 +52,14 @@ export async function updateManagerReport(id: string, updates: Partial<ManagerRe
   if (error) throw error;
   return data as ManagerReportRow;
 }
+
+export async function deleteManagerReport(id: string) {
+  const { data, error } = await supabase
+    .from("manager_reports")
+    .delete()
+    .eq("id", id)
+    .select("id")
+    .single();
+  if (error) throw error;
+  return true;
+}
