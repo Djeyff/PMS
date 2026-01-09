@@ -325,6 +325,9 @@ const InvoiceDetail = () => {
           <div className="text-gray-600">{lang === "es" ? "Fecha" : "Date"}</div>
           <div className="font-medium">{inv.issue_date}</div>
 
+          <div className="text-gray-600">{t.due}</div>
+          <div className="font-medium">{inv.due_date}</div>
+
           <div className="text-gray-600">{lang === "es" ? "Para el mes de" : "For month of"}</div>
           <div className="font-medium">{monthText}</div>
         </div>
