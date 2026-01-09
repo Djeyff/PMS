@@ -149,7 +149,8 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl invoice-print bg-white text-black p-6 rounded-md overflow-hidden">
+      {/* Allow vertical scroll and cap height */}
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto invoice-print bg-white text-black p-6 rounded-md">
         <DialogHeader>
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-3">
@@ -237,13 +238,8 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
           </Table>
         </div>
 
-        <div className="mt-3 flex items-center justify-between">
-          <div className="text-xs text-gray-600">
-            Note: "Unassigned" shows payments from properties without owner assignments.
-          </div>
-          <div className="print:hidden">
-            <Button variant="outline" onClick={() => window.print()}>Print</Button>
-          </div>
+        <div className="mt-3 flex items-center justify-end print:hidden">
+          <Button variant="outline" onClick={() => window.print()}>Print</Button>
         </div>
       </DialogContent>
     </Dialog>
