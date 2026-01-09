@@ -121,6 +121,30 @@ export async function createPayment(input: {
     .single();
 
   if (error) throw error;
+
+  // After successful insert, fire server-side email notification (does not block the flow)
+  try {
+    const { data: sess } = await supabase.auth.getSession();
+    const token = sess.session?.access_token;
+    if (token) {
+      const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/notify-payment";
+      await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id: data.id }),
+      });
+    } else {
+      // No session token; skip notification silently
+      console.warn("[payments.createPayment] No session token, skipping notify-payment");
+    }
+  } catch (e) {
+    // Log but do not break payment creation
+    console.error("[payments.createPayment] notify-payment failed", e);
+  }
+
   return data as PaymentRow;
 }
 
