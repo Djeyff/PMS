@@ -64,13 +64,20 @@ const AgencyDashboard = () => {
     return Math.round((occupiedIds.size / totalProps) * 100);
   })();
 
-  const monthly = (() => {
+  const monthlyByMethod = (() => {
     const d = new Date();
-    const ym = d.toISOString().slice(0, 7);
+    const ym = d.toISOString().slice(0, 7); // YYYY-MM
     const list = (payments ?? []).filter((p: any) => (p.received_date ?? "").startsWith(ym));
-    const usd = list.filter((p: any) => p.currency === "USD").reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-    const dop = list.filter((p: any) => p.currency === "DOP").reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-    return { usd, dop };
+    const sum = (method: string, currency: "USD" | "DOP") =>
+      list
+        .filter((p: any) => String(p.method) === method && p.currency === currency)
+        .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+    return {
+      bankUsd: sum("bank_transfer", "USD"),
+      bankDop: sum("bank_transfer", "DOP"),
+      cashUsd: sum("cash", "USD"),
+      cashDop: sum("cash", "DOP"),
+    };
   })();
 
   const overdueCount = (() => {
@@ -120,10 +127,16 @@ const AgencyDashboard = () => {
     <div className="space-y-6">
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <Stat title="Occupancy" value={`${occupancyPercent}%`} />
-        <Stat title="Monthly Revenue">
+        <Stat title="Bank Transfer">
           <div className="flex flex-col text-base font-normal">
-            <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(monthly.usd)} USD</span>
-            <span className="text-muted-foreground text-sm">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(monthly.dop)} DOP</span>
+            <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(monthlyByMethod.bankUsd)} USD</span>
+            <span className="text-muted-foreground text-sm">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(monthlyByMethod.bankDop)} DOP</span>
+          </div>
+        </Stat>
+        <Stat title="Cash">
+          <div className="flex flex-col text-base font-normal">
+            <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(monthlyByMethod.cashUsd)} USD</span>
+            <span className="text-muted-foreground text-sm">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(monthlyByMethod.cashDop)} DOP</span>
           </div>
         </Stat>
         <Stat title="Overdue Invoices" value={String(overdueCount)} />

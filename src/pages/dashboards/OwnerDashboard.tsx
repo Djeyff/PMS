@@ -45,9 +45,16 @@ const OwnerDashboard = () => {
 
   const occupancy = (() => {
     const totalProps = props?.length ?? 0;
-    const activeLeases = leases?.length ?? 0;
     if (totalProps === 0) return "0%";
-    return `${Math.round((activeLeases / totalProps) * 100)}%`;
+    // properties list for owner
+    const propIds = new Set<string>((props ?? []).map((p: any) => p.id));
+    const occupied = new Set<string>();
+    (leases ?? []).forEach((l: any) => {
+      if (propIds.has(l.property_id) && l?.tenant_id && String(l.status) !== "terminated") {
+        occupied.add(l.property_id);
+      }
+    });
+    return `${Math.round((occupied.size / totalProps) * 100)}%`;
   })();
 
   const monthly = (() => {

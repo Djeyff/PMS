@@ -97,26 +97,35 @@ const Reports = () => {
 
   // Occupancy
   const occupancy = useMemo(() => {
+    // Consistent with dashboard: occupied if any lease has a tenant and is not terminated
     const totalProps = properties?.length ?? 0;
     if (totalProps === 0) return { percent: 0, activeProps: 0, totalProps: 0 };
-    const activePropsSet = new Set<string>();
+    const occupiedSet = new Set<string>();
     (leases ?? []).forEach((l: any) => {
-      if (overlapLease(l, startDate, endDate)) {
-        activePropsSet.add(l.property_id);
+      if (l?.tenant_id && String(l.status) !== "terminated") {
+        occupiedSet.add(l.property_id);
       }
     });
-    const activeProps = activePropsSet.size;
+    const activeProps = occupiedSet.size;
     const percent = Math.round((activeProps / totalProps) * 100);
     return { percent, activeProps, totalProps };
-  }, [properties, leases, startDate, endDate]);
+  }, [properties, leases]);
 
   // Revenue (by currency)
   const revenue = useMemo(() => {
     const inRange = (payments ?? []).filter((p: any) => p.received_date >= startDate && p.received_date <= endDate);
     const byTenant = tenantFilter === "all" ? inRange : inRange.filter((p: any) => p.tenant_id === tenantFilter);
-    const usd = byTenant.filter((p: any) => p.currency === "USD").reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-    const dop = byTenant.filter((p: any) => p.currency === "DOP").reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-    return { usd, dop, rows: byTenant };
+    const sum = (method: string, currency: "USD" | "DOP") =>
+      byTenant
+        .filter((p: any) => String(p.method) === method && p.currency === currency)
+        .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+    return {
+      bankUsd: sum("bank_transfer", "USD"),
+      bankDop: sum("bank_transfer", "DOP"),
+      cashUsd: sum("cash", "USD"),
+      cashDop: sum("cash", "DOP"),
+      rows: byTenant,
+    };
   }, [payments, startDate, endDate, tenantFilter]);
 
   // Invoice aging
@@ -273,12 +282,18 @@ const Reports = () => {
             <CardContent className="text-2xl font-bold">{`${occupancy.percent}%`}</CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Revenue USD</CardTitle></CardHeader>
-            <CardContent className="text-2xl font-bold">{fmtMoney(revenue.usd, "USD")}</CardContent>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Bank Transfer</CardTitle></CardHeader>
+            <CardContent className="text-base font-normal">
+              <div className="text-lg font-semibold">{fmtMoney(revenue.bankUsd, "USD")} USD</div>
+              <div className="text-muted-foreground text-sm">{fmtMoney(revenue.bankDop, "DOP")} DOP</div>
+            </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Revenue DOP</CardTitle></CardHeader>
-            <CardContent className="text-2xl font-bold">{fmtMoney(revenue.dop, "DOP")}</CardContent>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Cash</CardTitle></CardHeader>
+            <CardContent className="text-base font-normal">
+              <div className="text-lg font-semibold">{fmtMoney(revenue.cashUsd, "USD")} USD</div>
+              <div className="text-muted-foreground text-sm">{fmtMoney(revenue.cashDop, "DOP")} DOP</div>
+            </CardContent>
           </Card>
         </div>
 
