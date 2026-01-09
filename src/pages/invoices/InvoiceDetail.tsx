@@ -256,11 +256,7 @@ const InvoiceDetail = () => {
       </div>
 
       {/* Info grid: agency block left, billed-to and meta right */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="space-y-1">
-          <div className="font-semibold">{agencyName}</div>
-          <div className="text-sm text-gray-600 whitespace-pre-line">{agencyAddress}</div>
-        </div>
+      <div className="mb-6">
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <div className="text-gray-600">{lang === "es" ? "Facturado a" : "Billed to"}</div>
           <div className="font-medium">{tenantName}</div>
