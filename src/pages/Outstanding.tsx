@@ -43,18 +43,58 @@ const Outstanding = () => {
       map.set(t.id, { id: t.id, name, usd: 0, dop: 0 });
     });
 
+    // Build a quick lookup for invoice currency by id
+    const invoiceById = new Map<string, { currency: "USD" | "DOP"; total_amount: number; tenant_id: string }>();
+    (invoices ?? []).forEach((inv: any) => {
+      invoiceById.set(inv.id, { currency: inv.currency, total_amount: Number(inv.total_amount || 0), tenant_id: inv.tenant_id });
+    });
+
+    // Subtract invoices from balances in their own currency
     (invoices ?? []).forEach((inv: any) => {
       const item = map.get(inv.tenant_id);
       if (!item) return;
-      if (inv.currency === "USD") item.usd -= Number(inv.total_amount || 0);
-      if (inv.currency === "DOP") item.dop -= Number(inv.total_amount || 0);
+      const amt = Number(inv.total_amount || 0);
+      if (inv.currency === "USD") item.usd -= amt;
+      else if (inv.currency === "DOP") item.dop -= amt;
     });
 
+    // Helper: convert a payment amount to a target currency via a per-payment exchange_rate
+    const convert = (amt: number, from: "USD" | "DOP", to: "USD" | "DOP", rate: number | null) => {
+      if (from === to) return amt;
+      if (!rate || !isFinite(rate) || rate <= 0) return 0;
+      if (from === "DOP" && to === "USD") return amt / rate;
+      if (from === "USD" && to === "DOP") return amt * rate;
+      return 0;
+    };
+
+    // Add payments; if linked to an invoice and currencies differ, convert using exchange_rate and apply to invoice currency
     (payments ?? []).forEach((p: any) => {
       const item = map.get(p.tenant_id);
       if (!item) return;
-      if (p.currency === "USD") item.usd += Number(p.amount || 0);
-      if (p.currency === "DOP") item.dop += Number(p.amount || 0);
+      const amt = Number(p.amount || 0);
+      const payCur = p.currency as "USD" | "DOP";
+      const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : null;
+
+      const invRef = p.invoice_id ? invoiceById.get(p.invoice_id) : null;
+      if (invRef) {
+        const invCur = invRef.currency;
+        if (payCur === invCur) {
+          // Same currency, apply directly to the invoice currency balance
+          if (invCur === "USD") item.usd += amt;
+          else item.dop += amt;
+        } else {
+          // Cross-currency: convert with the recorded exchange_rate and apply to the invoice currency
+          const converted = convert(amt, payCur, invCur, rate);
+          if (invCur === "USD") item.usd += converted;
+          else item.dop += converted;
+          // IMPORTANT: do not add the original payment to its native currency column,
+          // since it settles an invoice in a different currency.
+        }
+      } else {
+        // Unlinked payment: apply to its native currency (no conversion context)
+        if (payCur === "USD") item.usd += amt;
+        else item.dop += amt;
+      }
     });
 
     return Array.from(map.values()).sort((a, b) => {
