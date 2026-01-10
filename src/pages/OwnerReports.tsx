@@ -89,6 +89,16 @@ const OwnerReports = () => {
     queryFn: () => fetchOwnerProfilesInAgency(agencyId!),
   });
 
+  // Build a map of ownerId -> "First Last"
+  const ownerNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    (owners ?? []).forEach((o: any) => {
+      const name = [o.first_name, o.last_name].filter(Boolean).join(" ");
+      if (o.id) map[o.id] = name || o.id;
+    });
+    return map;
+  }, [owners]);
+
   const { data: savedReports, refetch: refetchSaved } = useQuery({
     queryKey: ["owner-saved-reports", agencyId, ownerId],
     enabled: !!agencyId && isAdmin,
@@ -345,7 +355,7 @@ const OwnerReports = () => {
                   </TableHeader>
                   <TableBody>
                     {savedReports.map((r: OwnerReportRow) => (
-                      <SavedReportRow key={r.id} report={r} onEdited={() => refetchSaved()} />
+                      <SavedReportRow key={r.id} report={r} onEdited={() => refetchSaved()} ownerNameMap={ownerNameMap} />
                     ))}
                   </TableBody>
                 </Table>
@@ -359,7 +369,7 @@ const OwnerReports = () => {
 };
 
 // Helper row component inside this file for saved entries
-function SavedReportRow({ report, onEdited }: { report: OwnerReportRow; onEdited: () => void }) {
+function SavedReportRow({ report, onEdited, ownerNameMap }: { report: OwnerReportRow; onEdited: () => void; ownerNameMap: Record<string, string> }) {
   const [openEdit, setOpenEdit] = useState(false);
   const [openInvoice, setOpenInvoice] = useState(false);
   const [openDelete, setOpenDelete] = useState(false);
@@ -376,10 +386,12 @@ function SavedReportRow({ report, onEdited }: { report: OwnerReportRow; onEdited
     }
   };
 
+  const displayOwner = ownerNameMap[report.owner_id] ?? report.owner_id;
+
   return (
     <TableRow>
       <TableCell>{report.month}</TableCell>
-      <TableCell>{report.owner_id}</TableCell>
+      <TableCell>{displayOwner}</TableCell>
       <TableCell>{fmt(Number(report.usd_total || 0), "USD")}</TableCell>
       <TableCell>{fmt(Number(report.dop_total || 0), "DOP")}</TableCell>
       <TableCell>{report.avg_rate != null ? Number(report.avg_rate).toFixed(6) : "—"}</TableCell>

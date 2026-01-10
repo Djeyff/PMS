@@ -197,7 +197,13 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
         </div>
 
         <div className="mt-3 flex items-center justify-end print:hidden">
-          <Button variant="outline" onClick={() => window.print()}>Print</Button>
+          <Button
+            variant="default"
+            className="bg-neutral-800 text-white hover:bg-neutral-900"
+            onClick={() => window.print()}
+          >
+            Print
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
