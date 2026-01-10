@@ -97,6 +97,8 @@
 
   body {
     @apply bg-background text-foreground;
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
   }
 }
 
@@ -144,6 +146,22 @@
   .invoice-print .flex {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+}
+
+/* Mobile-friendly momentum scrolling for horizontally scrollable areas */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent label/values from overflowing on narrow screens */
+@media (max-width: 380px) {
+  .truncate {
+    max-width: 100%;
+  }
+  .text-sm,
+  .text-xs {
+    word-break: break-word;
   }
 }
 

@@ -39,8 +39,9 @@ const MobileNav = () => {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-30 border-t bg-background md:hidden"
+      className="fixed bottom-0 left-0 right-0 z-30 border-t bg-background md:hidden shadow-[0_-4px_12px_rgba(0,0,0,0.06)]"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      aria-label="Bottom navigation"
     >
       <div className="mx-auto max-w-5xl">
         <ul
@@ -58,6 +59,8 @@ const MobileNav = () => {
                   className={`flex min-w-[90px] flex-col items-center justify-center py-2 text-xs ${
                     active ? "text-primary" : "text-muted-foreground"
                   }`}
+                  aria-label={item.label}
+                  aria-current={active ? "page" : undefined}
                 >
                   <Icon className="h-5 w-5" />
                   <span className="mt-1">{item.label}</span>

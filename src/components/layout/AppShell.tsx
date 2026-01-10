@@ -67,7 +67,10 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
           </SidebarFooter>
         </Sidebar>
         <div className="flex-1 flex flex-col">
-          <header className="h-14 border-b flex items-center justify-between px-3 md:px-6">
+          <header
+            className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center justify-between px-3 md:px-6"
+            style={{ paddingTop: "env(safe-area-inset-top)" }}
+          >
             <div className="md:hidden">
               <Link to="/dashboard" className="font-semibold text-lg">PMS</Link>
             </div>
@@ -76,7 +79,12 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
               <CurrencySelector />
             </div>
           </header>
-          <main className="flex-1 p-3 md:p-6 pb-20 md:pb-6">{children}</main>
+          <main
+            className="flex-1 p-3 md:p-6 pb-20 md:pb-6"
+            style={{ paddingBottom: "calc(72px + env(safe-area-inset-bottom))" }}
+          >
+            {children}
+          </main>
         </div>
         <MobileNav />
       </div>
