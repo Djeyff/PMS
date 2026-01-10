@@ -82,7 +82,7 @@ export async function syncEventsToGoogle(eventIds?: string[], calendarId?: strin
 }
 
 // NEW: Upsert lease expiry events for all non-terminated leases and remove for terminated
-export async function upsertLeaseExpiryEvents(params: { role: Role | null; userId: string | null; agencyId: string | null; alertDays: number }) {
+export async function upsertLeaseExpiryEvents(params: { role: Role | null; userId: string | null; agencyId: string | null; alertDays: number; alertTime?: string }) {
   const leases = await fetchLeases(params);
   const { data: userRes } = await supabase.auth.getUser();
   const uid = userRes.user?.id;
@@ -105,7 +105,6 @@ export async function upsertLeaseExpiryEvents(params: { role: Role | null; userI
   const duplicateIds: string[] = [];
   Object.entries(byLease).forEach(([key, arr]) => {
     if (key === "__no_lease__") {
-      // Remove orphaned lease expiry events without lease_id
       duplicateIds.push(...arr.map((e) => e.id));
     } else if (arr.length > 1) {
       duplicateIds.push(...arr.slice(1).map((e) => e.id));
@@ -116,14 +115,20 @@ export async function upsertLeaseExpiryEvents(params: { role: Role | null; userI
     if (dedErr) throw dedErr;
   }
 
-  // Re-fetch a clean map after dedupe
   const cleanExisting = (existing ?? []).filter((e: any) => !duplicateIds.includes(e.id));
   const existingByLease = new Map<string, any>();
   cleanExisting.forEach((e: any) => {
     if (e.lease_id) existingByLease.set(e.lease_id, e);
   });
 
-  const minutesBefore = Math.max(0, Math.floor(params.alertDays * 24 * 60));
+  // Parse HH:MM → minutes
+  const timeStr = (params.alertTime ?? "09:00").slice(0, 5);
+  const [hhStr, mmStr] = timeStr.split(":");
+  const timeMinutes = Math.max(0, (Number(hhStr) || 0) * 60 + (Number(mmStr) || 0));
+  // Reminder is set minutes before event start; for an all-day event starting at 00:00 local,
+  // minutes_before = alertDays*1440 - timeMinutes so it fires at <alertDays> days before at HH:MM local.
+  const minutesBeforeBase = Math.max(0, Math.floor(params.alertDays * 24 * 60));
+  const minutesBefore = Math.max(0, minutesBeforeBase - timeMinutes);
 
   const toInsert: any[] = [];
   const toUpdate: { id: string; patch: any }[] = [];

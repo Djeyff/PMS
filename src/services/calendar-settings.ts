@@ -5,6 +5,7 @@ export type CalendarSettings = {
   google_account_email?: string | null;
   google_calendar_id?: string | null;
   lease_alert_days: number;
+  lease_alert_time?: string | null; // NEW: HH:MM
   updated_at?: string;
 };
 
@@ -26,7 +27,6 @@ export async function saveMyCalendarSettings(patch: Partial<Omit<CalendarSetting
   const uid = userRes.user?.id;
   if (!uid) throw new Error("Not authenticated");
 
-  // Try update; if not exists, insert
   const { data: existing, error: selErr } = await supabase
     .from("calendar_settings")
     .select("user_id")

@@ -15,6 +15,8 @@ import { format, parse, startOfWeek, getDay } from "date-fns";
 import { enUS } from "date-fns/locale";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast as notify } from "sonner";
+import { fetchAgencyById } from "@/services/agencies";
 
 const locales = { "en-US": enUS };
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });
@@ -51,23 +53,32 @@ const CalendarPage: React.FC = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  // NEW: Google calendars state
+  // Load agency timezone
+  const { data: agency } = useQuery({
+    queryKey: ["calendar-agency", profile?.agency_id],
+    enabled: !!profile?.agency_id,
+    queryFn: () => fetchAgencyById(profile!.agency_id!),
+  });
+
+  // Google calendars state
   const [googleCalendars, setGoogleCalendars] = React.useState<Array<{ id: string; summary: string; primary?: boolean }>>([]);
 
   const { data: settings, refetch: refetchSettings } = useQuery({
     queryKey: ["calendar-settings"],
     queryFn: getMyCalendarSettings,
-    enabled: !!user?.id, // wait until logged in
+    enabled: !!user?.id,
   });
 
   const [showLeaseExpiry, setShowLeaseExpiry] = React.useState(true);
   const [alertDays, setAlertDays] = React.useState<number>(settings?.lease_alert_days ?? 7);
+  const [alertTime, setAlertTime] = React.useState<string>(settings?.lease_alert_time ?? "09:00"); // NEW: HH:MM
   const [googleEmail, setGoogleEmail] = React.useState<string>(settings?.google_account_email ?? "");
   const [googleCalendarId, setGoogleCalendarId] = React.useState<string>(settings?.google_calendar_id ?? "");
 
   React.useEffect(() => {
     if (settings) {
       setAlertDays(settings.lease_alert_days ?? 7);
+      setAlertTime(settings.lease_alert_time ?? "09:00");
       setGoogleEmail(settings.google_account_email ?? "");
       setGoogleCalendarId(settings.google_calendar_id ?? "");
     }
@@ -76,41 +87,10 @@ const CalendarPage: React.FC = () => {
   const { data: events, isLoading, isError, error } = useQuery({
     queryKey: ["calendar-events", user?.id],
     queryFn: listEvents,
-    enabled: !!user?.id, // only fetch when session exists
+    enabled: !!user?.id,
   });
 
-  const createMut = useMutation({
-    mutationFn: (evt: UiEvent) => createEvent(toDbEvent(evt)),
-    onSuccess: () => {
-      toast({ title: "Event added" });
-      qc.invalidateQueries({ queryKey: ["calendar-events"] });
-    },
-  });
-
-  const updateMut = useMutation({
-    mutationFn: (payload: { id: string; patch: Partial<UiEvent> }) => {
-      const patchDb: any = {};
-      if (payload.patch.title != null) patchDb.title = payload.patch.title;
-      if (payload.patch.start) patchDb.start = payload.patch.start.toISOString();
-      if (payload.patch.end) patchDb.end = payload.patch.end.toISOString();
-      if (payload.patch.allDay != null) patchDb.all_day = !!payload.patch.allDay;
-      return updateEvent(payload.id, patchDb);
-    },
-    onSuccess: () => {
-      toast({ title: "Event updated" });
-      qc.invalidateQueries({ queryKey: ["calendar-events"] });
-    },
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: (id: string) => deleteEvent(id),
-    onSuccess: () => {
-      toast({ title: "Event deleted" });
-      qc.invalidateQueries({ queryKey: ["calendar-events"] });
-    },
-  });
-
-  // Guard lease expiry updater until logged in
+  // Ensure lease expiry events with chosen lead time + time
   const ensureLeaseExpiry = async () => {
     if (!showLeaseExpiry || !user?.id) return;
     await upsertLeaseExpiryEvents({
@@ -118,8 +98,10 @@ const CalendarPage: React.FC = () => {
       userId: user?.id ?? null,
       agencyId: profile?.agency_id ?? null,
       alertDays,
+      alertTime,
     });
     await qc.invalidateQueries({ queryKey: ["calendar-events"] });
+    notify.success(`Reminder settings updated (${alertDays} day(s) before at ${alertTime}${agency?.timezone ? ` • ${agency.timezone}` : ""})`, { position: "bottom-right" });
   };
 
   React.useEffect(() => {
@@ -131,10 +113,10 @@ const CalendarPage: React.FC = () => {
       google_account_email: googleEmail || null,
       google_calendar_id: googleCalendarId || null,
       lease_alert_days: alertDays,
+      lease_alert_time: alertTime,
     });
     toast({ title: "Settings saved" });
     refetchSettings();
-    // Re-ensure events with new alertDays
     await ensureLeaseExpiry();
   };
 
@@ -240,18 +222,30 @@ const CalendarPage: React.FC = () => {
     setOpen(true);
   };
 
-  const saveEvent = () => {
+  const saveEvent = async () => {
     if (!active) return;
     if (!active.id) {
-      createMut.mutate(active);
+      await createEvent(toDbEvent(active));
+      notify.success("Event added", { position: "bottom-right" });
     } else {
-      updateMut.mutate({ id: active.id, patch: active });
+      await updateEvent(active.id, {
+        title: active.title,
+        start: active.start.toISOString(),
+        end: active.end.toISOString(),
+        all_day: !!active.allDay,
+      } as any);
+      notify.success("Event updated", { position: "bottom-right" });
     }
+    await qc.invalidateQueries({ queryKey: ["calendar-events"] });
     setOpen(false);
   };
 
-  const removeEvent = () => {
-    if (active?.id) deleteMut.mutate(active.id);
+  const removeEvent = async () => {
+    if (active?.id) {
+      await deleteEvent(active.id);
+      notify.success("Event deleted", { position: "bottom-right" });
+      await qc.invalidateQueries({ queryKey: ["calendar-events"] });
+    }
     setOpen(false);
   };
 
@@ -278,7 +272,7 @@ const CalendarPage: React.FC = () => {
                     {showLeaseExpiry ? "On" : "Off"}
                   </Button>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   <div>
                     <div className="text-xs text-muted-foreground">Alert lead time (days)</div>
                     <Input
@@ -286,6 +280,16 @@ const CalendarPage: React.FC = () => {
                       min={0}
                       value={alertDays}
                       onChange={(e) => setAlertDays(Math.max(0, Number(e.target.value || 0)))}
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">
+                      Reminder time {agency?.timezone ? `(${agency.timezone})` : ""}
+                    </div>
+                    <Input
+                      type="time"
+                      value={alertTime}
+                      onChange={(e) => setAlertTime(e.target.value)}
                     />
                   </div>
                   <div className="flex items-end">
