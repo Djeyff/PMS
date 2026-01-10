@@ -264,12 +264,12 @@ const InvoiceDetail = () => {
   })();
 
   const paymentDatesText = (() => {
-    const dates = (payments ?? [])
+    const raw = (payments ?? [])
       .map((p: any) => p.received_date)
-      .filter((d: any) => typeof d === "string")
-      .sort();
-    if (dates.length === 0) return "—";
-    return dates.join(", ");
+      .filter((d: any) => typeof d === "string");
+    const uniqSorted = Array.from(new Set(raw)).sort();
+    if (uniqSorted.length === 0) return "—";
+    return uniqSorted.join(", ");
   })();
 
   return (
