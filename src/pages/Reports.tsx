@@ -6,6 +6,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthProvider";
+import { useIsMobile } from "@/hooks/use-mobile";
+import InvoiceAgingBucketMobile from "@/components/reports/InvoiceAgingBucketMobile";
+import TenantPaymentHistoryItemMobile from "@/components/reports/TenantPaymentHistoryItemMobile";
+import OwnerPayoutItemMobile from "@/components/reports/OwnerPayoutItemMobile";
 import { useQuery } from "@tanstack/react-query";
 import { fetchLeases } from "@/services/leases";
 import { fetchPayments } from "@/services/payments";
@@ -43,6 +47,7 @@ const Reports = () => {
   const agencyId = profile?.agency_id ?? null;
   const isAdmin = role === "agency_admin";
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   // Filters
   const today = new Date().toISOString().slice(0, 10);
@@ -361,42 +366,71 @@ const Reports = () => {
               </Button>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Bucket</TableHead>
-                    <TableHead>Count</TableHead>
-                    <TableHead>Total USD</TableHead>
-                    <TableHead>Total DOP</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell>Current</TableCell>
-                    <TableCell>{aging.bucket.current}</TableCell>
-                    <TableCell>{fmtMoney(aging.totalsByBucket.current.USD ?? 0, "USD")}</TableCell>
-                    <TableCell>{fmtMoney(aging.totalsByBucket.current.DOP ?? 0, "DOP")}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>1-30</TableCell>
-                    <TableCell>{aging.bucket["1-30"]}</TableCell>
-                    <TableCell>{fmtMoney(aging.totalsByBucket["1-30"].USD ?? 0, "USD")}</TableCell>
-                    <TableCell>{fmtMoney(aging.totalsByBucket["1-30"].DOP ?? 0, "DOP")}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>31-60</TableCell>
-                    <TableCell>{aging.bucket["31-60"]}</TableCell>
-                    <TableCell>{fmtMoney(aging.totalsByBucket["31-60"].USD ?? 0, "USD")}</TableCell>
-                    <TableCell>{fmtMoney(aging.totalsByBucket["31-60"].DOP ?? 0, "DOP")}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>61+</TableCell>
-                    <TableCell>{aging.bucket["61+"]}</TableCell>
-                    <TableCell>{fmtMoney(aging.totalsByBucket["61+"].USD ?? 0, "USD")}</TableCell>
-                    <TableCell>{fmtMoney(aging.totalsByBucket["61+"].DOP ?? 0, "DOP")}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+              {isMobile ? (
+                <div>
+                  <InvoiceAgingBucketMobile
+                    title="Current"
+                    count={aging.bucket.current}
+                    totalUsd={aging.totalsByBucket.current.USD ?? 0}
+                    totalDop={aging.totalsByBucket.current.DOP ?? 0}
+                  />
+                  <InvoiceAgingBucketMobile
+                    title="1-30"
+                    count={aging.bucket["1-30"]}
+                    totalUsd={aging.totalsByBucket["1-30"].USD ?? 0}
+                    totalDop={aging.totalsByBucket["1-30"].DOP ?? 0}
+                  />
+                  <InvoiceAgingBucketMobile
+                    title="31-60"
+                    count={aging.bucket["31-60"]}
+                    totalUsd={aging.totalsByBucket["31-60"].USD ?? 0}
+                    totalDop={aging.totalsByBucket["31-60"].DOP ?? 0}
+                  />
+                  <InvoiceAgingBucketMobile
+                    title="61+"
+                    count={aging.bucket["61+"]}
+                    totalUsd={aging.totalsByBucket["61+"].USD ?? 0}
+                    totalDop={aging.totalsByBucket["61+"].DOP ?? 0}
+                  />
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Bucket</TableHead>
+                      <TableHead>Count</TableHead>
+                      <TableHead>Total USD</TableHead>
+                      <TableHead>Total DOP</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell>Current</TableCell>
+                      <TableCell>{aging.bucket.current}</TableCell>
+                      <TableCell>{fmtMoney(aging.totalsByBucket.current.USD ?? 0, "USD")}</TableCell>
+                      <TableCell>{fmtMoney(aging.totalsByBucket.current.DOP ?? 0, "DOP")}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>1-30</TableCell>
+                      <TableCell>{aging.bucket["1-30"]}</TableCell>
+                      <TableCell>{fmtMoney(aging.totalsByBucket["1-30"].USD ?? 0, "USD")}</TableCell>
+                      <TableCell>{fmtMoney(aging.totalsByBucket["1-30"].DOP ?? 0, "DOP")}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>31-60</TableCell>
+                      <TableCell>{aging.bucket["31-60"]}</TableCell>
+                      <TableCell>{fmtMoney(aging.totalsByBucket["31-60"].USD ?? 0, "USD")}</TableCell>
+                      <TableCell>{fmtMoney(aging.totalsByBucket["31-60"].DOP ?? 0, "DOP")}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>61+</TableCell>
+                      <TableCell>{aging.bucket["61+"]}</TableCell>
+                      <TableCell>{fmtMoney(aging.totalsByBucket["61+"].USD ?? 0, "USD")}</TableCell>
+                      <TableCell>{fmtMoney(aging.totalsByBucket["61+"].DOP ?? 0, "DOP")}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
 
@@ -418,21 +452,27 @@ const Reports = () => {
               </Button>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Property</TableHead>
-                    <TableHead>Tenant</TableHead>
-                    <TableHead>Method</TableHead>
-                    <TableHead>Amount</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tenantHistoryRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-muted-foreground text-sm">No payments in range.</TableCell></TableRow>
-                  ) : (
-                    tenantHistoryRows.map((r, idx) => (
+              {tenantHistoryRows.length === 0 ? (
+                <div className="text-muted-foreground text-sm">No payments in range.</div>
+              ) : isMobile ? (
+                <div>
+                  {tenantHistoryRows.map((r, idx) => (
+                    <TenantPaymentHistoryItemMobile key={idx} row={r} />
+                  ))}
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Property</TableHead>
+                      <TableHead>Tenant</TableHead>
+                      <TableHead>Method</TableHead>
+                      <TableHead>Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tenantHistoryRows.map((r, idx) => (
                       <TableRow key={idx}>
                         <TableCell>{r.date}</TableCell>
                         <TableCell>{r.property}</TableCell>
@@ -440,10 +480,10 @@ const Reports = () => {
                         <TableCell className="capitalize">{r.method}</TableCell>
                         <TableCell>{r.amount}</TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -474,31 +514,44 @@ const Reports = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Owner</TableHead>
-                    <TableHead>USD</TableHead>
-                    <TableHead>DOP</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              {isMobile ? (
+                <div>
                   {ownerPayoutRows
                     .filter((r) => (ownerFilter === "all" ? true : r.ownerId === ownerFilter))
                     .map((r) => (
-                      <TableRow key={r.ownerId}>
-                        <TableCell>{r.name}</TableCell>
-                        <TableCell>{fmtMoney(r.usd, "USD")}</TableCell>
-                        <TableCell>{fmtMoney(r.dop, "DOP")}</TableCell>
-                      </TableRow>
+                      <OwnerPayoutItemMobile key={r.ownerId} name={r.name} usd={r.usd} dop={r.dop} />
                     ))}
                   {ownerPayoutRows.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={3} className="text-muted-foreground text-sm">No payouts in range.</TableCell>
-                    </TableRow>
+                    <div className="text-muted-foreground text-sm">No payouts in range.</div>
                   )}
-                </TableBody>
-              </Table>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Owner</TableHead>
+                      <TableHead>USD</TableHead>
+                      <TableHead>DOP</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ownerPayoutRows
+                      .filter((r) => (ownerFilter === "all" ? true : r.ownerId === ownerFilter))
+                      .map((r) => (
+                        <TableRow key={r.ownerId}>
+                          <TableCell>{r.name}</TableCell>
+                          <TableCell>{fmtMoney(r.usd, "USD")}</TableCell>
+                          <TableCell>{fmtMoney(r.dop, "DOP")}</TableCell>
+                        </TableRow>
+                      ))}
+                    {ownerPayoutRows.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-muted-foreground text-sm">No payouts in range.</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         )}

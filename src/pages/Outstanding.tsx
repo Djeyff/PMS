@@ -9,6 +9,8 @@ import { fetchInvoices } from "@/services/invoices";
 import { fetchPayments } from "@/services/payments";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { useIsMobile } from "@/hooks/use-mobile";
+import OutstandingTenantItemMobile from "@/components/outstanding/OutstandingTenantItemMobile";
 
 const fmt = (amt: number, cur: string) =>
   new Intl.NumberFormat(undefined, { style: "currency", currency: cur }).format(amt);
@@ -106,6 +108,8 @@ const Outstanding = () => {
 
   const isLoading = tenantsLoading || invLoading || payLoading;
 
+  const isMobile = useIsMobile();
+
   return (
     <AppShell>
       <div className="space-y-4">
@@ -122,6 +126,12 @@ const Outstanding = () => {
               <div className="text-sm text-muted-foreground">Loading...</div>
             ) : (rows?.length ?? 0) === 0 ? (
               <div className="text-sm text-muted-foreground">No tenants found.</div>
+            ) : isMobile ? (
+              <div>
+                {rows.map((r) => (
+                  <OutstandingTenantItemMobile key={r.id} tenantId={r.id} name={r.name} usd={r.usd} dop={r.dop} />
+                ))}
+              </div>
             ) : (
               <Table>
                 <TableHeader>
