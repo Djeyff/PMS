@@ -92,18 +92,21 @@ const ManagerReport = () => {
 
   const months = useMemo(() => monthList(12), []);
   const [monthValue, setMonthValue] = useState<string>(months[0]?.value ?? "");
-  const currentMonth = useMemo(() => months.find((m) => m.value === monthValue) ?? months[0], [months, monthValue]);
-  const [startDate, setStartDate] = useState<string>(currentMonth.start);
-  const [endDate, setEndDate] = useState<string>(currentMonth.end);
+  const currentMonth = useMemo(() => months.find((m) => m.value === monthValue), [months, monthValue]);
+  const [startDate, setStartDate] = useState<string>(months[0]?.start ?? "");
+  const [endDate, setEndDate] = useState<string>(months[0]?.end ?? "");
 
   // NEW: manual generate state
   const [generated, setGenerated] = useState<boolean>(false);
   useEffect(() => {
-    // Reset when month changes
+    // Reset generated state on month change; only sync dates when a real month is selected
     setGenerated(false);
-    setStartDate(currentMonth.start);
-    setEndDate(currentMonth.end);
-  }, [monthValue]);
+    const m = months.find((mm) => mm.value === monthValue);
+    if (m) {
+      setStartDate(m.start);
+      setEndDate(m.end);
+    }
+  }, [monthValue, months]);
 
   const [avgRateInput, setAvgRateInput] = useState<string>(""); // user-editable average USD/DOP for the month
   const [suggestedRate, setSuggestedRate] = useState<number | null>(null);
@@ -253,9 +256,9 @@ const ManagerReport = () => {
 
   // NEW: handler to generate report manually
   const handleGenerate = () => {
-    if (!currentMonth) return;
+    const label = currentMonth?.label ?? "Custom range";
     setGenerated(true);
-    toast({ title: "Report generated", description: `Generated for ${currentMonth.label} (${currentMonth.start} to ${currentMonth.end}).` });
+    toast({ title: "Report generated", description: `Generated for ${label} (${startDate} to ${endDate}).` });
   };
 
   // NEW: Save current generated report

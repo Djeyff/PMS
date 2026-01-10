@@ -67,9 +67,9 @@ const OwnerReports = () => {
 
   const months = useMemo(() => monthList(12), []);
   const [monthValue, setMonthValue] = useState<string>(months[0]?.value ?? "");
-  const currentMonth = useMemo(() => months.find((m) => m.value === monthValue) ?? months[0], [months, monthValue]);
-  const [startDate, setStartDate] = useState<string>(currentMonth.start);
-  const [endDate, setEndDate] = useState<string>(currentMonth.end);
+  const currentMonth = useMemo(() => months.find((m) => m.value === monthValue), [months, monthValue]);
+  const [startDate, setStartDate] = useState<string>(months[0]?.start ?? "");
+  const [endDate, setEndDate] = useState<string>(months[0]?.end ?? "");
 
   const [ownerId, setOwnerId] = useState<string>("");
 
@@ -111,9 +111,13 @@ const OwnerReports = () => {
   });
 
   useEffect(() => {
-    setStartDate(currentMonth.start);
-    setEndDate(currentMonth.end);
-  }, [currentMonth]);
+    // Sync dates when a real month is selected; keep manual dates when 'custom'
+    const m = months.find((mm) => mm.value === monthValue);
+    if (m) {
+      setStartDate(m.start);
+      setEndDate(m.end);
+    }
+  }, [monthValue, months]);
 
   useEffect(() => {
     const loadRate = async () => {
@@ -217,6 +221,7 @@ const OwnerReports = () => {
                 <SelectValue placeholder="Select month" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="custom">Custom range</SelectItem>
                 {months.map((m) => (
                   <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                 ))}

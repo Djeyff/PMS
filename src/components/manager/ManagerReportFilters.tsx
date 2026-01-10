@@ -51,6 +51,7 @@ const ManagerReportFilters: React.FC<Props> = ({
             <SelectValue placeholder="Select month" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="custom">Custom range</SelectItem>
             {months.map((m) => (
               <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
             ))}
