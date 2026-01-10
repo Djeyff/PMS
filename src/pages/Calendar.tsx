@@ -57,7 +57,7 @@ const CalendarPage: React.FC = () => {
   const { data: settings, refetch: refetchSettings } = useQuery({
     queryKey: ["calendar-settings"],
     queryFn: getMyCalendarSettings,
-    enabled: !!user?.id, // only after login
+    enabled: !!user?.id, // wait until logged in
   });
 
   const [showLeaseExpiry, setShowLeaseExpiry] = React.useState(true);
@@ -327,7 +327,9 @@ const CalendarPage: React.FC = () => {
                 Failed to load events: {error instanceof Error ? error.message : "Unknown error"}
               </div>
             ) : uiEvents.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No events yet. Use the calendar to add one or enable lease expiry events above.</div>
+              <div className="text-sm text-muted-foreground">
+                No events yet. Use the calendar to add one or enable lease expiry events above.
+              </div>
             ) : (
               <div className="h-[70vh]">
                 <RBCalendar

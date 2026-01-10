@@ -19,7 +19,7 @@ export type CalendarEvent = {
 export async function listEvents(): Promise<CalendarEvent[]> {
   const { data: userRes } = await supabase.auth.getUser();
   if (!userRes.user?.id) {
-    // Not authenticated yet, return empty to avoid throwing in UI
+    // Not authenticated yet; return empty list to avoid UI crashes
     return [];
   }
   const { data, error } = await supabase
