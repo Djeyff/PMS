@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider } from "@/components/ui/sidebar";
-import { Home, Building2, Users, FileText, Wrench, Receipt, CreditCard, Settings, LogOut, BarChart3, UserCog, History } from "lucide-react";
+import { Home, Building2, Users, FileText, Wrench, Receipt, CreditCard, Settings, LogOut, BarChart3, UserCog, History, Calendar as CalendarIcon, Shield } from "lucide-react";
 import { useAuth } from "@/contexts/AuthProvider";
 import type { Role } from "@/contexts/AuthProvider";
 import CurrencySelector from "@/components/CurrencySelector";
@@ -25,10 +25,12 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
     { to: "/reports", label: "Reports", icon: BarChart3, roles: ["agency_admin", "owner"] as Role[] },
     { to: "/manager-report", label: "Manager Report", icon: UserCog, roles: ["agency_admin"] as Role[] },
     { to: "/owner-reports", label: "Owner Reports", icon: UserCog, roles: ["agency_admin"] as Role[] },
+    { to: "/calendar", label: "Calendar", icon: CalendarIcon, roles: ["agency_admin", "owner", "tenant"] as Role[] },
     { to: "/contracts", label: "Contracts", icon: FileText, roles: ["agency_admin"] as Role[] },
     { to: "/outstanding", label: "Outstanding", icon: History, roles: ["agency_admin"] as Role[] },
     { to: "/logs", label: "Activity Log", icon: History, roles: ["agency_admin"] as Role[] },
     { to: "/users", label: "Users", icon: Users, roles: ["agency_admin"] as Role[] },
+    { to: "/security", label: "Security", icon: Shield, roles: ["agency_admin"] as Role[] },
     { to: "/settings", label: "Settings", icon: Settings, roles: ["agency_admin"] as Role[] },
   ];
 

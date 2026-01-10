@@ -33,6 +33,8 @@ import ActivityLog from "./pages/ActivityLog";
 import Contracts from "./pages/Contracts";
 import ManagerReport from "./pages/ManagerReport";
 import OwnerReports from "./pages/OwnerReports";
+import CalendarPage from "./pages/Calendar";
+import Security from "./pages/Security";
 
 const queryClient = new QueryClient();
 
@@ -242,11 +244,21 @@ const App = () => (
                   }
                 />
                 <Route
-                  path="/contracts"
+                  path="/calendar"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin", "owner", "tenant"]}>
+                        <CalendarPage />
+                      </RoleGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/security"
                   element={
                     <ProtectedRoute>
                       <RoleGate allow={["agency_admin"]}>
-                        <Contracts />
+                        <Security />
                       </RoleGate>
                     </ProtectedRoute>
                   }

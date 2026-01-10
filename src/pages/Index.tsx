@@ -37,6 +37,32 @@ const Index = () => {
             </Button>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Calendar</CardTitle>
+          </CardHeader>
+          <CardContent className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              Schedule bookings, rent due dates, and maintenance.
+            </div>
+            <Button asChild>
+              <Link to="/calendar">Open</Link>
+            </Button>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Security & Compliance</CardTitle>
+          </CardHeader>
+          <CardContent className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              Authentication, encryption, compliance, and audit logging overview.
+            </div>
+            <Button asChild>
+              <Link to="/security">Open</Link>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
