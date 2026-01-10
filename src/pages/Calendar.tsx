@@ -290,14 +290,18 @@ const CalendarPage: React.FC = () => {
                 </div>
                 <div className="mt-2">
                   <div className="text-xs text-muted-foreground">Target Calendar</div>
-                  <Select value={googleCalendarId} onValueChange={setGoogleCalendarId}>
+                  <Select
+                    value={googleCalendarId}
+                    onValueChange={setGoogleCalendarId}
+                  >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Choose calendar" />
                     </SelectTrigger>
                     <SelectContent>
                       {googleCalendars.length === 0 ? (
-                        <SelectItem value={googleCalendarId || ""} disabled>
-                          {googleCalendarId ? googleCalendarId : "No calendars loaded"}
+                        // Use a non-empty disabled placeholder to satisfy Radix Select requirements
+                        <SelectItem value="__placeholder__" disabled>
+                          No calendars loaded
                         </SelectItem>
                       ) : (
                         googleCalendars.map((c) => (
