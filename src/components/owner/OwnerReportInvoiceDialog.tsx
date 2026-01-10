@@ -133,19 +133,17 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
     return m ?? null;
   }, [mgrReports, report.month, report.start_date, report.end_date]);
 
-  // Agency-level totals and fee from Manager Report (fallback to computed if absent)
+  // Agency-level totals and fee percent from Manager Report (avg rate used only for explaining base)
   const feePercent = managerForPeriod ? Number(managerForPeriod.fee_percent || 5) : 5;
   const usdAgencyTotal = managerForPeriod ? Number(managerForPeriod.usd_total || 0) : (totals.usdCash + totals.usdTransfer);
   const dopAgencyTotal = managerForPeriod ? Number(managerForPeriod.dop_total || 0) : (totals.dopCash + totals.dopTransfer);
   const avgRate = managerForPeriod && managerForPeriod.avg_rate != null ? Number(managerForPeriod.avg_rate) : (report.avg_rate != null ? Number(report.avg_rate) : NaN);
   const feeBaseDop = managerForPeriod ? Number(managerForPeriod.fee_base_dop || 0) : ((Number.isNaN(avgRate) ? 0 : usdAgencyTotal * avgRate) + dopAgencyTotal);
   const feeDop = managerForPeriod ? Number(managerForPeriod.fee_dop || 0) : (feeBaseDop * (feePercent / 100));
-  const feeDeductedDop = managerForPeriod ? Number(managerForPeriod.fee_deducted_dop || 0) : Math.min(feeDop, totals.dopCash);
 
-  // Owner share based on DOP cash proportion
+  // Owner's DOP cash; fee is computed directly on this amount for clarity
   const ownerDopCash = totals.dopCash;
-  const agencyDopCash = managerForPeriod ? Number(managerForPeriod.dop_cash_total || 0) : totals.dopCash;
-  const ownerFeeShareDop = agencyDopCash > 0 ? (feeDeductedDop * (ownerDopCash / agencyDopCash)) : 0;
+  const ownerFeeShareDop = ownerDopCash * (feePercent / 100);
   const ownerDopAfterFee = Math.max(0, ownerDopCash - ownerFeeShareDop);
 
   // Format "YYYY-MM" into "Month YYYY" label
@@ -227,7 +225,7 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
               <div>{avgRate && Number.isFinite(avgRate) ? avgRate.toFixed(6) : "—"}</div>
             </div>
           </div>
-          {/* Manager fee math, like Manager Report */}
+          {/* Manager fee math (agency-level), and owner-level fee calculation */}
           <div className="p-3">
             <div className="text-xs font-medium mb-1">Manager fee</div>
             <div className="space-y-1 text-sm">
@@ -238,7 +236,7 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
                 {fmt(feeDop, "DOP")} ({feePercent.toFixed(2)}%)
               </div>
               <div className="text-xs text-muted-foreground">
-                Deducted from agency DOP cash: {fmt(feeDeductedDop, "DOP")}
+                Owner fee (for clarity): {fmt(ownerDopCash, "DOP")} × {feePercent.toFixed(2)}% = {fmt(ownerFeeShareDop, "DOP")}
               </div>
             </div>
           </div>
@@ -284,16 +282,18 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Owner DOP cash</TableHead>
-                <TableHead>Manager fee share (DOP)</TableHead>
-                <TableHead>Cash DOP after fee</TableHead>
+                <TableHead>Cash DOP (after fee)</TableHead>
+                <TableHead>Cash USD</TableHead>
+                <TableHead>Transfer DOP</TableHead>
+                <TableHead>Transfer USD</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               <TableRow>
-                <TableCell className="font-semibold">{fmt(ownerDopCash, "DOP")}</TableCell>
-                <TableCell className="font-semibold">{fmt(ownerFeeShareDop, "DOP")}</TableCell>
                 <TableCell className="font-semibold">{fmt(ownerDopAfterFee, "DOP")}</TableCell>
+                <TableCell className="font-semibold">{fmt(totals.usdCash, "USD")}</TableCell>
+                <TableCell className="font-semibold">{fmt(totals.dopTransfer, "DOP")}</TableCell>
+                <TableCell className="font-semibold">{fmt(totals.usdTransfer, "USD")}</TableCell>
               </TableRow>
             </TableBody>
           </Table>

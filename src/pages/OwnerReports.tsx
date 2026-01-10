@@ -428,26 +428,6 @@ function SavedReportRow({
 
   const displayOwner = ownerNameMap[report.owner_id] ?? report.owner_id;
 
-  // Match Manager Report for the same period
-  const managerForPeriod = useMemo(() => {
-    if (!mgrReports || mgrReports.length === 0) return null;
-    const m = (mgrReports as any[]).find((mr) =>
-      String(mr.month) === String(report.month) &&
-      String(mr.start_date).slice(0, 10) === String(report.start_date).slice(0, 10) &&
-      String(mr.end_date).slice(0, 10) === String(report.end_date).slice(0, 10)
-    );
-    return m ?? null;
-  }, [mgrReports, report.month, report.start_date, report.end_date]);
-
-  const feePercent = managerForPeriod ? Number(managerForPeriod.fee_percent || 5) : 5;
-  const agencyDopCash = managerForPeriod ? Number(managerForPeriod.dop_cash_total || 0) : 0;
-  const feeDeductedDop = managerForPeriod ? Number(managerForPeriod.fee_deducted_dop || 0) : 0;
-
-  const ownerDopCash = Number(report.dop_total || 0);
-  const ownerFeeShareDop = agencyDopCash > 0 ? (feeDeductedDop * (ownerDopCash / agencyDopCash)) : 0;
-  const ownerDopAfterFee = Math.max(0, ownerDopCash - ownerFeeShareDop);
-
-  // NEW: helpers for month-or-range label
   const formatMonthLabel = (ym?: string) => {
     const parts = String(ym ?? "").split("-");
     if (parts.length !== 2) return ym ?? "";
@@ -480,6 +460,22 @@ function SavedReportRow({
 
     return (isFirstDay && isSameMonth && isLastDay) ? formatMonthLabel(report.month) : `${sStr} to ${eStr}`;
   }, [report.month, report.start_date, report.end_date]);
+
+  // Match Manager Report for the same period
+  const managerForPeriod = useMemo(() => {
+    if (!mgrReports || mgrReports.length === 0) return null;
+    const m = (mgrReports as any[]).find((mr) =>
+      String(mr.month) === String(report.month) &&
+      String(mr.start_date).slice(0, 10) === String(report.start_date).slice(0, 10) &&
+      String(mr.end_date).slice(0, 10) === String(report.end_date).slice(0, 10)
+    );
+    return m ?? null;
+  }, [mgrReports, report.month, report.start_date, report.end_date]);
+
+  const feePercent = managerForPeriod ? Number(managerForPeriod.fee_percent || 5) : 5;
+  const ownerDopCash = Number(report.dop_total || 0);
+  const ownerFeeShareDop = ownerDopCash * (feePercent / 100);
+  const ownerDopAfterFee = Math.max(0, ownerDopCash - ownerFeeShareDop);
 
   return (
     <TableRow>
