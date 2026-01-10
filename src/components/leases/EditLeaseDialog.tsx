@@ -9,7 +9,6 @@ import type { LeaseWithMeta } from "@/services/leases";
 import { updateLease } from "@/services/leases";
 import { toast } from "sonner";
 import KDriveUploader from "@/components/leases/KDriveUploader";
-import Loader from "@/components/loader";
 import { useAuth } from "@/contexts/AuthProvider";
 import { getMyCalendarSettings } from "@/services/calendar-settings";
 import { upsertLeaseExpiryEvents, syncEventsToGoogle } from "@/services/calendar";
@@ -38,7 +37,6 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
   const [kdriveFolderUrl, setKdriveFolderUrl] = useState<string>(lease.contract_kdrive_folder_url ?? "");
   const [kdriveFileUrl, setKdriveFileUrl] = useState<string>(lease.contract_kdrive_file_url ?? "");
 
-  // ADDED: annual increase
   const [annualIncreaseEnabled, setAnnualIncreaseEnabled] = useState<boolean>(!!lease.annual_increase_enabled);
   const [annualIncreasePercent, setAnnualIncreasePercent] = useState<string>(
     typeof lease.annual_increase_percent === "number" ? String(lease.annual_increase_percent) : ""
@@ -60,16 +58,8 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
     setAutoMinute(typeof lease.auto_invoice_minute === "number" ? lease.auto_invoice_minute : 0);
     setKdriveFolderUrl(lease.contract_kdrive_folder_url ?? "");
     setKdriveFileUrl(lease.contract_kdrive_file_url ?? "");
-    // RESET: annual increase
     setAnnualIncreaseEnabled(!!lease.annual_increase_enabled);
     setAnnualIncreasePercent(typeof lease.annual_increase_percent === "number" ? String(lease.annual_increase_percent) : "");
-  };
-
-  // Prevent closing while saving
-  const handleOpenChange = (v: boolean) => {
-    if (saving) return; // ignore close while saving
-    setOpen(v);
-    if (!v) reset();
   };
 
   const onSave = async () => {
@@ -95,11 +85,10 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
           : null,
       });
       toast.success("Lease updated");
-      // Close quickly to feel fast
       setOpen(false);
       onUpdated?.();
 
-      // Fire-and-forget calendar update/sync in background
+      // Background calendar update/sync (fire-and-forget)
       (async () => {
         try {
           const settings = await getMyCalendarSettings();
@@ -123,8 +112,8 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
               agency?.timezone || undefined
             );
           }
-        } catch (err) {
-          // Silently ignore; user already saw lease saved; sync is best-effort
+        } catch {
+          // ignore sync errors; UI already confirmed save
         } finally {
           setSaving(false);
         }
@@ -137,21 +126,16 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => { if (!saving) { setOpen(v); if (!v) reset(); } }}>
       <DialogTrigger asChild>
         <Button variant="secondary" size="sm">Edit</Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[720px] max-h-[85vh] overflow-y-auto relative">
-        {saving && (
-          <div className="absolute inset-0 bg-black/20 dark:bg-black/40 flex items-center justify-center z-10">
-            <div className="rounded-md bg-background p-4 shadow">
-              <div className="flex items-center gap-3">
-                <Loader />
-                <div className="text-sm">Saving lease…</div>
-              </div>
-            </div>
-          </div>
-        )}
+      <DialogContent
+        className="sm:max-w-[720px] max-h-[85vh] overflow-y-auto"
+        // Prevent accidental close while saving (outside click or ESC)
+        onInteractOutside={(e) => { if (saving) e.preventDefault(); }}
+        onEscapeKeyDown={(e) => { if (saving) e.preventDefault(); }}
+      >
         <DialogHeader>
           <DialogTitle>Edit Lease</DialogTitle>
         </DialogHeader>
@@ -204,7 +188,6 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
             </Select>
           </div>
 
-          {/* ADDED: Annual increase controls */}
           <div className="space-y-3 border rounded-md p-3">
             <div className="flex items-center justify-between py-1">
               <Label className="flex-1">Annual increase on contract anniversary</Label>
@@ -283,6 +266,7 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
               </div>
             </div>
           )}
+
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>kDrive Folder URL (optional)</Label>
@@ -312,9 +296,17 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
               }}
             />
           </div>
+
           <div className="pt-2">
             <Button onClick={onSave} disabled={saving}>
-              {saving ? "Saving..." : "Save changes"}
+              {saving ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Saving...
+                </span>
+              ) : (
+                "Save changes"
+              )}
             </Button>
           </div>
         </div>
