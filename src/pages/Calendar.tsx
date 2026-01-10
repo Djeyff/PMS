@@ -12,10 +12,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useToast } from "@/components/ui/use-toast";
 import { Calendar as RBCalendar, dateFnsLocalizer, View } from "react-big-calendar";
 import { format, parse, startOfWeek, getDay } from "date-fns";
+import { enUS } from "date-fns/locale";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const locales = {};
+const locales = { "en-US": enUS };
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });
 
 type UiEvent = {
@@ -56,7 +57,7 @@ const CalendarPage: React.FC = () => {
   const { data: settings, refetch: refetchSettings } = useQuery({
     queryKey: ["calendar-settings"],
     queryFn: getMyCalendarSettings,
-    enabled: !!user?.id, // wait until logged in
+    enabled: !!user?.id, // only after login
   });
 
   const [showLeaseExpiry, setShowLeaseExpiry] = React.useState(true);
@@ -75,7 +76,7 @@ const CalendarPage: React.FC = () => {
   const { data: events, isLoading, isError, error } = useQuery({
     queryKey: ["calendar-events", user?.id],
     queryFn: listEvents,
-    enabled: !!user?.id, // only fetch when user session exists
+    enabled: !!user?.id, // only fetch when session exists
   });
 
   const createMut = useMutation({
@@ -109,6 +110,7 @@ const CalendarPage: React.FC = () => {
     },
   });
 
+  // Guard lease expiry updater until logged in
   const ensureLeaseExpiry = async () => {
     if (!showLeaseExpiry || !user?.id) return;
     await upsertLeaseExpiryEvents({
@@ -121,7 +123,6 @@ const CalendarPage: React.FC = () => {
   };
 
   React.useEffect(() => {
-    // On load and when toggled, ensure lease expiry events are up-to-date
     ensureLeaseExpiry().catch(() => {});
   }, [showLeaseExpiry, user?.id]);
 
@@ -208,7 +209,11 @@ const CalendarPage: React.FC = () => {
   const [active, setActive] = React.useState<UiEvent | null>(null);
   const [view, setView] = React.useState<View>("month");
 
-  const uiEvents: UiEvent[] = (events ?? []).map(toUiEvent);
+  // Filter invalid events to avoid calendar crashes
+  const uiEvents: UiEvent[] = ((events ?? []).map(toUiEvent)).filter((e) => {
+    return e.start instanceof Date && !Number.isNaN(e.start.getTime()) &&
+           e.end instanceof Date && !Number.isNaN(e.end.getTime());
+  });
 
   const onSelectSlot = (slot: { start: Date; end: Date; action: "select" }) => {
     setActive({ title: "", start: slot.start, end: slot.end, allDay: false });
@@ -321,11 +326,13 @@ const CalendarPage: React.FC = () => {
               <div className="text-sm text-destructive">
                 Failed to load events: {error instanceof Error ? error.message : "Unknown error"}
               </div>
+            ) : uiEvents.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No events yet. Use the calendar to add one or enable lease expiry events above.</div>
             ) : (
               <div className="h-[70vh]">
                 <RBCalendar
                   localizer={localizer}
-                  events={(events ?? []).map(toUiEvent)}
+                  events={uiEvents}
                   startAccessor="start"
                   endAccessor="end"
                   views={["month", "week", "day"]}
