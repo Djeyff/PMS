@@ -132,11 +132,22 @@ const CalendarPage: React.FC = () => {
   };
 
   const connectGoogle = async () => {
-    // Start Google OAuth; Supabase will handle the callback and session
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: window.location.origin },
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/calendar`,
+          scopes: "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email",
+        },
+      });
+      if (error) {
+        const msg = error.message || "Google sign-in failed";
+        toast({ title: "Google connect error", description: msg, variant: "destructive" });
+      }
+    } catch (e: any) {
+      const msg = e?.message || "Google sign-in failed";
+      toast({ title: "Google connect error", description: msg, variant: "destructive" });
+    }
   };
 
   const syncToGoogle = async () => {
@@ -238,6 +249,9 @@ const CalendarPage: React.FC = () => {
                 <div className="mt-2 flex items-center gap-2">
                   <Button variant="outline" size="sm" onClick={connectGoogle}>Connect Google</Button>
                   <Button size="sm" onClick={saveSettings}>Save</Button>
+                </div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  If you see "Unsupported provider", enable Google in Supabase (Auth → Providers), add Client ID/Secret, and set Redirect URL to {window.location.origin}/calendar.
                 </div>
               </div>
             </div>

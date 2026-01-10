@@ -85,15 +85,38 @@ export async function upsertLeaseExpiryEvents(params: { role: Role | null; userI
   const uid = userRes.user?.id;
   if (!uid) throw new Error("Not authenticated");
 
-  // Existing lease_expiry events for this user
   const { data: existing, error: exErr } = await supabase
     .from("calendar_events")
     .select("id, lease_id, title, start, end, all_day, alert_minutes_before, type")
     .eq("user_id", uid)
     .eq("type", "lease_expiry");
   if (exErr) throw exErr;
-  const existingByLease = new Map<string, any>();
+
+  // Group existing events by lease_id and delete duplicates (keep the first)
+  const byLease: Record<string, any[]> = {};
   (existing ?? []).forEach((e: any) => {
+    const key = e.lease_id || "__no_lease__";
+    byLease[key] = byLease[key] || [];
+    byLease[key].push(e);
+  });
+  const duplicateIds: string[] = [];
+  Object.entries(byLease).forEach(([key, arr]) => {
+    if (key === "__no_lease__") {
+      // Remove orphaned lease expiry events without lease_id
+      duplicateIds.push(...arr.map((e) => e.id));
+    } else if (arr.length > 1) {
+      duplicateIds.push(...arr.slice(1).map((e) => e.id));
+    }
+  });
+  if (duplicateIds.length > 0) {
+    const { error: dedErr } = await supabase.from("calendar_events").delete().in("id", duplicateIds);
+    if (dedErr) throw dedErr;
+  }
+
+  // Re-fetch a clean map after dedupe
+  const cleanExisting = (existing ?? []).filter((e: any) => !duplicateIds.includes(e.id));
+  const existingByLease = new Map<string, any>();
+  cleanExisting.forEach((e: any) => {
     if (e.lease_id) existingByLease.set(e.lease_id, e);
   });
 
@@ -141,18 +164,13 @@ export async function upsertLeaseExpiryEvents(params: { role: Role | null; userI
   }
 
   for (const u of toUpdate) {
-    const { error: updErr } = await supabase
-      .from("calendar_events")
-      .update(u.patch)
-      .eq("id", u.id);
+    const { error: updErr } = await supabase.from("calendar_events").update(u.patch).eq("id", u.id);
     if (updErr) throw updErr;
   }
 
-  if (terminatedLeaseEventIds.length > 0) {
-    const { error: delErr } = await supabase
-      .from("calendar_events")
-      .delete()
-      .in("id", terminatedLeaseEventIds);
+  const toDelete = [...terminatedLeaseEventIds];
+  if (toDelete.length > 0) {
+    const { error: delErr } = await supabase.from("calendar_events").delete().in("id", toDelete);
     if (delErr) throw delErr;
   }
 
