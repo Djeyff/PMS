@@ -136,7 +136,7 @@ const CalendarPage: React.FC = () => {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/calendar`,
+          redirectTo: "https://app.lasterrenas.properties/calendar",
           scopes: "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email",
         },
       });
@@ -251,7 +251,7 @@ const CalendarPage: React.FC = () => {
                   <Button size="sm" onClick={saveSettings}>Save</Button>
                 </div>
                 <div className="mt-2 text-xs text-muted-foreground">
-                  If you see "Unsupported provider", enable Google in Supabase (Auth → Providers), add Client ID/Secret, and set Redirect URL to {window.location.origin}/calendar.
+                  If you see "Unsupported provider", enable Google in Supabase (Auth → Providers), add Client ID/Secret, and set Redirect URL to https://app.lasterrenas.properties/calendar.
                 </div>
               </div>
             </div>
