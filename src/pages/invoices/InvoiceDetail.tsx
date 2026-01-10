@@ -159,15 +159,28 @@ const InvoiceDetail = () => {
   }, 0);
 
   const paidDisplayText = (() => {
-    if (inv.currency === "USD" && dopTotal > 0) {
-      const rateLabel = dopRates.length === 1 ? String(dopRates[0]) : dopRates.length > 1 ? dopRates.join(", ") : "—";
-      return `${fmt(dopTotal, "DOP")} @ ${rateLabel} ≈ ${fmt(dopConvertedToUSD, "USD")}`;
+    if (inv.currency === "USD") {
+      if (usdTotal > 0 && dopTotal > 0) {
+        const rateLabel = dopRates.length === 1 ? String(dopRates[0]) : dopRates.length > 1 ? dopRates.join(", ") : "—";
+        const totalUsdEquiv = usdTotal + dopConvertedToUSD;
+        return `${fmt(usdTotal, "USD")} + ${fmt(dopTotal, "DOP")} @ ${rateLabel} ≈ ${fmt(totalUsdEquiv, "USD")}`;
+      }
+      if (dopTotal > 0) {
+        const rateLabel = dopRates.length === 1 ? String(dopRates[0]) : dopRates.length > 1 ? dopRates.join(", ") : "—";
+        return `${fmt(dopTotal, "DOP")} @ ${rateLabel} ≈ ${fmt(dopConvertedToUSD, "USD")}`;
+      }
+      return fmt(paidConverted, inv.currency);
     }
-    if (inv.currency === "DOP" && usdTotal > 0) {
+    // DOP invoice
+    if (usdTotal > 0 && dopTotal > 0) {
+      const rateLabel = usdRates.length === 1 ? String(usdRates[0]) : usdRates.length > 1 ? usdRates.join(", ") : "—";
+      const totalDopEquiv = dopTotal + usdConvertedToDOP;
+      return `${fmt(dopTotal, "DOP")} + ${fmt(usdTotal, "USD")} @ ${rateLabel} ≈ ${fmt(totalDopEquiv, "DOP")}`;
+    }
+    if (usdTotal > 0) {
       const rateLabel = usdRates.length === 1 ? String(usdRates[0]) : usdRates.length > 1 ? usdRates.join(", ") : "—";
       return `${fmt(usdTotal, "USD")} @ ${rateLabel} ≈ ${fmt(usdConvertedToDOP, "DOP")}`;
     }
-    // Same-currency payments
     return fmt(paidConverted, inv.currency);
   })();
 
