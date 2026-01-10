@@ -18,6 +18,7 @@ import ManagerReportInvoiceDialog from "@/components/manager/ManagerReportInvoic
 import { useIsMobile } from "@/hooks/use-mobile";
 import OwnerBreakdownItemMobile from "@/components/manager/OwnerBreakdownItemMobile";
 import SavedManagerReportItemMobile from "@/components/manager/SavedManagerReportItemMobile";
+import ManagerReportFilters from "@/components/manager/ManagerReportFilters";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 type OwnerRow = {
@@ -102,7 +103,7 @@ const ManagerReport = () => {
     setGenerated(false);
     setStartDate(currentMonth.start);
     setEndDate(currentMonth.end);
-  }, [monthValue, currentMonth]);
+  }, [monthValue]);
 
   const [avgRateInput, setAvgRateInput] = useState<string>(""); // user-editable average USD/DOP for the month
   const [suggestedRate, setSuggestedRate] = useState<number | null>(null);
@@ -305,62 +306,23 @@ const ManagerReport = () => {
   return (
     <AppShell>
       <div className="space-y-6">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px]">
-            <div className="text-sm text-muted-foreground">Quick month</div>
-            <Select value={monthValue} onValueChange={setMonthValue}>
-              <SelectTrigger className="w-[220px]">
-                <SelectValue placeholder="Select month" />
-              </SelectTrigger>
-              <SelectContent>
-                {months.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <div>
-                <div className="text-xs text-muted-foreground">Start</div>
-                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">End</div>
-                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-              </div>
-            </div>
-          </div>
-          <div>
-            <div className="text-sm text-muted-foreground">Avg USD/DOP rate</div>
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                inputMode="decimal"
-                value={avgRateInput}
-                onChange={(e) => setAvgRateInput(e.target.value)}
-                placeholder={suggestedRate != null ? `Suggested: ${suggestedRate.toFixed(6)}` : "Enter rate"}
-                className="w-[220px]"
-              />
-              <Button variant="outline" size="sm" onClick={applySuggestedRate}>Apply suggested</Button>
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              If available, suggested average is computed from your exchange_rates data for the selected month.
-            </div>
-          </div>
-          {/* NEW: Generate controls */}
-          <div className="ml-auto flex items-end gap-2">
-            <Button size="sm" onClick={handleGenerate}>Generate report</Button>
-            {generated && (
-              <>
-                <Button size="sm" variant="outline" onClick={() => setGenerated(false)}>
-                  Reset
-                </Button>
-                <Button size="sm" variant="default" onClick={handleSaveReport}>
-                  Save report
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
+        <ManagerReportFilters
+          months={months}
+          monthValue={monthValue}
+          onMonthChange={setMonthValue}
+          startDate={startDate}
+          endDate={endDate}
+          onStartDateChange={setStartDate}
+          onEndDateChange={setEndDate}
+          avgRateInput={avgRateInput}
+          onAvgRateChange={setAvgRateInput}
+          suggestedRate={suggestedRate}
+          onApplySuggested={applySuggestedRate}
+          generated={generated}
+          onGenerate={handleGenerate}
+          onReset={() => setGenerated(false)}
+          onSave={handleSaveReport}
+        />
 
         {/* Warning if rate missing but USD exists */}
         {/* Show warnings only once generated */}

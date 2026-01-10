@@ -35,6 +35,8 @@ const Maintenance = () => {
     queryFn: () => fetchMaintenanceRequests({ agencyId: agencyId!, status: statuses as any }),
   });
 
+  const isMobile = useIsMobile();
+
   const onUpdateStatus = async (id: string, status: "open" | "in_progress" | "closed") => {
     try {
       await updateMaintenanceStatus(id, status);
@@ -77,7 +79,7 @@ const Maintenance = () => {
               <div className="text-sm text-muted-foreground">Loading...</div>
             ) : (data?.length ?? 0) === 0 ? (
               <div className="text-sm text-muted-foreground">No maintenance requests.</div>
-            ) : useIsMobile() ? (
+            ) : isMobile ? (
               <div>
                 {(data ?? []).map((m) => (
                   <div key={m.id} className="rounded-lg border p-3 bg-card mb-3">

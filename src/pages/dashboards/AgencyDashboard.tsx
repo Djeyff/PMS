@@ -185,11 +185,9 @@ const AgencyDashboard = () => {
             ) : (
               <ul className="space-y-2">
                 {upcomingExpirations.map((l: any) => (
-                  <li key={l.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                  <li key={l.id} className="space-y-1 sm:space-y-0 sm:flex sm:items-center sm:justify-between">
                     <div className="truncate">
-                      <div className="font-medium">
-                        {l.property?.name ?? (l.property_id ? l.property_id.slice(0, 8) : "Property")}
-                      </div>
+                      <div className="font-medium">{l.property?.name ?? (l.property_id ? l.property_id.slice(0, 8) : "Property")}</div>
                       <div className="text-sm text-muted-foreground">
                         {[(l.tenant?.first_name ?? ""), (l.tenant?.last_name ?? "")]
                           .filter(Boolean)

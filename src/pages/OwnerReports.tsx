@@ -111,6 +111,11 @@ const OwnerReports = () => {
   });
 
   useEffect(() => {
+    setStartDate(currentMonth.start);
+    setEndDate(currentMonth.end);
+  }, [currentMonth]);
+
+  useEffect(() => {
     const loadRate = async () => {
       if (!startDate || !endDate) return;
       try {
@@ -122,11 +127,6 @@ const OwnerReports = () => {
     };
     loadRate();
   }, [startDate, endDate]);
-
-  useEffect(() => {
-    setStartDate(currentMonth.start);
-    setEndDate(currentMonth.end);
-  }, [currentMonth]);
 
   const filteredPayments = useMemo(() => {
     if (!startDate || !endDate) return payments ?? [];
