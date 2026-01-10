@@ -253,23 +253,6 @@ const OwnerReports = () => {
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <div className="text-sm text-muted-foreground">Avg USD/DOP rate</div>
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                inputMode="decimal"
-                value={avgRateInput}
-                onChange={(e) => setAvgRateInput(e.target.value)}
-                placeholder={suggestedRate != null ? `Suggested: ${suggestedRate.toFixed(6)}` : "Enter rate"}
-                className="w-[220px]"
-              />
-              <Button variant="outline" size="sm" onClick={applySuggestedRate}>Apply suggested</Button>
-            </div>
-          </div>
-          <div className="ml-auto flex items-end gap-2">
-            <Button size="sm" onClick={handleSaveReport} disabled={!ownerId}>Save report</Button>
-          </div>
         </div>
 
         <div className="grid gap-4 grid-cols-1 md:grid-cols-3">

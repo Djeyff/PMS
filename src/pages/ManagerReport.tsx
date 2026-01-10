@@ -15,6 +15,7 @@ import { listManagerReports, createManagerReport, deleteManagerReport } from "@/
 import { logManagerReport } from "@/services/activity-logs";
 import EditManagerReportDialog from "@/components/manager/EditManagerReportDialog";
 import ManagerReportInvoiceDialog from "@/components/manager/ManagerReportInvoiceDialog";
+import { createOwnerReport } from "@/services/owner-reports";
 import { useIsMobile } from "@/hooks/use-mobile";
 import OwnerBreakdownItemMobile from "@/components/manager/OwnerBreakdownItemMobile";
 import SavedManagerReportItemMobile from "@/components/manager/SavedManagerReportItemMobile";
@@ -289,6 +290,7 @@ const ManagerReport = () => {
       fee_dop,
       fee_deducted_dop,
     });
+
     if (user?.id) {
       await logManagerReport("created", user.id, {
         id: saved.id,
@@ -300,7 +302,31 @@ const ManagerReport = () => {
       });
     }
 
-    toast({ title: "Report saved", description: `Saved ${currentMonth.label}.` });
+    // NEW: Auto-generate Owner Reports for each owner found in the breakdown
+    const createdCount = await (async () => {
+      let count = 0;
+      for (const r of ownerRows) {
+        if (!r.ownerId || r.ownerId === "__unassigned__") continue;
+        await createOwnerReport({
+          agency_id: agencyId!,
+          owner_id: r.ownerId,
+          month: currentMonth.value,
+          start_date: startDate,
+          end_date: endDate,
+          avg_rate: Number.isNaN(rateNum) ? null : rateNum,
+          usd_cash_total: r.cashUsd,
+          dop_cash_total: r.cashDop,
+          usd_transfer_total: r.transferUsd,
+          dop_transfer_total: r.transferDop,
+          usd_total: r.cashUsd + r.transferUsd,
+          dop_total: r.cashDop + r.transferDop,
+        });
+        count++;
+      }
+      return count;
+    })();
+
+    toast({ title: "Report saved", description: `Saved ${currentMonth.label}. Generated ${createdCount} owner reports.` });
     refetchSaved();
   };
 

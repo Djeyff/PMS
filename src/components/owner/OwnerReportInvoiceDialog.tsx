@@ -12,6 +12,7 @@ import type { OwnerReportRow } from "@/services/owner-reports";
 import { fetchOwnerProfilesInAgency } from "@/services/users";
 import { fetchAgencyById } from "@/services/agencies";
 import { getLogoPublicUrl } from "@/services/branding";
+import { listManagerReports } from "@/services/manager-reports";
 
 type Props = {
   report: OwnerReportRow;
@@ -32,6 +33,13 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
     queryKey: ["owner-invoice-agency", agencyId],
     enabled: open && !!agencyId,
     queryFn: () => fetchAgencyById(agencyId!),
+  });
+
+  // Load manager reports for fee info
+  const { data: mgrReports } = useQuery({
+    queryKey: ["owner-invoice-mgr", agencyId],
+    enabled: open && !!agencyId,
+    queryFn: () => listManagerReports(agencyId!),
   });
 
   const [logoUrl, setLogoUrl] = React.useState<string>("");
@@ -114,6 +122,33 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
     return { usdCash, dopCash, usdTransfer, dopTransfer };
   }, [ownerRows]);
 
+  // Find matching manager report for the same period
+  const managerForPeriod = useMemo(() => {
+    if (!mgrReports || mgrReports.length === 0) return null;
+    const m = mgrReports.find((mr: any) =>
+      String(mr.month) === String(report.month) &&
+      String(mr.start_date).slice(0,10) === String(report.start_date).slice(0,10) &&
+      String(mr.end_date).slice(0,10) === String(report.end_date).slice(0,10)
+    );
+    return m ?? null;
+  }, [mgrReports, report.month, report.start_date, report.end_date]);
+
+  // Agency-level DOP cash (raw payments, not pro-rated), to match manager fee computation base
+  const agencyDopCash = useMemo(() => {
+    return (filteredPayments ?? [])
+      .filter((p: any) => String(p.method).toLowerCase() !== "bank_transfer" && p.currency === "DOP")
+      .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+  }, [filteredPayments]);
+
+  // Owner's DOP cash (pro-rated) used to compute fee share
+  const ownerDopCash = totals.dopCash;
+
+  // Owner fee share and DOP after fee using manager fee_deducted_dop
+  const feePercent = managerForPeriod ? Number(managerForPeriod.fee_percent || 5) : 5;
+  const feeDeductedDop = managerForPeriod ? Number(managerForPeriod.fee_deducted_dop || 0) : 0;
+  const ownerFeeShareDop = agencyDopCash > 0 ? (feeDeductedDop * (ownerDopCash / agencyDopCash)) : 0;
+  const ownerDopAfterFee = Math.max(0, ownerDopCash - ownerFeeShareDop);
+
   // Format "YYYY-MM" into "Month YYYY" label
   const formatMonthLabel = (ym?: string) => {
     const parts = String(ym ?? "").split("-");
@@ -191,6 +226,14 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
             <div className="text-xs font-medium mb-1">Average USD/DOP rate</div>
             <div className="space-y-1 text-sm">
               <div>{report.avg_rate != null ? Number(report.avg_rate).toFixed(6) : "—"}</div>
+            </div>
+          </div>
+          <div className="p-3">
+            <div className="text-xs font-medium mb-1">Manager fee</div>
+            <div className="space-y-1 text-sm">
+              <div>Fee percent: {feePercent.toFixed(2)}%</div>
+              <div>Owner fee share: {fmt(ownerFeeShareDop, "DOP")}</div>
+              <div className="font-semibold">Cash DOP after fee: {fmt(ownerDopAfterFee, "DOP")}</div>
             </div>
           </div>
         </div>
