@@ -22,6 +22,7 @@ type AuthContextValue = {
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  providerToken: string | null; // NEW: Google provider token from OAuth
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -46,6 +47,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [providerToken, setProviderToken] = useState<string | null>(null);
 
   const role: Role | null = useMemo(() => {
     return profile?.role ?? null;
@@ -60,6 +62,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const sess = data.session ?? null;
       setSession(sess);
       setUser(sess?.user ?? null);
+      setProviderToken((sess as any)?.provider_token ?? null);
     };
 
     loadSessionAndProfile().finally(() => {
@@ -69,6 +72,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
       setSession(sess ?? null);
       setUser(sess?.user ?? null);
+      setProviderToken((sess as any)?.provider_token ?? null);
     });
 
     const loadingFallback = setTimeout(() => {
@@ -97,6 +101,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signOut = async () => {
     await supabase.auth.signOut();
     setProfile(null);
+    setProviderToken(null);
   };
 
   const refreshProfile = async () => {
@@ -113,6 +118,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     loading,
     signOut,
     refreshProfile,
+    providerToken,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

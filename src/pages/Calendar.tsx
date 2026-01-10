@@ -45,7 +45,7 @@ function toDbEvent(e: UiEvent): Omit<CalendarEvent, "id" | "user_id" | "created_
 }
 
 const CalendarPage: React.FC = () => {
-  const { role, user, profile } = useAuth();
+  const { role, user, profile, providerToken } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -152,8 +152,9 @@ const CalendarPage: React.FC = () => {
 
   const syncToGoogle = async () => {
     try {
-      await syncEventsToGoogle(undefined, googleCalendarId || undefined);
-      toast({ title: "Sync started", description: googleCalendarId ? `Target calendar: ${googleCalendarId}` : "Default calendar" });
+      await syncEventsToGoogle(undefined, googleCalendarId || undefined, providerToken || undefined);
+      const target = googleCalendarId ? `Target calendar: ${googleCalendarId}` : "Default calendar";
+      toast({ title: "Sync started", description: providerToken ? target : "Connect Google first to use your account token." });
     } catch (e: any) {
       toast({ title: "Sync failed", description: e.message, variant: "destructive" });
     }
@@ -252,6 +253,7 @@ const CalendarPage: React.FC = () => {
                 </div>
                 <div className="mt-2 text-xs text-muted-foreground">
                   If you see "Unsupported provider", enable Google in Supabase (Auth → Providers), add Client ID/Secret, and set Redirect URL to https://app.lasterrenas.properties/calendar.
+                  {providerToken ? " Google is connected." : " Not connected yet."}
                 </div>
               </div>
             </div>

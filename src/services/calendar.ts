@@ -60,7 +60,7 @@ export async function deleteEvent(id: string) {
   return true;
 }
 
-export async function syncEventsToGoogle(eventIds?: string[], calendarId?: string) {
+export async function syncEventsToGoogle(eventIds?: string[], calendarId?: string, providerToken?: string) {
   const { data: sess } = await supabase.auth.getSession();
   const token = sess.session?.access_token;
   if (!token) throw new Error("Not authenticated");
@@ -68,7 +68,7 @@ export async function syncEventsToGoogle(eventIds?: string[], calendarId?: strin
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ eventIds, calendarId }),
+    body: JSON.stringify({ eventIds, calendarId, providerToken }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -129,7 +129,11 @@ export async function upsertLeaseExpiryEvents(params: { role: Role | null; userI
   leases.forEach((l) => {
     const leaseId = l.id;
     const isTerminated = l.status === "terminated";
-    const startIso = new Date(l.end_date).toISOString();
+    const startDate = new Date(l.end_date);
+    const endDate = new Date(l.end_date);
+    endDate.setDate(endDate.getDate() + 1); // all-day event should end next day
+    const startIso = startDate.toISOString();
+    const endIso = endDate.toISOString();
     const existingEvt = existingByLease.get(leaseId);
 
     if (isTerminated) {
@@ -141,7 +145,7 @@ export async function upsertLeaseExpiryEvents(params: { role: Role | null; userI
     const patch = {
       title,
       start: startIso,
-      end: startIso,
+      end: endIso,
       all_day: true,
       alert_minutes_before: minutesBefore,
       type: "lease_expiry",
