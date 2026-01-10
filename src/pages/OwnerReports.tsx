@@ -433,19 +433,26 @@ function SavedReportRow({ report, onEdited, ownerNameMap }: { report: OwnerRepor
     return label.charAt(0).toUpperCase() + label.slice(1);
   };
 
+  const parseYmd = (s: string) => {
+    const [y, m, d] = String(s).slice(0, 10).split("-").map(Number);
+    if (!y || !m || !d) return null;
+    return { y, m, d };
+  };
+
+  const daysInMonth = (y: number, m: number) => new Date(y, m, 0).getUTCDate();
+
   const monthOrRangeLabel = React.useMemo(() => {
-    const s = String(report.start_date ?? "").slice(0, 10);
-    const e = String(report.end_date ?? "").slice(0, 10);
+    const sStr = String(report.start_date ?? "").slice(0, 10);
+    const eStr = String(report.end_date ?? "").slice(0, 10);
+    const s = parseYmd(sStr);
+    const e = parseYmd(eStr);
     if (!s || !e) return formatMonthLabel(report.month);
 
-    const sd = new Date(s);
-    const ed = new Date(e);
-    const isFirstDay = sd.getDate() === 1;
-    const isSameMonth = sd.getMonth() === ed.getMonth() && sd.getFullYear() === ed.getFullYear();
-    const lastDayOfMonth = new Date(sd.getFullYear(), sd.getMonth() + 1, 0).getDate();
-    const isLastDay = ed.getDate() === lastDayOfMonth;
+    const isFirstDay = s.d === 1;
+    const isSameMonth = s.y === e.y && s.m === e.m;
+    const isLastDay = e.d === daysInMonth(s.y, s.m);
 
-    return (isFirstDay && isSameMonth && isLastDay) ? formatMonthLabel(report.month) : `${s} to ${e}`;
+    return (isFirstDay && isSameMonth && isLastDay) ? formatMonthLabel(report.month) : `${sStr} to ${eStr}`;
   }, [report.month, report.start_date, report.end_date]);
 
   return (
