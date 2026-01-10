@@ -62,3 +62,15 @@ export async function deleteOwnerReport(id: string) {
   if (error) throw error;
   return true;
 }
+
+export async function deleteOwnerReportsForPeriod(agencyId: string, month: string, startDate: string, endDate: string) {
+  const { error } = await supabase
+    .from("owner_reports")
+    .delete()
+    .eq("agency_id", agencyId)
+    .eq("month", month)
+    .eq("start_date", startDate)
+    .eq("end_date", endDate);
+  if (error) throw error;
+  return true;
+}

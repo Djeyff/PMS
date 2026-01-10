@@ -15,7 +15,7 @@ import { listManagerReports, createManagerReport, deleteManagerReport } from "@/
 import { logManagerReport } from "@/services/activity-logs";
 import EditManagerReportDialog from "@/components/manager/EditManagerReportDialog";
 import ManagerReportInvoiceDialog from "@/components/manager/ManagerReportInvoiceDialog";
-import { createOwnerReport } from "@/services/owner-reports";
+import { createOwnerReport, deleteOwnerReportsForPeriod } from "@/services/owner-reports";
 import { useIsMobile } from "@/hooks/use-mobile";
 import OwnerBreakdownItemMobile from "@/components/manager/OwnerBreakdownItemMobile";
 import SavedManagerReportItemMobile from "@/components/manager/SavedManagerReportItemMobile";
@@ -272,6 +272,10 @@ const ManagerReport = () => {
       toast({ title: "Average rate required", description: "Enter a valid USD/DOP average rate to save.", variant: "destructive" });
       return;
     }
+
+    // NEW: Clear any existing owner reports for this agency and period before regenerating
+    await deleteOwnerReportsForPeriod(agencyId!, currentMonth.value, startDate, endDate);
+
     const fee_base_dop = (Number.isNaN(rateNum) ? 0 : usdTotal * rateNum) + dopTotal;
     const fee_dop = fee_base_dop * 0.05;
     const fee_deducted_dop = Math.min(fee_dop, totals.dopCash);
@@ -616,7 +620,11 @@ function SavedReportRow({ report, onEdited }: { report: any; onEdited: () => voi
           fee_percent: report.fee_percent,
         });
       }
-      toast({ title: "Report deleted", description: `Deleted ${report.month}.` });
+
+      // NEW: Also delete owner reports for the same period so only new ones remain after regeneration
+      await deleteOwnerReportsForPeriod(report.agency_id, report.month, report.start_date, report.end_date);
+
+      toast({ title: "Report deleted", description: `Deleted ${report.month} and cleared owner reports for the same period.` });
       setOpenDelete(false);
       onEdited();
     } catch (e: any) {
