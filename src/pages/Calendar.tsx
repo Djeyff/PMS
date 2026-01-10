@@ -2,7 +2,9 @@ import React from "react";
 import AppShell from "@/components/layout/AppShell";
 import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { listEvents, createEvent, updateEvent, deleteEvent, type CalendarEvent, syncEventsToGoogle } from "@/services/calendar";
+import { listEvents, createEvent, updateEvent, deleteEvent, type CalendarEvent, syncEventsToGoogle, upsertLeaseExpiryEvents } from "@/services/calendar";
+import { getMyCalendarSettings, saveMyCalendarSettings } from "@/services/calendar-settings";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,9 +45,27 @@ function toDbEvent(e: UiEvent): Omit<CalendarEvent, "id" | "user_id" | "created_
 }
 
 const CalendarPage: React.FC = () => {
-  const { role } = useAuth();
+  const { role, user, profile } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
+
+  const { data: settings, refetch: refetchSettings } = useQuery({
+    queryKey: ["calendar-settings"],
+    queryFn: getMyCalendarSettings,
+  });
+
+  const [showLeaseExpiry, setShowLeaseExpiry] = React.useState(true);
+  const [alertDays, setAlertDays] = React.useState<number>(settings?.lease_alert_days ?? 7);
+  const [googleEmail, setGoogleEmail] = React.useState<string>(settings?.google_account_email ?? "");
+  const [googleCalendarId, setGoogleCalendarId] = React.useState<string>(settings?.google_calendar_id ?? "");
+
+  React.useEffect(() => {
+    if (settings) {
+      setAlertDays(settings.lease_alert_days ?? 7);
+      setGoogleEmail(settings.google_account_email ?? "");
+      setGoogleCalendarId(settings.google_calendar_id ?? "");
+    }
+  }, [settings]);
 
   const { data: events, isLoading } = useQuery({
     queryKey: ["calendar-events"],
@@ -83,6 +103,51 @@ const CalendarPage: React.FC = () => {
     },
   });
 
+  const ensureLeaseExpiry = async () => {
+    if (!showLeaseExpiry) return;
+    await upsertLeaseExpiryEvents({
+      role,
+      userId: user?.id ?? null,
+      agencyId: profile?.agency_id ?? null,
+      alertDays,
+    });
+    await qc.invalidateQueries({ queryKey: ["calendar-events"] });
+  };
+
+  React.useEffect(() => {
+    // On load and when toggled, ensure lease expiry events are up-to-date
+    ensureLeaseExpiry().catch(() => {});
+  }, [showLeaseExpiry]);
+
+  const saveSettings = async () => {
+    await saveMyCalendarSettings({
+      google_account_email: googleEmail || null,
+      google_calendar_id: googleCalendarId || null,
+      lease_alert_days: alertDays,
+    });
+    toast({ title: "Settings saved" });
+    refetchSettings();
+    // Re-ensure events with new alertDays
+    await ensureLeaseExpiry();
+  };
+
+  const connectGoogle = async () => {
+    // Start Google OAuth; Supabase will handle the callback and session
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+  };
+
+  const syncToGoogle = async () => {
+    try {
+      await syncEventsToGoogle(undefined, googleCalendarId || undefined);
+      toast({ title: "Sync started", description: googleCalendarId ? `Target calendar: ${googleCalendarId}` : "Default calendar" });
+    } catch (e: any) {
+      toast({ title: "Sync failed", description: e.message, variant: "destructive" });
+    }
+  };
+
   const [open, setOpen] = React.useState(false);
   const [active, setActive] = React.useState<UiEvent | null>(null);
   const [view, setView] = React.useState<View>("month");
@@ -114,15 +179,6 @@ const CalendarPage: React.FC = () => {
     setOpen(false);
   };
 
-  const syncToGoogle = async () => {
-    try {
-      await syncEventsToGoogle();
-      toast({ title: "Sync started", description: "Events are being synced to Google Calendar." });
-    } catch (e: any) {
-      toast({ title: "Sync failed", description: e.message, variant: "destructive" });
-    }
-  };
-
   return (
     <AppShell>
       <div className="space-y-6">
@@ -137,6 +193,55 @@ const CalendarPage: React.FC = () => {
             </div>
           </CardHeader>
           <CardContent>
+            <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="p-3 border rounded-md">
+                <div className="font-medium text-sm mb-2">Lease expiry events</div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-sm">Show in calendar</label>
+                  <Button variant={showLeaseExpiry ? "default" : "outline"} size="sm" onClick={() => setShowLeaseExpiry((v) => !v)}>
+                    {showLeaseExpiry ? "On" : "Off"}
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Alert lead time (days)</div>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={alertDays}
+                      onChange={(e) => setAlertDays(Math.max(0, Number(e.target.value || 0)))}
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button className="w-full" variant="outline" onClick={ensureLeaseExpiry}>Apply</Button>
+                  </div>
+                </div>
+              </div>
+              <div className="p-3 border rounded-md">
+                <div className="font-medium text-sm mb-2">Google Sync Settings</div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Google account (email)</div>
+                  <Input
+                    placeholder="name@example.com"
+                    value={googleEmail}
+                    onChange={(e) => setGoogleEmail(e.target.value)}
+                  />
+                </div>
+                <div className="mt-2">
+                  <div className="text-xs text-muted-foreground">Target Calendar ID</div>
+                  <Input
+                    placeholder="primary or calendarId@group.calendar.google.com"
+                    value={googleCalendarId}
+                    onChange={(e) => setGoogleCalendarId(e.target.value)}
+                  />
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={connectGoogle}>Connect Google</Button>
+                  <Button size="sm" onClick={saveSettings}>Save</Button>
+                </div>
+              </div>
+            </div>
+
             {isLoading ? (
               <div className="text-sm text-muted-foreground">Loading calendar...</div>
             ) : (
