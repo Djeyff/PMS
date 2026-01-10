@@ -3,12 +3,13 @@ declare const Deno: {
   env: { get: (name: string) => string | undefined };
 };
 
-Deno.serve(async (req: Request) => {
-  const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  };
+// Hoist CORS headers to top-level so the file begins with valid code
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -37,18 +38,12 @@ Deno.serve(async (req: Request) => {
   const cleanupFromCalendarId: string | undefined = payload?.cleanupFromCalendarId;
   const timeZone: string | undefined = payload?.timeZone;
 
-  // Use Supabase REST API with user's JWT (RLS applies)
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-  // Build REST query for events (include type for all-day logic)
-  const select =
-    "id,title,description,start,end,all_day,alert_minutes_before,type";
+  const select = "id,title,description,start,end,all_day,alert_minutes_before,type";
   const baseUrl = `${supabaseUrl}/rest/v1/calendar_events`;
-  const params = new URLSearchParams({
-    select,
-    "order": "start.asc",
-  });
+  const params = new URLSearchParams({ select, order: "start.asc" });
 
   if (Array.isArray(payload?.eventIds) && payload.eventIds.length > 0) {
     const list = payload.eventIds.join(",");
@@ -76,11 +71,8 @@ Deno.serve(async (req: Request) => {
     return !Number.isNaN(s.getTime()) && !Number.isNaN(f.getTime());
   });
 
-  // Helper: upsert a Google event by key (pms_event_id or pms_reminder_for)
   async function upsertGoogleEventByKey(calId: string, key: string, keyValue: string, body: any) {
-    const listUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
-      calId
-    )}/events?privateExtendedProperty=${encodeURIComponent(`${key}=${keyValue}`)}`;
+    const listUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?privateExtendedProperty=${encodeURIComponent(`${key}=${keyValue}`)}`;
     const listRes = await fetch(listUrl, { method: "GET", headers: { Authorization: `Bearer ${providerToken}` } });
     if (!listRes.ok) {
       const errBody = await listRes.json().catch(() => ({}));
@@ -118,7 +110,6 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // Cleanup both main and reminder events from old calendar if switching
   if (cleanupFromCalendarId) {
     for (const e of sanitized) {
       for (const pair of [
@@ -126,17 +117,13 @@ Deno.serve(async (req: Request) => {
         { key: "pms_reminder_for", val: e.id },
       ]) {
         try {
-          const listUrlOld = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
-            cleanupFromCalendarId
-          )}/events?privateExtendedProperty=${encodeURIComponent(`${pair.key}=${pair.val}`)}`;
+          const listUrlOld = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cleanupFromCalendarId)}/events?privateExtendedProperty=${encodeURIComponent(`${pair.key}=${pair.val}`)}`;
           const listOldRes = await fetch(listUrlOld, { method: "GET", headers: { Authorization: `Bearer ${providerToken}` } });
           if (listOldRes.ok) {
             const listedOld = await listOldRes.json().catch(() => ({ items: [] }));
             if (Array.isArray(listedOld.items)) {
               for (const item of listedOld.items) {
-                const delUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
-                  cleanupFromCalendarId
-                )}/events/${encodeURIComponent(item.id)}`;
+                const delUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cleanupFromCalendarId)}/events/${encodeURIComponent(item.id)}`;
                 const delRes = await fetch(delUrl, { method: "DELETE", headers: { Authorization: `Bearer ${providerToken}` } });
                 if (!delRes.ok) {
                   const errBody = await delRes.json().catch(() => ({}));
@@ -158,7 +145,6 @@ Deno.serve(async (req: Request) => {
   let updated = 0;
   const errors: Array<{ id: string; message: string }> = [];
 
-  // Build bodies
   function buildMainEventBody(e: any): any {
     const minutes = typeof e.alert_minutes_before === "number" && e.alert_minutes_before > 0 ? e.alert_minutes_before : 0;
     const body: any = {
@@ -170,7 +156,6 @@ Deno.serve(async (req: Request) => {
         overrides: minutes > 0 ? [{ method: "popup", minutes }] : [],
       },
     };
-    // Always all-day for lease expiry (or when flagged)
     const startDate = new Date(e.start).toISOString().slice(0, 10);
     const endDate = new Date(e.end).toISOString().slice(0, 10);
     body.start = { date: startDate };
@@ -179,7 +164,6 @@ Deno.serve(async (req: Request) => {
   }
 
   function buildReminderEventBody(e: any): any {
-    // Derive reminder date/time from alert_minutes_before relative to expiry midnight
     const total = typeof e.alert_minutes_before === "number" ? e.alert_minutes_before : 0;
     const days = Math.floor(total / 1440);
     const hm = total % 1440;
@@ -201,7 +185,7 @@ Deno.serve(async (req: Request) => {
       description: e.description ?? "",
       extendedProperties: { private: { pms_reminder_for: e.id } },
       start: { dateTime: dateTimeStr, timeZone: timeZone || undefined },
-      end: { dateTime: dateTimeStr, timeZone: timeZone || undefined }, // zero-length reminder marker
+      end: { dateTime: dateTimeStr, timeZone: timeZone || undefined },
       reminders: { useDefault: false, overrides: [] },
     };
     return body;
@@ -209,14 +193,12 @@ Deno.serve(async (req: Request) => {
 
   for (const e of sanitized) {
     try {
-      // 1) Upsert main all-day event keyed by pms_event_id
       const mainBody = buildMainEventBody(e);
       const mainResult = await upsertGoogleEventByKey(calendarId, "pms_event_id", e.id, mainBody);
       if (mainResult.error) errors.push({ id: e.id, message: mainResult.error });
       inserted += mainResult.inserted;
       updated += mainResult.updated;
 
-      // 2) Upsert separate timed reminder keyed by pms_reminder_for
       if (typeof e.alert_minutes_before === "number" && e.alert_minutes_before > 0) {
         const reminderBody = buildReminderEventBody(e);
         const remResult = await upsertGoogleEventByKey(calendarId, "pms_reminder_for", e.id, reminderBody);
