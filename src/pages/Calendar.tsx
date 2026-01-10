@@ -56,6 +56,7 @@ const CalendarPage: React.FC = () => {
   const { data: settings, refetch: refetchSettings } = useQuery({
     queryKey: ["calendar-settings"],
     queryFn: getMyCalendarSettings,
+    enabled: !!user?.id, // wait until logged in
   });
 
   const [showLeaseExpiry, setShowLeaseExpiry] = React.useState(true);
@@ -71,9 +72,10 @@ const CalendarPage: React.FC = () => {
     }
   }, [settings]);
 
-  const { data: events, isLoading } = useQuery({
-    queryKey: ["calendar-events"],
+  const { data: events, isLoading, isError, error } = useQuery({
+    queryKey: ["calendar-events", user?.id],
     queryFn: listEvents,
+    enabled: !!user?.id, // only fetch when user session exists
   });
 
   const createMut = useMutation({
@@ -108,7 +110,7 @@ const CalendarPage: React.FC = () => {
   });
 
   const ensureLeaseExpiry = async () => {
-    if (!showLeaseExpiry) return;
+    if (!showLeaseExpiry || !user?.id) return;
     await upsertLeaseExpiryEvents({
       role,
       userId: user?.id ?? null,
@@ -121,7 +123,7 @@ const CalendarPage: React.FC = () => {
   React.useEffect(() => {
     // On load and when toggled, ensure lease expiry events are up-to-date
     ensureLeaseExpiry().catch(() => {});
-  }, [showLeaseExpiry]);
+  }, [showLeaseExpiry, user?.id]);
 
   const saveSettings = async () => {
     await saveMyCalendarSettings({
@@ -315,11 +317,15 @@ const CalendarPage: React.FC = () => {
 
             {isLoading ? (
               <div className="text-sm text-muted-foreground">Loading calendar...</div>
+            ) : isError ? (
+              <div className="text-sm text-destructive">
+                Failed to load events: {error instanceof Error ? error.message : "Unknown error"}
+              </div>
             ) : (
               <div className="h-[70vh]">
                 <RBCalendar
                   localizer={localizer}
-                  events={uiEvents}
+                  events={(events ?? []).map(toUiEvent)}
                   startAccessor="start"
                   endAccessor="end"
                   views={["month", "week", "day"]}

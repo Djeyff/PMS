@@ -18,7 +18,10 @@ export type CalendarEvent = {
 
 export async function listEvents(): Promise<CalendarEvent[]> {
   const { data: userRes } = await supabase.auth.getUser();
-  if (!userRes.user?.id) throw new Error("Not authenticated");
+  if (!userRes.user?.id) {
+    // Not authenticated yet, return empty to avoid throwing in UI
+    return [];
+  }
   const { data, error } = await supabase
     .from("calendar_events")
     .select("*")
