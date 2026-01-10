@@ -125,27 +125,26 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
   // Find matching manager report for the same period
   const managerForPeriod = useMemo(() => {
     if (!mgrReports || mgrReports.length === 0) return null;
-    const m = mgrReports.find((mr: any) =>
+    const m = (mgrReports as any[]).find((mr) =>
       String(mr.month) === String(report.month) &&
-      String(mr.start_date).slice(0,10) === String(report.start_date).slice(0,10) &&
-      String(mr.end_date).slice(0,10) === String(report.end_date).slice(0,10)
+      String(mr.start_date).slice(0, 10) === String(report.start_date).slice(0, 10) &&
+      String(mr.end_date).slice(0, 10) === String(report.end_date).slice(0, 10)
     );
     return m ?? null;
   }, [mgrReports, report.month, report.start_date, report.end_date]);
 
-  // Agency-level DOP cash (raw payments, not pro-rated), to match manager fee computation base
-  const agencyDopCash = useMemo(() => {
-    return (filteredPayments ?? [])
-      .filter((p: any) => String(p.method).toLowerCase() !== "bank_transfer" && p.currency === "DOP")
-      .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-  }, [filteredPayments]);
-
-  // Owner's DOP cash (pro-rated) used to compute fee share
-  const ownerDopCash = totals.dopCash;
-
-  // Owner fee share and DOP after fee using manager fee_deducted_dop
+  // Agency-level totals and fee from Manager Report (fallback to computed if absent)
   const feePercent = managerForPeriod ? Number(managerForPeriod.fee_percent || 5) : 5;
-  const feeDeductedDop = managerForPeriod ? Number(managerForPeriod.fee_deducted_dop || 0) : 0;
+  const usdAgencyTotal = managerForPeriod ? Number(managerForPeriod.usd_total || 0) : (totals.usdCash + totals.usdTransfer);
+  const dopAgencyTotal = managerForPeriod ? Number(managerForPeriod.dop_total || 0) : (totals.dopCash + totals.dopTransfer);
+  const avgRate = managerForPeriod && managerForPeriod.avg_rate != null ? Number(managerForPeriod.avg_rate) : (report.avg_rate != null ? Number(report.avg_rate) : NaN);
+  const feeBaseDop = managerForPeriod ? Number(managerForPeriod.fee_base_dop || 0) : ((Number.isNaN(avgRate) ? 0 : usdAgencyTotal * avgRate) + dopAgencyTotal);
+  const feeDop = managerForPeriod ? Number(managerForPeriod.fee_dop || 0) : (feeBaseDop * (feePercent / 100));
+  const feeDeductedDop = managerForPeriod ? Number(managerForPeriod.fee_deducted_dop || 0) : Math.min(feeDop, totals.dopCash);
+
+  // Owner share based on DOP cash proportion
+  const ownerDopCash = totals.dopCash;
+  const agencyDopCash = managerForPeriod ? Number(managerForPeriod.dop_cash_total || 0) : totals.dopCash;
   const ownerFeeShareDop = agencyDopCash > 0 ? (feeDeductedDop * (ownerDopCash / agencyDopCash)) : 0;
   const ownerDopAfterFee = Math.max(0, ownerDopCash - ownerFeeShareDop);
 
@@ -225,15 +224,22 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
           <div className="p-3">
             <div className="text-xs font-medium mb-1">Average USD/DOP rate</div>
             <div className="space-y-1 text-sm">
-              <div>{report.avg_rate != null ? Number(report.avg_rate).toFixed(6) : "—"}</div>
+              <div>{avgRate && Number.isFinite(avgRate) ? avgRate.toFixed(6) : "—"}</div>
             </div>
           </div>
+          {/* Manager fee math, like Manager Report */}
           <div className="p-3">
             <div className="text-xs font-medium mb-1">Manager fee</div>
             <div className="space-y-1 text-sm">
-              <div>Fee percent: {feePercent.toFixed(2)}%</div>
-              <div>Owner fee share: {fmt(ownerFeeShareDop, "DOP")}</div>
-              <div className="font-semibold">Cash DOP after fee: {fmt(ownerDopAfterFee, "DOP")}</div>
+              <div>
+                Base: {fmt(dopAgencyTotal, "DOP")} + {usdAgencyTotal.toFixed(2)} USD × {Number.isFinite(avgRate) ? avgRate : "rate ?"} = {fmt(feeBaseDop, "DOP")}
+              </div>
+              <div className="font-semibold">
+                {fmt(feeDop, "DOP")} ({feePercent.toFixed(2)}%)
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Deducted from agency DOP cash: {fmt(feeDeductedDop, "DOP")}
+              </div>
             </div>
           </div>
         </div>
@@ -269,6 +275,25 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
                 <TableCell className="font-semibold">{fmt(totals.usdCash + totals.usdTransfer, "USD")}</TableCell>
                 <TableCell className="font-semibold">{fmt(totals.dopCash + totals.dopTransfer, "DOP")}</TableCell>
                 <TableCell />
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+
+        <div className="border rounded-md mt-4">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Owner DOP cash</TableHead>
+                <TableHead>Manager fee share (DOP)</TableHead>
+                <TableHead>Cash DOP after fee</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell className="font-semibold">{fmt(ownerDopCash, "DOP")}</TableCell>
+                <TableCell className="font-semibold">{fmt(ownerFeeShareDop, "DOP")}</TableCell>
+                <TableCell className="font-semibold">{fmt(ownerDopAfterFee, "DOP")}</TableCell>
               </TableRow>
             </TableBody>
           </Table>

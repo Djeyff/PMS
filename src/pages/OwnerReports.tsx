@@ -19,6 +19,7 @@ import OwnerPaymentItemMobile from "@/components/owner/OwnerPaymentItemMobile";
 import SavedOwnerReportItemMobile from "@/components/owner/SavedOwnerReportItemMobile";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
+import { listManagerReports } from "@/services/manager-reports";
 
 function fmt(amount: number, currency: "USD" | "DOP") {
   return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
@@ -92,6 +93,12 @@ const OwnerReports = () => {
     queryKey: ["owner-owners", agencyId],
     enabled: !!agencyId && isAdmin,
     queryFn: () => fetchOwnerProfilesInAgency(agencyId!),
+  });
+
+  const { data: mgrReports } = useQuery({
+    queryKey: ["owner-mgr-reports", agencyId],
+    enabled: !!agencyId,
+    queryFn: () => listManagerReports(agencyId!),
   });
 
   // Build a map of ownerId -> "First Last"
@@ -376,12 +383,20 @@ const OwnerReports = () => {
                       <TableHead>USD total</TableHead>
                       <TableHead>DOP total</TableHead>
                       <TableHead>Avg rate</TableHead>
+                      <TableHead>Fee share (DOP)</TableHead>
+                      <TableHead>DOP after fee</TableHead>
                       <TableHead className="print:hidden">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {savedReports.map((r: OwnerReportRow) => (
-                      <SavedReportRow key={r.id} report={r} onEdited={() => refetchSaved()} ownerNameMap={ownerNameMap} />
+                      <SavedReportRow
+                        key={r.id}
+                        report={r}
+                        onEdited={() => refetchSaved()}
+                        ownerNameMap={ownerNameMap}
+                        mgrReports={mgrReports ?? []}
+                      />
                     ))}
                   </TableBody>
                 </Table>
@@ -395,14 +410,42 @@ const OwnerReports = () => {
 };
 
 // Helper row component inside this file for saved entries
-function SavedReportRow({ report, onEdited, ownerNameMap }: { report: OwnerReportRow; onEdited: () => void; ownerNameMap: Record<string, string> }) {
+function SavedReportRow({
+  report,
+  onEdited,
+  ownerNameMap,
+  mgrReports,
+}: {
+  report: OwnerReportRow;
+  onEdited: () => void;
+  ownerNameMap: Record<string, string>;
+  mgrReports: any[];
+}) {
   const [openEdit, setOpenEdit] = useState(false);
   const [openInvoice, setOpenInvoice] = useState(false);
   const [openDelete, setOpenDelete] = useState(false);
   const { toast } = useToast();
 
-  // Display full owner name instead of UUID
   const displayOwner = ownerNameMap[report.owner_id] ?? report.owner_id;
+
+  // Match Manager Report for the same period
+  const managerForPeriod = useMemo(() => {
+    if (!mgrReports || mgrReports.length === 0) return null;
+    const m = (mgrReports as any[]).find((mr) =>
+      String(mr.month) === String(report.month) &&
+      String(mr.start_date).slice(0, 10) === String(report.start_date).slice(0, 10) &&
+      String(mr.end_date).slice(0, 10) === String(report.end_date).slice(0, 10)
+    );
+    return m ?? null;
+  }, [mgrReports, report.month, report.start_date, report.end_date]);
+
+  const feePercent = managerForPeriod ? Number(managerForPeriod.fee_percent || 5) : 5;
+  const agencyDopCash = managerForPeriod ? Number(managerForPeriod.dop_cash_total || 0) : 0;
+  const feeDeductedDop = managerForPeriod ? Number(managerForPeriod.fee_deducted_dop || 0) : 0;
+
+  const ownerDopCash = Number(report.dop_total || 0);
+  const ownerFeeShareDop = agencyDopCash > 0 ? (feeDeductedDop * (ownerDopCash / agencyDopCash)) : 0;
+  const ownerDopAfterFee = Math.max(0, ownerDopCash - ownerFeeShareDop);
 
   // NEW: helpers for month-or-range label
   const formatMonthLabel = (ym?: string) => {
@@ -445,6 +488,8 @@ function SavedReportRow({ report, onEdited, ownerNameMap }: { report: OwnerRepor
       <TableCell>{fmt(Number(report.usd_total || 0), "USD")}</TableCell>
       <TableCell>{fmt(Number(report.dop_total || 0), "DOP")}</TableCell>
       <TableCell>{report.avg_rate != null ? Number(report.avg_rate).toFixed(6) : "—"}</TableCell>
+      <TableCell>{fmt(ownerFeeShareDop, "DOP")}</TableCell>
+      <TableCell>{fmt(ownerDopAfterFee, "DOP")}</TableCell>
       <TableCell className="print:hidden">
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setOpenEdit(true)}>Edit</Button>
