@@ -6,6 +6,8 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
 import { fetchOwnerProfilesInAgency } from "@/services/users";
 import AddOwnerDialog from "@/components/owners/AddOwnerDialog";
+import { useIsMobile } from "@/hooks/use-mobile";
+import OwnerListItemMobile from "@/components/owners/OwnerListItemMobile";
 import EditOwnerDialog from "@/components/owners/EditOwnerDialog";
 import DeleteOwnerDialog from "@/components/owners/DeleteOwnerDialog";
 
@@ -19,6 +21,8 @@ const Owners = () => {
     enabled: isAdmin && !!agencyId,
     queryFn: () => fetchOwnerProfilesInAgency(agencyId!),
   });
+
+  const isMobile = useIsMobile();
 
   return (
     <AppShell>
@@ -34,6 +38,12 @@ const Owners = () => {
               <div className="text-sm text-muted-foreground">Loading...</div>
             ) : (data?.length ?? 0) === 0 ? (
               <div className="text-sm text-muted-foreground">No owners yet.</div>
+            ) : isMobile ? (
+              <div>
+                {(data ?? []).map((o) => (
+                  <OwnerListItemMobile key={o.id} owner={o} onRefetch={() => refetch()} />
+                ))}
+              </div>
             ) : (
               <Table>
                 <TableHeader>

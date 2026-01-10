@@ -10,6 +10,8 @@ import EditTenantDialog from "@/components/tenants/EditTenantDialog";
 import DeleteTenantDialog from "@/components/tenants/DeleteTenantDialog";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
+import TenantListItemMobile from "@/components/tenants/TenantListItemMobile";
 
 const data = [
   { name: "Maria Gomez", email: "maria@example.com", phone: "+1 809-555-1100", property: "Ocean View Villa" },
@@ -27,6 +29,8 @@ const Tenants = () => {
     queryFn: () => fetchTenantProfilesInAgency(agencyId!),
   });
 
+  const isMobile = useIsMobile();
+
   return (
     <AppShell>
       <div className="space-y-4">
@@ -43,6 +47,12 @@ const Tenants = () => {
               <div className="text-sm text-muted-foreground">Loading...</div>
             ) : (data?.length ?? 0) === 0 ? (
               <div className="text-sm text-muted-foreground">No tenants yet.</div>
+            ) : isMobile ? (
+              <div>
+                {(data ?? []).map((t) => (
+                  <TenantListItemMobile key={t.id} tenant={t} isAdmin={isAdmin} onRefetch={() => refetch()} />
+                ))}
+              </div>
             ) : (
               <Table>
                 <TableHeader>

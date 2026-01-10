@@ -14,6 +14,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { listOwnerReports, createOwnerReport, deleteOwnerReport, type OwnerReportRow } from "@/services/owner-reports";
 import EditOwnerReportDialog from "@/components/owner/EditOwnerReportDialog";
 import OwnerReportInvoiceDialog from "@/components/owner/OwnerReportInvoiceDialog";
+import { useIsMobile } from "@/hooks/use-mobile";
+import OwnerPaymentItemMobile from "@/components/owner/OwnerPaymentItemMobile";
+import SavedOwnerReportItemMobile from "@/components/owner/SavedOwnerReportItemMobile";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -196,6 +199,8 @@ const OwnerReports = () => {
     refetchSaved();
   };
 
+  const isMobile = useIsMobile();
+
   return (
     <AppShell>
       <div className="space-y-6">
@@ -280,24 +285,35 @@ const OwnerReports = () => {
             <CardTitle>Owner Payments (Assigned)</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Property</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Method</TableHead>
-                    <TableHead>USD</TableHead>
-                    <TableHead>DOP</TableHead>
-                    <TableHead>Rate</TableHead>
-                    <TableHead>Owner assigned</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-sm text-muted-foreground">No payments for selection.</TableCell></TableRow>
-                  ) : (
-                    rows.map((r, idx) => (
+            {rows.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No payments for selection.</div>
+            ) : isMobile ? (
+              <div>
+                {rows.map((r, idx) => (
+                  <OwnerPaymentItemMobile key={idx} row={r} />
+                ))}
+                <div className="mt-3 text-sm">
+                  <div className="font-semibold">Totals</div>
+                  <div>USD: {fmt(totals.usdCash + totals.usdTransfer, "USD")}</div>
+                  <div>DOP: {fmt(totals.dopCash + totals.dopTransfer, "DOP")}</div>
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Property</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Method</TableHead>
+                      <TableHead>USD</TableHead>
+                      <TableHead>DOP</TableHead>
+                      <TableHead>Rate</TableHead>
+                      <TableHead>Owner assigned</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((r, idx) => (
                       <TableRow key={idx}>
                         <TableCell className="font-medium">{r.property}</TableCell>
                         <TableCell>{r.date}</TableCell>
@@ -309,22 +325,22 @@ const OwnerReports = () => {
                           {r.assigned ? "Assigned" : "Unassigned"}
                         </TableCell>
                       </TableRow>
-                    ))
-                  )}
-                  {rows.length > 0 && (
-                    <TableRow>
-                      <TableCell className="font-semibold">Totals</TableCell>
-                      <TableCell />
-                      <TableCell />
-                      <TableCell className="font-semibold">{fmt(totals.usdCash + totals.usdTransfer, "USD")}</TableCell>
-                      <TableCell className="font-semibold">{fmt(totals.dopCash + totals.dopTransfer, "DOP")}</TableCell>
-                      <TableCell />
-                      <TableCell />
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                    ))}
+                    {rows.length > 0 && (
+                      <TableRow>
+                        <TableCell className="font-semibold">Totals</TableCell>
+                        <TableCell />
+                        <TableCell />
+                        <TableCell className="font-semibold">{fmt(totals.usdCash + totals.usdTransfer, "USD")}</TableCell>
+                        <TableCell className="font-semibold">{fmt(totals.dopCash + totals.dopTransfer, "DOP")}</TableCell>
+                        <TableCell />
+                        <TableCell />
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -337,6 +353,17 @@ const OwnerReports = () => {
           <CardContent>
             {!savedReports || savedReports.length === 0 ? (
               <div className="text-sm text-muted-foreground">No saved reports yet.</div>
+            ) : isMobile ? (
+              <div>
+                {savedReports.map((r: any) => (
+                  <SavedOwnerReportItemMobile
+                    key={r.id}
+                    report={r}
+                    ownerName={ownerNameMap[r.owner_id] ?? r.owner_id}
+                    onEdited={() => refetchSaved()}
+                  />
+                ))}
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>

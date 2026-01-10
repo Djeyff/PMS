@@ -15,6 +15,9 @@ import { listManagerReports, createManagerReport, deleteManagerReport } from "@/
 import { logManagerReport } from "@/services/activity-logs";
 import EditManagerReportDialog from "@/components/manager/EditManagerReportDialog";
 import ManagerReportInvoiceDialog from "@/components/manager/ManagerReportInvoiceDialog";
+import { useIsMobile } from "@/hooks/use-mobile";
+import OwnerBreakdownItemMobile from "@/components/manager/OwnerBreakdownItemMobile";
+import SavedManagerReportItemMobile from "@/components/manager/SavedManagerReportItemMobile";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 type OwnerRow = {
@@ -296,6 +299,8 @@ const ManagerReport = () => {
     refetchSaved();
   };
 
+  const isMobile = useIsMobile();
+
   return (
     <AppShell>
       <div className="space-y-6">
@@ -440,6 +445,21 @@ const ManagerReport = () => {
                   <div className="text-sm text-muted-foreground">Loading...</div>
                 ) : ownerRowsWithFee.length === 0 ? (
                   <div className="text-sm text-muted-foreground">No payments found for this month.</div>
+                ) : isMobile ? (
+                  <div>
+                    {ownerRowsWithFee.map((r) => (
+                      <OwnerBreakdownItemMobile key={r.ownerId} row={r} />
+                    ))}
+                    <div className="mt-3 text-sm">
+                      <div className="font-semibold">Totals</div>
+                      <div>Cash USD: {fmt(totals.usdCash, "USD")}</div>
+                      <div>Cash DOP: {fmt(totals.dopCash, "DOP")}</div>
+                      <div>Fee share (DOP): {fmt(actualFeeDeducted, "DOP")}</div>
+                      <div>Cash DOP after fee: {fmt(dopCashAfterFeeTotal, "DOP")}</div>
+                      <div>Transfer USD: {fmt(totals.usdTransfer, "USD")}</div>
+                      <div>Transfer DOP: {fmt(totals.dopTransfer, "DOP")}</div>
+                    </div>
+                  </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <Table>
@@ -496,6 +516,12 @@ const ManagerReport = () => {
           <CardContent>
             {!savedReports || savedReports.length === 0 ? (
               <div className="text-sm text-muted-foreground">No saved reports yet.</div>
+            ) : isMobile ? (
+              <div>
+                {savedReports.map((r) => (
+                  <SavedManagerReportItemMobile key={r.id} report={r} onEdited={() => refetchSaved()} />
+                ))}
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
