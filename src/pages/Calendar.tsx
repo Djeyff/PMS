@@ -145,6 +145,11 @@ const CalendarPage: React.FC = () => {
         options: {
           redirectTo: "https://app.lasterrenas.properties/calendar",
           scopes: "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email",
+          queryParams: {
+            access_type: "offline",           // request refresh + access token
+            prompt: "consent",                // force consent screen to grant scopes
+            include_granted_scopes: "true",   // merge previously granted scopes
+          },
         },
       });
       if (error) {
