@@ -143,7 +143,7 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
             <div className="text-right">
               <DialogTitle className="text-base font-semibold">Owner Statement • {prettyMonth}</DialogTitle>
               <div className="text-xs text-gray-600">{String(report.start_date).slice(0,10)} to {String(report.end_date).slice(0,10)}</div>
-              <div className="text-xs text-gray-600 mt-1">{ownerName}</div>
+              <div className="mt-1 font-semibold text-base">{ownerName}</div>
             </div>
           </div>
         </DialogHeader>

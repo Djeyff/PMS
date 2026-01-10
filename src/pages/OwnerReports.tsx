@@ -278,9 +278,6 @@ const OwnerReports = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Owner Payments (Assigned)</CardTitle>
-            <div className="text-sm text-muted-foreground">
-              Rows show only payments from properties assigned to the selected owner; amounts are pro‑rated by ownership percent.
-            </div>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -355,7 +352,7 @@ const OwnerReports = () => {
                   </TableHeader>
                   <TableBody>
                     {savedReports.map((r: OwnerReportRow) => (
-                      <SavedReportRow key={r.id} report={r} onEdited={() => refetchSaved()} />
+                      <SavedReportRow key={r.id} report={r} onEdited={() => refetchSaved()} ownerNameMap={ownerNameMap} />
                     ))}
                   </TableBody>
                 </Table>
@@ -369,39 +366,19 @@ const OwnerReports = () => {
 };
 
 // Helper row component inside this file for saved entries
-function SavedReportRow({ report, onEdited }: { report: OwnerReportRow; onEdited: () => void }) {
+function SavedReportRow({ report, onEdited, ownerNameMap }: { report: OwnerReportRow; onEdited: () => void; ownerNameMap: Record<string, string> }) {
   const [openEdit, setOpenEdit] = useState(false);
   const [openInvoice, setOpenInvoice] = useState(false);
   const [openDelete, setOpenDelete] = useState(false);
   const { toast } = useToast();
 
-  // Helper to format "YYYY-MM" → "Month YYYY"
-  const formatMonthLabel = (ym: string) => {
-    const parts = String(ym ?? "").split("-");
-    if (parts.length !== 2) return ym;
-    const y = Number(parts[0]);
-    const m = Number(parts[1]) - 1;
-    if (!Number.isFinite(y) || !Number.isFinite(m)) return ym;
-    const d = new Date(y, m, 1);
-    const label = d.toLocaleString(undefined, { month: "long", year: "numeric" });
-    return label.charAt(0).toUpperCase() + label.slice(1);
-  };
-
-  const confirmDelete = async () => {
-    try {
-      await deleteOwnerReport(report.id);
-      toast({ title: "Report deleted", description: `Deleted ${report.month}.` });
-      setOpenDelete(false);
-      onEdited();
-    } catch (e: any) {
-      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
-    }
-  };
+  // Display full owner name instead of UUID
+  const displayOwner = ownerNameMap[report.owner_id] ?? report.owner_id;
 
   return (
     <TableRow>
-      <TableCell>{formatMonthLabel(report.month)}</TableCell>
-      <TableCell>{report.owner_id}</TableCell>
+      <TableCell>{report.month}</TableCell>
+      <TableCell className="font-semibold">{displayOwner}</TableCell>
       <TableCell>{fmt(Number(report.usd_total || 0), "USD")}</TableCell>
       <TableCell>{fmt(Number(report.dop_total || 0), "DOP")}</TableCell>
       <TableCell>{report.avg_rate != null ? Number(report.avg_rate).toFixed(6) : "—"}</TableCell>
@@ -438,7 +415,20 @@ function SavedReportRow({ report, onEdited }: { report: OwnerReportRow; onEdited
             </div>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+              <AlertDialogAction
+                onClick={async () => {
+                  try {
+                    await deleteOwnerReport(report.id);
+                    toast({ title: "Report deleted", description: `Deleted ${report.month}.` });
+                    setOpenDelete(false);
+                    onEdited();
+                  } catch (e: any) {
+                    toast({ title: "Delete failed", description: e.message, variant: "destructive" });
+                  }
+                }}
+              >
+                Delete
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
