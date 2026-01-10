@@ -87,8 +87,15 @@ export async function syncEventsToGoogle(
   return out;
 }
 
-// NEW: Upsert lease expiry events with timed start at chosen HH:MM (agency timezone-aware via edge function)
-export async function upsertLeaseExpiryEvents(params: { role: Role | null; userId: string | null; agencyId: string | null; alertDays: number; alertTime?: string; timezone?: string }) {
+// Upsert lease expiry events (ALL-DAY) with reminder X days before at HH:MM
+export async function upsertLeaseExpiryEvents(params: {
+  role: Role | null;
+  userId: string | null;
+  agencyId: string | null;
+  alertDays: number;
+  alertTime?: string;   // "HH:MM"
+  timezone?: string;    // passthrough (stored only for sync usage)
+}) {
   const leases = await fetchLeases(params);
   const { data: userRes } = await supabase.auth.getUser();
   const uid = userRes.user?.id;
@@ -101,7 +108,7 @@ export async function upsertLeaseExpiryEvents(params: { role: Role | null; userI
     .eq("type", "lease_expiry");
   if (exErr) throw exErr;
 
-  // Group existing events by lease_id and delete duplicates (keep the first)
+  // De-dupe existing
   const byLease: Record<string, any[]> = {};
   (existing ?? []).forEach((e: any) => {
     const key = e.lease_id || "__no_lease__";
@@ -127,14 +134,12 @@ export async function upsertLeaseExpiryEvents(params: { role: Role | null; userI
     if (e.lease_id) existingByLease.set(e.lease_id, e);
   });
 
-  // Parse HH:MM → use for timed event start on end_date
+  // Compute reminder minutes: X days before at HH:MM => minutesBefore = X*1440 + HH*60 + MM
   const timeStr = (params.alertTime ?? "09:00").slice(0, 5);
   const [hhStr, mmStr] = timeStr.split(":");
   const hh = Math.max(0, Math.min(23, Number(hhStr) || 0));
   const mm = Math.max(0, Math.min(59, Number(mmStr) || 0));
-
-  // Reminder minutes before start: N days at the same time
-  const minutesBefore = Math.max(0, Math.floor(params.alertDays * 24 * 60));
+  const minutesBefore = Math.max(0, Math.floor(params.alertDays * 24 * 60) + hh * 60 + mm);
 
   const toInsert: any[] = [];
   const toUpdate: { id: string; patch: any }[] = [];
@@ -144,8 +149,10 @@ export async function upsertLeaseExpiryEvents(params: { role: Role | null; userI
     const leaseId = l.id;
     const isTerminated = l.status === "terminated";
     const endDateOnly = String(l.end_date).slice(0, 10); // YYYY-MM-DD
-    const startIso = new Date(`${endDateOnly}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00`).toISOString();
-    const endIso = new Date(new Date(startIso).getTime() + 30 * 60 * 1000).toISOString(); // 30-min duration
+
+    // All-day event starts at 00:00 local on expiry date; store as ISO date-only window
+    const startIso = new Date(`${endDateOnly}T00:00:00`).toISOString();
+    const endIso = new Date(new Date(startIso).getTime() + 24 * 60 * 60 * 1000).toISOString();
     const existingEvt = existingByLease.get(leaseId);
 
     if (isTerminated) {
@@ -158,7 +165,7 @@ export async function upsertLeaseExpiryEvents(params: { role: Role | null; userI
       title,
       start: startIso,
       end: endIso,
-      all_day: false, // timed event
+      all_day: true,
       alert_minutes_before: minutesBefore,
       type: "lease_expiry",
       lease_id: leaseId,
@@ -184,9 +191,8 @@ export async function upsertLeaseExpiryEvents(params: { role: Role | null; userI
     if (updErr) throw updErr;
   }
 
-  const toDelete = [...terminatedLeaseEventIds];
-  if (toDelete.length > 0) {
-    const { error: delErr } = await supabase.from("calendar_events").delete().in("id", toDelete);
+  if (terminatedLeaseEventIds.length > 0) {
+    const { error: delErr } = await supabase.from("calendar_events").delete().in("id", terminatedLeaseEventIds);
     if (delErr) throw delErr;
   }
 

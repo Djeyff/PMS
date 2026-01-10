@@ -41,7 +41,7 @@ Deno.serve(async (req: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-  // Build REST query for events (include type)
+  // Build REST query for events (include type for all-day logic)
   const select =
     "id,title,description,start,end,all_day,alert_minutes_before,type";
   const baseUrl = `${supabaseUrl}/rest/v1/calendar_events`;
@@ -76,7 +76,7 @@ Deno.serve(async (req: Request) => {
     return !Number.isNaN(s.getTime()) && !Number.isNaN(f.getTime());
   });
 
-  // If cleanup requested, delete previous calendar events matching pms_event_id
+  // Cleanup previously synced events on old calendar
   if (cleanupFromCalendarId) {
     for (const e of sanitized) {
       try {
@@ -113,10 +113,6 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  let inserted = 0;
-  let updated = 0;
-  const errors: Array<{ id: string; message: string }> = [];
-
   function buildGoogleEventBody(e: any): any {
     const minutes = typeof e.alert_minutes_before === "number" && e.alert_minutes_before > 0 ? e.alert_minutes_before : 0;
     const body: any = {
@@ -129,25 +125,24 @@ Deno.serve(async (req: Request) => {
       },
     };
 
-    // Force TIMED events for lease_expiry (to avoid "00:00 all-day" behavior) and honor provided timeZone
-    if (e.type === "lease_expiry") {
-      body.start = { dateTime: e.start, timeZone: timeZone || undefined };
-      body.end = { dateTime: e.end, timeZone: timeZone || undefined };
-      return body;
-    }
-
-    // Otherwise, respect all_day flag
-    if (e.all_day) {
+    // For lease expiry: force ALL-DAY event (date-only) so it shows as all-day; reminder fires X days before at HH:MM via minutes
+    if (e.type === "lease_expiry" || e.all_day) {
       const startDate = new Date(e.start).toISOString().slice(0, 10);
       const endDate = new Date(e.end).toISOString().slice(0, 10);
       body.start = { date: startDate };
       body.end = { date: endDate };
-    } else {
-      body.start = { dateTime: e.start, timeZone: timeZone || undefined };
-      body.end = { dateTime: e.end, timeZone: timeZone || undefined };
+      return body;
     }
+
+    // Timed events
+    body.start = { dateTime: e.start, timeZone: timeZone || undefined };
+    body.end = { dateTime: e.end, timeZone: timeZone || undefined };
     return body;
   }
+
+  let inserted = 0;
+  let updated = 0;
+  const errors: Array<{ id: string; message: string }> = [];
 
   for (const e of sanitized) {
     try {

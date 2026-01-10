@@ -90,7 +90,7 @@ const CalendarPage: React.FC = () => {
     enabled: !!user?.id,
   });
 
-  // Ensure lease expiry events with chosen lead time + time
+  // Ensure lease expiry events with chosen lead time + time (all-day events + minutesBefore math)
   const ensureLeaseExpiry = async () => {
     if (!showLeaseExpiry || !user?.id) return;
     await upsertLeaseExpiryEvents({
@@ -146,23 +146,17 @@ const CalendarPage: React.FC = () => {
     notify.success("Settings saved", { position: "bottom-right" });
     refetchSettings();
 
-    // Re-ensure events with new alertDays/time
     await ensureLeaseExpiry();
 
-    // If calendar changed, remove events from previous target and sync to new
-    if (changedCalendar && providerToken) {
-      try {
-        await syncEventsToGoogle(
-          undefined,
-          googleCalendarId || undefined,
-          providerToken || undefined,
-          previousCalendarId || undefined,
-          agency?.timezone || undefined
-        );
-        notify.success("Old calendar cleaned and new calendar synced", { position: "bottom-right" });
-      } catch (e: any) {
-        notify.error(`Cleanup/sync failed: ${e.message}`, { position: "bottom-right" });
-      }
+    if (providerToken) {
+      await syncEventsToGoogle(
+        undefined,
+        googleCalendarId || undefined,
+        providerToken || undefined,
+        changedCalendar ? previousCalendarId || undefined : undefined,
+        agency?.timezone || undefined
+      );
+      notify.success(changedCalendar ? "Old calendar cleaned and new calendar synced" : "Synced to Google", { position: "bottom-right" });
     }
   };
 

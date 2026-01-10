@@ -9,6 +9,10 @@ import type { LeaseWithMeta } from "@/services/leases";
 import { updateLease } from "@/services/leases";
 import { toast } from "sonner";
 import KDriveUploader from "@/components/leases/KDriveUploader";
+import { useAuth } from "@/contexts/AuthProvider";
+import { getMyCalendarSettings } from "@/services/calendar-settings";
+import { upsertLeaseExpiryEvents, syncEventsToGoogle } from "@/services/calendar";
+import { fetchAgencyById } from "@/services/agencies";
 
 type Props = {
   lease: LeaseWithMeta;
@@ -38,6 +42,8 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
   const [annualIncreasePercent, setAnnualIncreasePercent] = useState<string>(
     typeof lease.annual_increase_percent === "number" ? String(lease.annual_increase_percent) : ""
   );
+
+  const { user, role, profile, providerToken } = useAuth();
 
   const reset = () => {
     setStartDate(lease.start_date);
@@ -82,6 +88,35 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
           : null,
       });
       toast.success("Lease updated");
+
+      // Auto-update calendar events and sync to Google
+      try {
+        const settings = await getMyCalendarSettings();
+        const agency = profile?.agency_id ? await fetchAgencyById(profile.agency_id) : null;
+
+        await upsertLeaseExpiryEvents({
+          role,
+          userId: user?.id ?? null,
+          agencyId: profile?.agency_id ?? null,
+          alertDays: settings?.lease_alert_days ?? 7,
+          alertTime: settings?.lease_alert_time ?? "09:00",
+          timezone: agency?.timezone ?? "UTC",
+        });
+
+        if (settings?.google_calendar_id && providerToken) {
+          await syncEventsToGoogle(
+            undefined, // sync all updated events
+            settings.google_calendar_id || undefined,
+            providerToken || undefined,
+            undefined,
+            agency?.timezone || undefined
+          );
+        }
+      } catch (err: any) {
+        // We keep lease saved even if sync fails; show info toast
+        toast.info(err?.message ?? "Lease updated; calendar sync will be retried from Calendar page");
+      }
+
       setOpen(false);
       onUpdated?.();
     } catch (e: any) {
