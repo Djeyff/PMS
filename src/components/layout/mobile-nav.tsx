@@ -23,6 +23,7 @@ const navItems: NavItem[] = [
   { to: "/maintenance", label: "Maintenance", icon: Wrench, roles: ["agency_admin", "owner", "tenant"] },
   { to: "/reports", label: "Reports", icon: BarChart3, roles: ["agency_admin", "owner"] },
   { to: "/manager-report", label: "Manager Report", icon: UserCog, roles: ["agency_admin"] },
+  { to: "/owner-reports", label: "Owner Reports", icon: UserCog, roles: ["agency_admin"] },
   { to: "/contracts", label: "Contracts", icon: FileText, roles: ["agency_admin"] },
   { to: "/outstanding", label: "Outstanding", icon: History, roles: ["agency_admin"] },
   { to: "/logs", label: "Activity Log", icon: History, roles: ["agency_admin"] },

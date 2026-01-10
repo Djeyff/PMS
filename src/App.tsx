@@ -32,6 +32,7 @@ import Outstanding from "./pages/Outstanding";
 import ActivityLog from "./pages/ActivityLog";
 import Contracts from "./pages/Contracts";
 import ManagerReport from "./pages/ManagerReport";
+import OwnerReports from "./pages/OwnerReports";
 
 const queryClient = new QueryClient();
 
@@ -227,6 +228,16 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <ManagerReport />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/owner-reports"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin"]}>
+                        <OwnerReports />
+                      </RoleGate>
                     </ProtectedRoute>
                   }
                 />
