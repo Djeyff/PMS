@@ -231,7 +231,15 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
             <div className="text-xs font-medium mb-1">Manager fee</div>
             <div className="space-y-1 text-sm">
               <div className="font-semibold">
-                (USD × rate + DOP) × {feePercent.toFixed(2)}% = {fmt(ownerFeeShareDop, "DOP")}
+                {ownerUsdTotal > 0 ? (
+                  <>
+                    ({fmt(ownerDopTotal, "DOP")} + {ownerUsdTotal.toFixed(2)} USD × {Number.isFinite(avgRate) ? avgRate.toFixed(6) : "rate ?"}) × {feePercent.toFixed(2)}% = {fmt(ownerFeeShareDop, "DOP")}
+                  </>
+                ) : (
+                  <>
+                    {fmt(ownerDopTotal, "DOP")} × {feePercent.toFixed(2)}% = {fmt(ownerFeeShareDop, "DOP")}
+                  </>
+                )}
               </div>
             </div>
           </div>
