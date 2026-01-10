@@ -141,10 +141,13 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
   const feeBaseDop = managerForPeriod ? Number(managerForPeriod.fee_base_dop || 0) : ((Number.isNaN(avgRate) ? 0 : usdAgencyTotal * avgRate) + dopAgencyTotal);
   const feeDop = managerForPeriod ? Number(managerForPeriod.fee_dop || 0) : (feeBaseDop * (feePercent / 100));
 
-  // Owner's DOP cash; fee is computed directly on this amount for clarity
+  // Owner-specific fee
+  const ownerUsdTotal = totals.usdCash + totals.usdTransfer;
+  const ownerDopTotal = totals.dopCash + totals.dopTransfer;
   const ownerDopCash = totals.dopCash;
-  const ownerFeeShareDop = ownerDopCash * (feePercent / 100);
-  const ownerDopAfterFee = Math.max(0, ownerDopCash - ownerFeeShareDop);
+  const ownerFeeShareDop = ((Number.isNaN(avgRate) ? 0 : ownerUsdTotal * avgRate) + ownerDopTotal) * (feePercent / 100);
+  const ownerFeeDeducted = Math.min(ownerFeeShareDop, ownerDopCash);
+  const ownerDopAfterFee = Math.max(0, ownerDopCash - ownerFeeDeducted);
 
   // Format "YYYY-MM" into "Month YYYY" label
   const formatMonthLabel = (ym?: string) => {
@@ -236,7 +239,7 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
                 {fmt(feeDop, "DOP")} ({feePercent.toFixed(2)}%)
               </div>
               <div className="text-xs text-muted-foreground">
-                Owner fee (for clarity): {fmt(ownerDopCash, "DOP")} × {feePercent.toFixed(2)}% = {fmt(ownerFeeShareDop, "DOP")}
+                Owner fee (computed on owner totals): (USD × rate + DOP) × {feePercent.toFixed(2)}% = {fmt(ownerFeeShareDop, "DOP")}
               </div>
             </div>
           </div>

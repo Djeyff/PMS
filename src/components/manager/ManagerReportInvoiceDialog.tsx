@@ -128,19 +128,18 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
   const feeBaseDop = (Number.isNaN(rateNum) ? 0 : usdTotal * rateNum) + dopTotal;
   const feePct = Number(report.fee_percent ?? 5);
   const managerFeeDop = feeBaseDop * (feePct / 100);
-  const actualFeeDeducted = Math.min(managerFeeDop, totals.dopCash);
 
+  // Per-owner fee computed on owner base = (owner USD × rate) + owner DOP; deduct from DOP cash, capped at available DOP cash
   const ownerRowsWithFee = useMemo(() => {
-    const totalDopCash = totals.dopCash;
-    if (totalDopCash <= 0 || actualFeeDeducted <= 0) {
-      return ownerRows.map((r) => ({ ...r, cashDopAfterFee: r.cashDop }));
-    }
     return ownerRows.map((r) => {
-      const share = r.cashDop / totalDopCash;
-      const deducted = actualFeeDeducted * share;
-      return { ...r, cashDopAfterFee: Math.max(0, r.cashDop - deducted) };
+      const ownerUsdTotal = r.cashUsd + r.transferUsd;
+      const ownerDopTotal = r.cashDop + r.transferDop;
+      const ownerBaseDop = (Number.isNaN(rateNum) ? 0 : ownerUsdTotal * rateNum) + ownerDopTotal;
+      const ownerFee = ownerBaseDop * (feePct / 100);
+      const ownerFeeDeducted = Math.min(ownerFee, r.cashDop);
+      return { ...r, cashDopAfterFee: Math.max(0, r.cashDop - ownerFeeDeducted), feeShareDop: ownerFeeDeducted };
     });
-  }, [ownerRows, totals.dopCash, actualFeeDeducted]);
+  }, [ownerRows, rateNum, feePct]);
 
   const dopCashAfterFeeTotal = useMemo(
     () => ownerRowsWithFee.reduce((s, r) => s + (r.cashDopAfterFee ?? r.cashDop), 0),
@@ -247,7 +246,7 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
             </TableHeader>
             <TableBody>
               {ownerRowsWithFee.map((r) => {
-                const feeShare = (r.cashDop ?? 0) - (r.cashDopAfterFee ?? r.cashDop ?? 0);
+                const feeShare = r.feeShareDop ?? 0;
                 return (
                   <TableRow key={r.ownerId}>
                     <TableCell className="font-medium">{r.name}</TableCell>
@@ -264,7 +263,9 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
                 <TableCell className="font-semibold">Totals</TableCell>
                 <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.cashUsd, 0), "USD")}</TableCell>
                 <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.cashDop, 0), "DOP")}</TableCell>
-                <TableCell className="font-semibold">{fmt(actualFeeDeducted, "DOP")}</TableCell>
+                <TableCell className="font-semibold">
+                  {fmt(ownerRowsWithFee.reduce((s, r) => s + (r.feeShareDop ?? 0), 0), "DOP")}
+                </TableCell>
                 <TableCell className="font-semibold">{fmt(dopCashAfterFeeTotal, "DOP")}</TableCell>
                 <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.transferUsd, 0), "USD")}</TableCell>
                 <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.transferDop, 0), "DOP")}</TableCell>

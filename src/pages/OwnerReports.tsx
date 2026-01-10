@@ -473,9 +473,16 @@ function SavedReportRow({
   }, [mgrReports, report.month, report.start_date, report.end_date]);
 
   const feePercent = managerForPeriod ? Number(managerForPeriod.fee_percent || 5) : 5;
-  const ownerDopCash = Number(report.dop_total || 0);
-  const ownerFeeShareDop = ownerDopCash * (feePercent / 100);
-  const ownerDopAfterFee = Math.max(0, ownerDopCash - ownerFeeShareDop);
+  const avgRate = managerForPeriod && managerForPeriod.avg_rate != null ? Number(managerForPeriod.avg_rate) : (report.avg_rate != null ? Number(report.avg_rate) : NaN);
+
+  const ownerUsdTotal = Number(report.usd_total || 0);
+  const ownerDopCash = Number(report.dop_cash_total || 0);
+  const ownerDopTransfer = Number(report.dop_transfer_total || 0);
+  const ownerDopTotal = ownerDopCash + ownerDopTransfer;
+
+  const ownerFeeShareDop = ((Number.isNaN(avgRate) ? 0 : ownerUsdTotal * avgRate) + ownerDopTotal) * (feePercent / 100);
+  const ownerFeeDeducted = Math.min(ownerFeeShareDop, ownerDopCash);
+  const ownerDopAfterFee = Math.max(0, ownerDopCash - ownerFeeDeducted);
 
   return (
     <TableRow>
@@ -483,8 +490,8 @@ function SavedReportRow({
       <TableCell className="font-semibold">{displayOwner}</TableCell>
       <TableCell>{fmt(Number(report.usd_total || 0), "USD")}</TableCell>
       <TableCell>{fmt(Number(report.dop_total || 0), "DOP")}</TableCell>
-      <TableCell>{report.avg_rate != null ? Number(report.avg_rate).toFixed(6) : "—"}</TableCell>
-      <TableCell>{fmt(ownerFeeShareDop, "DOP")}</TableCell>
+      <TableCell>{avgRate && Number.isFinite(avgRate) ? avgRate.toFixed(6) : "—"}</TableCell>
+      <TableCell>{fmt(ownerFeeDeducted, "DOP")}</TableCell>
       <TableCell>{fmt(ownerDopAfterFee, "DOP")}</TableCell>
       <TableCell className="print:hidden">
         <div className="flex gap-2">
