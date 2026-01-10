@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fetchAgencyById } from "@/services/agencies";
 import DeleteMaintenanceRequestDialog from "@/components/maintenance/DeleteMaintenanceRequestDialog";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const Maintenance = () => {
   const { role, profile } = useAuth();
@@ -76,6 +77,45 @@ const Maintenance = () => {
               <div className="text-sm text-muted-foreground">Loading...</div>
             ) : (data?.length ?? 0) === 0 ? (
               <div className="text-sm text-muted-foreground">No maintenance requests.</div>
+            ) : useIsMobile() ? (
+              <div>
+                {(data ?? []).map((m) => (
+                  <div key={m.id} className="rounded-lg border p-3 bg-card mb-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-medium">{m.title}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {m.property?.name ?? m.property_id.slice(0, 8)}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs capitalize">{m.priority}</div>
+                        <div className="text-xs capitalize">{m.status.replace("_", " ")}</div>
+                        <div className="text-xs">{m.due_date ?? "—"}</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {isAdmin ? (
+                        <>
+                          {m.status !== "in_progress" && (
+                            <Button size="sm" variant="outline" onClick={() => onUpdateStatus(m.id, "in_progress")}>Start</Button>
+                          )}
+                          {m.status !== "closed" && (
+                            <Button size="sm" variant="outline" onClick={() => onUpdateStatus(m.id, "closed")}>Close</Button>
+                          )}
+                          <DeleteMaintenanceRequestDialog
+                            id={m.id}
+                            metadata={{ title: m.title, property_id: m.property?.id ?? m.property_id, status: m.status, due_date: m.due_date }}
+                            onDeleted={() => refetch()}
+                            size="sm"
+                          />
+                        </>
+                      ) : null}
+                      <LogsDialog request={m} tz={tz} onUpdated={() => refetch()} />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
               <Table>
                 <TableHeader>

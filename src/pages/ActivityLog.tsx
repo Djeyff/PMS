@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
 import { fetchActivityLogsByAgency, reinstatePaymentFromLog, reinstateMaintenanceRequestFromLog, logAction } from "@/services/activity-logs";
@@ -137,18 +138,8 @@ const ActivityLog = () => {
                   </Select>
                   <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
                 </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>When</TableHead>
-                      <TableHead>User</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Entity</TableHead>
-                      <TableHead>Details</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                {useIsMobile() ? (
+                  <div>
                     {rows.map((x) => {
                       const userName = [x.user?.first_name ?? "", x.user?.last_name ?? ""].filter(Boolean).join(" ") || x.user_id.slice(0, 6);
                       const safeMeta = stripIds(x.metadata ?? {});
@@ -160,54 +151,110 @@ const ActivityLog = () => {
                       const isMaint = x.entity_type === "maintenance_request";
                       const showHistory = !!openHistory[x.id];
                       const reqId = x.entity_id as string | undefined;
-
                       return (
-                        <TableRow key={x.id}>
-                          <TableCell className="whitespace-nowrap align-top">{fmt(x.created_at)}</TableCell>
-                          <TableCell className="align-top">{userName}</TableCell>
-                          <TableCell className="capitalize align-top">{x.action.replace(/_/g, " ")}</TableCell>
-                          <TableCell className="capitalize align-top">
-                            {x.entity_type.replace(/_/g, " ")} {x.entity_id ? `(${x.entity_id.slice(0,8)})` : ""}
-                          </TableCell>
-                          <TableCell className="align-top">
-                            <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(safeMeta, null, 2)}</pre>
-                            {isMaint && reqId ? (
-                              <div className="mt-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => setOpenHistory((prev) => ({ ...prev, [x.id]: !prev[x.id] }))}
-                                >
-                                  {showHistory ? "Hide maintenance history" : "Show maintenance history"}
-                                </Button>
-                                {showHistory ? <MaintenanceHistoryInline requestId={reqId} /> : null}
-                              </div>
-                            ) : null}
-                          </TableCell>
-                          <TableCell className="align-top">
-                            <div className="flex flex-col gap-2">
-                              {canReinstatePayment ? (
-                                <Button size="sm" onClick={() => onReinstate(x.id, "payment")}>Reinstate</Button>
-                              ) : null}
-                              {canReinstateMaint ? (
-                                <Button size="sm" onClick={() => onReinstate(x.id, "maintenance_request", reqId)}>Reinstate</Button>
-                              ) : null}
-                              {canReinstateProperty ? (
-                                <Button size="sm" onClick={() => onReinstate(x.id, "property")}>Reinstate</Button>
-                              ) : null}
-                              {canReinstateLease ? (
-                                <Button size="sm" onClick={() => onReinstate(x.id, "lease")}>Reinstate</Button>
-                              ) : null}
-                              {canReinstateTenant ? (
-                                <Button size="sm" onClick={() => onReinstate(x.id, "tenant")}>Reinstate</Button>
-                              ) : null}
+                        <div key={x.id} className="rounded-lg border p-3 bg-card mb-3 space-y-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-xs text-muted-foreground">{fmt(x.created_at)}</div>
+                              <div className="font-medium">{userName}</div>
                             </div>
-                          </TableCell>
-                        </TableRow>
+                            <div className="text-right text-xs capitalize">{x.entity_type.replace(/_/g, " ")}</div>
+                          </div>
+                          <div className="text-sm capitalize">{x.action.replace(/_/g, " ")}</div>
+                          <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(safeMeta, null, 2)}</pre>
+                          <div className="flex flex-wrap gap-2">
+                            {canReinstatePayment ? <Button size="sm" onClick={() => onReinstate(x.id, "payment")}>Reinstate</Button> : null}
+                            {canReinstateMaint ? <Button size="sm" onClick={() => onReinstate(x.id, "maintenance_request", reqId)}>Reinstate</Button> : null}
+                            {canReinstateProperty ? <Button size="sm" onClick={() => onReinstate(x.id, "property")}>Reinstate</Button> : null}
+                            {canReinstateLease ? <Button size="sm" onClick={() => onReinstate(x.id, "lease")}>Reinstate</Button> : null}
+                            {canReinstateTenant ? <Button size="sm" onClick={() => onReinstate(x.id, "tenant")}>Reinstate</Button> : null}
+                            {isMaint && reqId ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setOpenHistory((prev) => ({ ...prev, [x.id]: !prev[x.id] }))}
+                              >
+                                {showHistory ? "Hide maintenance history" : "Show maintenance history"}
+                              </Button>
+                            ) : null}
+                          </div>
+                          {isMaint && reqId && showHistory ? <MaintenanceHistoryInline requestId={reqId} /> : null}
+                        </div>
                       );
                     })}
-                  </TableBody>
-                </Table>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>When</TableHead>
+                        <TableHead>User</TableHead>
+                        <TableHead>Action</TableHead>
+                        <TableHead>Entity</TableHead>
+                        <TableHead>Details</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rows.map((x) => {
+                        const userName = [x.user?.first_name ?? "", x.user?.last_name ?? ""].filter(Boolean).join(" ") || x.user_id.slice(0, 6);
+                        const safeMeta = stripIds(x.metadata ?? {});
+                        const canReinstatePayment = x.action === "delete_payment" && x.entity_type === "payment";
+                        const canReinstateMaint = x.action === "delete_maintenance_request" && x.entity_type === "maintenance_request";
+                        const canReinstateProperty = x.action === "delete_property" && x.entity_type === "property";
+                        const canReinstateLease = x.action === "delete_lease" && x.entity_type === "lease";
+                        const canReinstateTenant = x.action === "delete_tenant" && x.entity_type === "profile";
+                        const isMaint = x.entity_type === "maintenance_request";
+                        const showHistory = !!openHistory[x.id];
+                        const reqId = x.entity_id as string | undefined;
+                        return (
+                          <TableRow key={x.id}>
+                            <TableCell className="whitespace-nowrap align-top">{fmt(x.created_at)}</TableCell>
+                            <TableCell className="align-top">{userName}</TableCell>
+                            <TableCell className="capitalize align-top">{x.action.replace(/_/g, " ")}</TableCell>
+                            <TableCell className="capitalize align-top">
+                              {x.entity_type.replace(/_/g, " ")} {x.entity_id ? `(${x.entity_id.slice(0,8)})` : ""}
+                            </TableCell>
+                            <TableCell className="align-top">
+                              <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(safeMeta, null, 2)}</pre>
+                              {isMaint && reqId ? (
+                                <div className="mt-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setOpenHistory((prev) => ({ ...prev, [x.id]: !prev[x.id] }))}
+                                  >
+                                    {showHistory ? "Hide maintenance history" : "Show maintenance history"}
+                                  </Button>
+                                  {showHistory ? <MaintenanceHistoryInline requestId={reqId} /> : null}
+                                </div>
+                              ) : null}
+                            </TableCell>
+                            <TableCell className="align-top">
+                              <div className="flex flex-col gap-2">
+                                {canReinstatePayment ? (
+                                  <Button size="sm" onClick={() => onReinstate(x.id, "payment")}>Reinstate</Button>
+                                ) : null}
+                                {canReinstateMaint ? (
+                                  <Button size="sm" onClick={() => onReinstate(x.id, "maintenance_request", reqId)}>Reinstate</Button>
+                                ) : null}
+                                {canReinstateProperty ? (
+                                  <Button size="sm" onClick={() => onReinstate(x.id, "property")}>Reinstate</Button>
+                                ) : null}
+                                {canReinstateLease ? (
+                                  <Button size="sm" onClick={() => onReinstate(x.id, "lease")}>Reinstate</Button>
+                                ) : null}
+                                {canReinstateTenant ? (
+                                  <Button size="sm" onClick={() => onReinstate(x.id, "tenant")}>Reinstate</Button>
+                                ) : null}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
               </div>
             )}
           </CardContent>

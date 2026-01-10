@@ -92,13 +92,17 @@ const ManagerReport = () => {
   const months = useMemo(() => monthList(12), []);
   const [monthValue, setMonthValue] = useState<string>(months[0]?.value ?? "");
   const currentMonth = useMemo(() => months.find((m) => m.value === monthValue) ?? months[0], [months, monthValue]);
+  const [startDate, setStartDate] = useState<string>(currentMonth.start);
+  const [endDate, setEndDate] = useState<string>(currentMonth.end);
 
   // NEW: manual generate state
   const [generated, setGenerated] = useState<boolean>(false);
   useEffect(() => {
     // Reset when month changes
     setGenerated(false);
-  }, [monthValue]);
+    setStartDate(currentMonth.start);
+    setEndDate(currentMonth.end);
+  }, [monthValue, currentMonth]);
 
   const [avgRateInput, setAvgRateInput] = useState<string>(""); // user-editable average USD/DOP for the month
   const [suggestedRate, setSuggestedRate] = useState<number | null>(null);
@@ -124,28 +128,25 @@ const ManagerReport = () => {
 
   useEffect(() => {
     const loadRate = async () => {
-      if (!currentMonth) return;
+      if (!startDate || !endDate) return;
       try {
-        const avg = await fetchMonthlyAvgRate(currentMonth.start, currentMonth.end);
+        const avg = await fetchMonthlyAvgRate(startDate, endDate);
         setSuggestedRate(avg);
-        // Do not auto-fill input; let user apply suggestion explicitly.
       } catch {
         setSuggestedRate(null);
       }
     };
     loadRate();
-  }, [currentMonth]);
+  }, [startDate, endDate]);
 
   const filteredPayments = useMemo(() => {
     const rows = payments ?? [];
-    if (!currentMonth) return rows;
-    const s = currentMonth.start;
-    const e = currentMonth.end;
+    if (!startDate || !endDate) return rows;
     return rows.filter((p: any) => {
-      const d = String(p.received_date ?? "").slice(0, 10); // guard against timestamps
-      return d >= s && d <= e;
+      const d = String(p.received_date ?? "").slice(0, 10);
+      return d >= startDate && d <= endDate;
     });
-  }, [payments, currentMonth]);
+  }, [payments, startDate, endDate]);
 
   // Build owner breakdown (pro-rata by ownership percent for each property)
   const ownerRows: OwnerRow[] = useMemo(() => {
@@ -270,8 +271,8 @@ const ManagerReport = () => {
     const saved = await createManagerReport({
       agency_id: agencyId!,
       month: currentMonth.value,
-      start_date: currentMonth.start,
-      end_date: currentMonth.end,
+      start_date: startDate,
+      end_date: endDate,
       avg_rate: Number.isNaN(rateNum) ? null : rateNum,
       fee_percent: 5,
       usd_cash_total: totals.usdCash,
@@ -305,8 +306,8 @@ const ManagerReport = () => {
     <AppShell>
       <div className="space-y-6">
         <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <div className="text-sm text-muted-foreground">Month</div>
+          <div className="min-w-[220px]">
+            <div className="text-sm text-muted-foreground">Quick month</div>
             <Select value={monthValue} onValueChange={setMonthValue}>
               <SelectTrigger className="w-[220px]">
                 <SelectValue placeholder="Select month" />
@@ -317,7 +318,16 @@ const ManagerReport = () => {
                 ))}
               </SelectContent>
             </Select>
-            <div className="mt-1 text-xs text-muted-foreground">{currentMonth?.start} to {currentMonth?.end}</div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <div>
+                <div className="text-xs text-muted-foreground">Start</div>
+                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">End</div>
+                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              </div>
+            </div>
           </div>
           <div>
             <div className="text-sm text-muted-foreground">Avg USD/DOP rate</div>

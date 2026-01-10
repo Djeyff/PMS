@@ -68,6 +68,8 @@ const OwnerReports = () => {
   const months = useMemo(() => monthList(12), []);
   const [monthValue, setMonthValue] = useState<string>(months[0]?.value ?? "");
   const currentMonth = useMemo(() => months.find((m) => m.value === monthValue) ?? months[0], [months, monthValue]);
+  const [startDate, setStartDate] = useState<string>(currentMonth.start);
+  const [endDate, setEndDate] = useState<string>(currentMonth.end);
 
   const [ownerId, setOwnerId] = useState<string>("");
 
@@ -110,26 +112,29 @@ const OwnerReports = () => {
 
   useEffect(() => {
     const loadRate = async () => {
-      if (!currentMonth) return;
+      if (!startDate || !endDate) return;
       try {
-        const avg = await fetchMonthlyAvgRate(currentMonth.start, currentMonth.end);
+        const avg = await fetchMonthlyAvgRate(startDate, endDate);
         setSuggestedRate(avg);
       } catch {
         setSuggestedRate(null);
       }
     };
     loadRate();
+  }, [startDate, endDate]);
+
+  useEffect(() => {
+    setStartDate(currentMonth.start);
+    setEndDate(currentMonth.end);
   }, [currentMonth]);
 
   const filteredPayments = useMemo(() => {
-    if (!currentMonth) return payments ?? [];
-    const s = currentMonth.start;
-    const e = currentMonth.end;
+    if (!startDate || !endDate) return payments ?? [];
     return (payments ?? []).filter((p: any) => {
       const d = String(p.received_date ?? "").slice(0, 10);
-      return d >= s && d <= e;
+      return d >= startDate && d <= endDate;
     });
-  }, [payments, currentMonth]);
+  }, [payments, startDate, endDate]);
 
   const ownerProps = useMemo(() => {
     if (!ownerId) return [];
@@ -185,8 +190,8 @@ const OwnerReports = () => {
       agency_id: agencyId!,
       owner_id: ownerId!,
       month: currentMonth.value,
-      start_date: currentMonth.start,
-      end_date: currentMonth.end,
+      start_date: startDate,
+      end_date: endDate,
       avg_rate: avgRateInput && Number(avgRateInput) > 0 ? Number(avgRateInput) : null,
       usd_cash_total: totals.usdCash,
       dop_cash_total: totals.dopCash,
@@ -206,7 +211,7 @@ const OwnerReports = () => {
       <div className="space-y-6">
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <div className="text-sm text-muted-foreground">Month</div>
+            <div className="text-sm text-muted-foreground">Quick month</div>
             <Select value={monthValue} onValueChange={setMonthValue}>
               <SelectTrigger className="w-[220px]">
                 <SelectValue placeholder="Select month" />
@@ -217,7 +222,16 @@ const OwnerReports = () => {
                 ))}
               </SelectContent>
             </Select>
-            <div className="mt-1 text-xs text-muted-foreground">{currentMonth?.start} to {currentMonth?.end}</div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <div>
+                <div className="text-xs text-muted-foreground">Start</div>
+                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-[180px]" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">End</div>
+                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-[180px]" />
+              </div>
+            </div>
           </div>
           <div>
             <div className="text-sm text-muted-foreground">Owner</div>
