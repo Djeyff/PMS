@@ -63,7 +63,13 @@ export async function deleteEvent(id: string) {
   return true;
 }
 
-export async function syncEventsToGoogle(eventIds?: string[], calendarId?: string, providerToken?: string, cleanupFromCalendarId?: string) {
+export async function syncEventsToGoogle(
+  eventIds?: string[],
+  calendarId?: string,
+  providerToken?: string,
+  cleanupFromCalendarId?: string,
+  timeZone?: string
+) {
   const { data: sess } = await supabase.auth.getSession();
   const token = sess.session?.access_token;
   if (!token) throw new Error("Not authenticated");
@@ -71,7 +77,7 @@ export async function syncEventsToGoogle(eventIds?: string[], calendarId?: strin
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ eventIds, calendarId, providerToken, cleanupFromCalendarId }),
+    body: JSON.stringify({ eventIds, calendarId, providerToken, cleanupFromCalendarId, timeZone }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

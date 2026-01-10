@@ -109,6 +109,29 @@ const CalendarPage: React.FC = () => {
     ensureLeaseExpiry().catch(() => {});
   }, [showLeaseExpiry, user?.id]);
 
+  const syncToGoogle = async () => {
+    try {
+      const previousCalendarId = settings?.google_calendar_id ?? null;
+      const changedCalendar = previousCalendarId && previousCalendarId !== googleCalendarId;
+
+      await syncEventsToGoogle(
+        undefined,
+        googleCalendarId || undefined,
+        providerToken || undefined,
+        changedCalendar ? previousCalendarId || undefined : undefined,
+        agency?.timezone || undefined
+      );
+
+      const target = googleCalendarId ? `Target calendar: ${googleCalendarId}` : "Default calendar";
+      notify.success(
+        providerToken ? (changedCalendar ? "Old calendar cleaned and new calendar synced" : `Sync started • ${target}`) : "Connect Google first to use your account token.",
+        { position: "bottom-right" }
+      );
+    } catch (e: any) {
+      notify.error(`Sync failed: ${e.message}`, { position: "bottom-right" });
+    }
+  };
+
   const saveSettings = async () => {
     const previousCalendarId = settings?.google_calendar_id ?? null;
     const changedCalendar = previousCalendarId && previousCalendarId !== googleCalendarId;
@@ -129,7 +152,13 @@ const CalendarPage: React.FC = () => {
     // If calendar changed, remove events from previous target and sync to new
     if (changedCalendar && providerToken) {
       try {
-        await syncEventsToGoogle(undefined, googleCalendarId || undefined, providerToken || undefined, previousCalendarId || undefined);
+        await syncEventsToGoogle(
+          undefined,
+          googleCalendarId || undefined,
+          providerToken || undefined,
+          previousCalendarId || undefined,
+          agency?.timezone || undefined
+        );
         notify.success("Old calendar cleaned and new calendar synced", { position: "bottom-right" });
       } catch (e: any) {
         notify.error(`Cleanup/sync failed: ${e.message}`, { position: "bottom-right" });
@@ -158,16 +187,6 @@ const CalendarPage: React.FC = () => {
     } catch (e: any) {
       const msg = e?.message || "Google sign-in failed";
       toast({ title: "Google connect error", description: msg, variant: "destructive" });
-    }
-  };
-
-  const syncToGoogle = async () => {
-    try {
-      await syncEventsToGoogle(undefined, googleCalendarId || undefined, providerToken || undefined);
-      const target = googleCalendarId ? `Target calendar: ${googleCalendarId}` : "Default calendar";
-      toast({ title: "Sync started", description: providerToken ? target : "Connect Google first to use your account token." });
-    } catch (e: any) {
-      toast({ title: "Sync failed", description: e.message, variant: "destructive" });
     }
   };
 

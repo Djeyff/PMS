@@ -35,14 +35,15 @@ Deno.serve(async (req: Request) => {
   const calendarId = (payload?.calendarId || "primary") as string;
   const providerToken: string | undefined = payload?.providerToken;
   const cleanupFromCalendarId: string | undefined = payload?.cleanupFromCalendarId;
+  const timeZone: string | undefined = payload?.timeZone;
 
   // Use Supabase REST API with user's JWT (RLS applies)
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-  // Build REST query for events
+  // Build REST query for events (include type)
   const select =
-    "id,title,description,start,end,all_day,alert_minutes_before";
+    "id,title,description,start,end,all_day,alert_minutes_before,type";
   const baseUrl = `${supabaseUrl}/rest/v1/calendar_events`;
   const params = new URLSearchParams({
     select,
@@ -127,14 +128,23 @@ Deno.serve(async (req: Request) => {
         overrides: minutes > 0 ? [{ method: "popup", minutes }] : [],
       },
     };
+
+    // Force TIMED events for lease_expiry (to avoid "00:00 all-day" behavior) and honor provided timeZone
+    if (e.type === "lease_expiry") {
+      body.start = { dateTime: e.start, timeZone: timeZone || undefined };
+      body.end = { dateTime: e.end, timeZone: timeZone || undefined };
+      return body;
+    }
+
+    // Otherwise, respect all_day flag
     if (e.all_day) {
       const startDate = new Date(e.start).toISOString().slice(0, 10);
       const endDate = new Date(e.end).toISOString().slice(0, 10);
       body.start = { date: startDate };
       body.end = { date: endDate };
     } else {
-      body.start = { dateTime: e.start, timeZone: payload?.timeZone || undefined };
-      body.end = { dateTime: e.end, timeZone: payload?.timeZone || undefined };
+      body.start = { dateTime: e.start, timeZone: timeZone || undefined };
+      body.end = { dateTime: e.end, timeZone: timeZone || undefined };
     }
     return body;
   }
