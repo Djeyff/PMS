@@ -19,6 +19,8 @@ import { Label } from "@/components/ui/label";
 import { createLocationGroup } from "@/services/property-groups";
 import { toast } from "sonner";
 import { fetchLeases } from "@/services/leases";
+import { useIsMobile } from "@/hooks/use-mobile";
+import PropertyListItemMobile from "@/components/properties/PropertyListItemMobile";
 
 // sample data removed
 
@@ -37,6 +39,7 @@ const Properties = () => {
   });
 
   const canCreate = role === "agency_admin";
+  const isMobile = useIsMobile();
 
   const grouped = React.useMemo(() => {
     const groups = new Map<string, any[]>();
@@ -156,45 +159,59 @@ const Properties = () => {
                       <h2 className="text-lg font-semibold">{groupName}</h2>
                       <Separator className="mt-2 w-full" />
                     </div>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Bedrooms</TableHead>
-                          <TableHead>City</TableHead>
-                          {canCreate && <TableHead>Actions</TableHead>}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                    {isMobile ? (
+                      <div>
                         {items.map((p: any) => (
-                          <TableRow key={p.id}>
-                            <TableCell className="font-medium">{p.name}</TableCell>
-                            <TableCell className="capitalize">{p.type}</TableCell>
-                            <TableCell>
-                              {occupiedProps.has(p.id) ? (
-                                <span className="text-green-600 font-medium">Occupied</span>
-                              ) : (
-                                <span className="text-red-600 font-medium">Vacant</span>
-                              )}
-                            </TableCell>
-                            <TableCell>{p.bedrooms ?? "-"}</TableCell>
-                            <TableCell>{p.city ?? "-"}</TableCell>
-                            {canCreate && (
-                              <TableCell>
-                                <div className="flex gap-2">
-                                  <EditPropertyDialog property={p} onUpdated={() => refetch()} />
-                                  <PropertyOwnersDialog propertyId={p.id} />
-                                  <AssignTenantDialog propertyId={p.id} onAssigned={() => refetch()} />
-                                  <DeletePropertyDialog id={p.id} name={p.name} onDeleted={() => refetch()} />
-                                </div>
-                              </TableCell>
-                            )}
-                          </TableRow>
+                          <PropertyListItemMobile
+                            key={p.id}
+                            property={p}
+                            occupied={occupiedProps.has(p.id)}
+                            canCreate={canCreate}
+                            onRefetch={() => refetch()}
+                          />
                         ))}
-                      </TableBody>
-                    </Table>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="whitespace-nowrap">Name</TableHead>
+                            <TableHead className="whitespace-nowrap">Type</TableHead>
+                            <TableHead className="whitespace-nowrap">Status</TableHead>
+                            <TableHead className="whitespace-nowrap">Bedrooms</TableHead>
+                            <TableHead className="whitespace-nowrap">City</TableHead>
+                            {canCreate && <TableHead>Actions</TableHead>}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {items.map((p: any) => (
+                            <TableRow key={p.id}>
+                              <TableCell className="font-medium whitespace-nowrap">{p.name}</TableCell>
+                              <TableCell className="capitalize whitespace-nowrap">{p.type}</TableCell>
+                              <TableCell>
+                                {occupiedProps.has(p.id) ? (
+                                  <span className="text-green-600 font-medium">Occupied</span>
+                                ) : (
+                                  <span className="text-red-600 font-medium">Vacant</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">{p.bedrooms ?? "-"}</TableCell>
+                              <TableCell className="whitespace-nowrap">{p.city ?? "-"}</TableCell>
+                              {canCreate && (
+                                <TableCell>
+                                  <div className="flex gap-2">
+                                    <EditPropertyDialog property={p} onUpdated={() => refetch()} />
+                                    <PropertyOwnersDialog propertyId={p.id} />
+                                    <AssignTenantDialog propertyId={p.id} onAssigned={() => refetch()} />
+                                    <DeletePropertyDialog id={p.id} name={p.name} onDeleted={() => refetch()} />
+                                  </div>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
                   </div>
                 ))}
               </div>
