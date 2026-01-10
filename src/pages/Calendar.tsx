@@ -174,7 +174,12 @@ const CalendarPage: React.FC = () => {
 
   const loadCalendars = async () => {
     if (!providerToken) {
-      toast({ title: "Connect Google first", description: "Please click Connect Google and complete sign-in.", variant: "destructive" });
+      toast({
+        title: "Google not fully connected",
+        description:
+          "No provider token received. Please enable 'Retrieve provider tokens' in Supabase and re-connect with consent.",
+        variant: "destructive",
+      });
       return;
     }
     try {
@@ -194,12 +199,17 @@ const CalendarPage: React.FC = () => {
       const out = await res.json();
       setGoogleCalendars(out?.calendars ?? []);
       if (out?.email) setGoogleEmail(out.email);
-      // Auto-select primary if none chosen
       const primary = (out?.calendars ?? []).find((c: any) => c.primary);
       if (!googleCalendarId && primary?.id) setGoogleCalendarId(primary.id);
       toast({ title: "Loaded Google calendars", description: `${(out?.calendars ?? []).length} calendars found.` });
     } catch (e: any) {
-      toast({ title: "Failed to load calendars", description: e.message, variant: "destructive" });
+      toast({
+        title: "Failed to load calendars",
+        description: e.message.includes("provider token")
+          ? "Provider token missing. Enable token retrieval in Supabase and re-consent."
+          : e.message,
+        variant: "destructive",
+      });
     }
   };
 
