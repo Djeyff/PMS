@@ -421,9 +421,36 @@ function SavedReportRow({ report, onEdited, ownerNameMap }: { report: OwnerRepor
   // Display full owner name instead of UUID
   const displayOwner = ownerNameMap[report.owner_id] ?? report.owner_id;
 
+  // NEW: helpers for month-or-range label
+  const formatMonthLabel = (ym?: string) => {
+    const parts = String(ym ?? "").split("-");
+    if (parts.length !== 2) return ym ?? "";
+    const y = Number(parts[0]);
+    const m = Number(parts[1]) - 1;
+    if (!Number.isFinite(y) || !Number.isFinite(m)) return ym ?? "";
+    const d = new Date(y, m, 1);
+    const label = d.toLocaleString(undefined, { month: "long", year: "numeric" });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  };
+
+  const monthOrRangeLabel = React.useMemo(() => {
+    const s = String(report.start_date ?? "").slice(0, 10);
+    const e = String(report.end_date ?? "").slice(0, 10);
+    if (!s || !e) return formatMonthLabel(report.month);
+
+    const sd = new Date(s);
+    const ed = new Date(e);
+    const isFirstDay = sd.getDate() === 1;
+    const isSameMonth = sd.getMonth() === ed.getMonth() && sd.getFullYear() === ed.getFullYear();
+    const lastDayOfMonth = new Date(sd.getFullYear(), sd.getMonth() + 1, 0).getDate();
+    const isLastDay = ed.getDate() === lastDayOfMonth;
+
+    return (isFirstDay && isSameMonth && isLastDay) ? formatMonthLabel(report.month) : `${s} to ${e}`;
+  }, [report.month, report.start_date, report.end_date]);
+
   return (
     <TableRow>
-      <TableCell>{report.month}</TableCell>
+      <TableCell>{monthOrRangeLabel}</TableCell>
       <TableCell className="font-semibold">{displayOwner}</TableCell>
       <TableCell>{fmt(Number(report.usd_total || 0), "USD")}</TableCell>
       <TableCell>{fmt(Number(report.dop_total || 0), "DOP")}</TableCell>

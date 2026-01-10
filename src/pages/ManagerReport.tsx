@@ -550,6 +550,22 @@ function SavedReportRow({ report, onEdited }: { report: any; onEdited: () => voi
     return label.charAt(0).toUpperCase() + label.slice(1);
   };
 
+  // NEW: label that prefers month when full-month, else date range
+  const monthOrRangeLabel = React.useMemo(() => {
+    const s = String(report.start_date ?? "").slice(0, 10);
+    const e = String(report.end_date ?? "").slice(0, 10);
+    if (!s || !e) return formatMonthLabel(report.month);
+
+    const sd = new Date(s);
+    const ed = new Date(e);
+    const isFirstDay = sd.getDate() === 1;
+    const isSameMonth = sd.getMonth() === ed.getMonth() && sd.getFullYear() === ed.getFullYear();
+    const lastDayOfMonth = new Date(sd.getFullYear(), sd.getMonth() + 1, 0).getDate();
+    const isLastDay = ed.getDate() === lastDayOfMonth;
+
+    return (isFirstDay && isSameMonth && isLastDay) ? formatMonthLabel(report.month) : `${s} to ${e}`;
+  }, [report.month, report.start_date, report.end_date]);
+
   const confirmDelete = async () => {
     try {
       await deleteManagerReport(report.id);
@@ -573,7 +589,7 @@ function SavedReportRow({ report, onEdited }: { report: any; onEdited: () => voi
 
   return (
     <TableRow>
-      <TableCell>{formatMonthLabel(report.month)}</TableCell>
+      <TableCell>{monthOrRangeLabel}</TableCell>
       <TableCell>{fmt(Number(report.usd_total || 0), "USD")}</TableCell>
       <TableCell>{fmt(Number(report.dop_total || 0), "DOP")}</TableCell>
       <TableCell>{report.avg_rate != null ? Number(report.avg_rate).toFixed(6) : "—"}</TableCell>

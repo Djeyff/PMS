@@ -115,16 +115,32 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
   }, [ownerRows]);
 
   // Format "YYYY-MM" into "Month YYYY" label
-  const prettyMonth = useMemo(() => {
-    const parts = String(report.month ?? "").split("-");
-    if (parts.length !== 2) return report.month;
+  const formatMonthLabel = (ym?: string) => {
+    const parts = String(ym ?? "").split("-");
+    if (parts.length !== 2) return ym ?? "";
     const y = Number(parts[0]);
     const m = Number(parts[1]) - 1;
-    if (!Number.isFinite(y) || !Number.isFinite(m)) return report.month;
+    if (!Number.isFinite(y) || !Number.isFinite(m)) return ym ?? "";
     const d = new Date(y, m, 1);
     const label = d.toLocaleString(undefined, { month: "long", year: "numeric" });
     return label.charAt(0).toUpperCase() + label.slice(1);
-  }, [report.month]);
+  };
+
+  const periodLabel = React.useMemo(() => {
+    const s = String(report.start_date ?? "").slice(0, 10);
+    const e = String(report.end_date ?? "").slice(0, 10);
+    if (!s || !e) return formatMonthLabel(report.month);
+
+    const sd = new Date(s);
+    const ed = new Date(e);
+    const isFirstDay = sd.getDate() === 1;
+    const isSameMonth = sd.getMonth() === ed.getMonth() && sd.getFullYear() === ed.getFullYear();
+    const lastDayOfMonth = new Date(sd.getFullYear(), sd.getMonth() + 1, 0).getDate();
+    const isLastDay = ed.getDate() === lastDayOfMonth;
+
+    const isFullMonth = isFirstDay && isSameMonth && isLastDay;
+    return isFullMonth ? formatMonthLabel(report.month) : `${s} to ${e}`;
+  }, [report.month, report.start_date, report.end_date]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -141,7 +157,7 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
               </div>
             </div>
             <div className="text-right">
-              <DialogTitle className="text-base font-semibold">Owner Statement • {prettyMonth}</DialogTitle>
+              <DialogTitle className="text-base font-semibold">Owner Statement • {periodLabel}</DialogTitle>
               <div className="text-xs text-gray-600">{String(report.start_date).slice(0,10)} to {String(report.end_date).slice(0,10)}</div>
               <div className="mt-1 font-semibold text-base">{ownerName}</div>
             </div>
