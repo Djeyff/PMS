@@ -99,6 +99,7 @@ const CalendarPage: React.FC = () => {
       agencyId: profile?.agency_id ?? null,
       alertDays,
       alertTime,
+      timezone: agency?.timezone ?? "UTC",
     });
     await qc.invalidateQueries({ queryKey: ["calendar-events"] });
     notify.success(`Reminder settings updated (${alertDays} day(s) before at ${alertTime}${agency?.timezone ? ` • ${agency.timezone}` : ""})`, { position: "bottom-right" });
@@ -109,15 +110,31 @@ const CalendarPage: React.FC = () => {
   }, [showLeaseExpiry, user?.id]);
 
   const saveSettings = async () => {
+    const previousCalendarId = settings?.google_calendar_id ?? null;
+    const changedCalendar = previousCalendarId && previousCalendarId !== googleCalendarId;
+
     await saveMyCalendarSettings({
       google_account_email: googleEmail || null,
       google_calendar_id: googleCalendarId || null,
       lease_alert_days: alertDays,
       lease_alert_time: alertTime,
     });
-    toast({ title: "Settings saved" });
+
+    notify.success("Settings saved", { position: "bottom-right" });
     refetchSettings();
+
+    // Re-ensure events with new alertDays/time
     await ensureLeaseExpiry();
+
+    // If calendar changed, remove events from previous target and sync to new
+    if (changedCalendar && providerToken) {
+      try {
+        await syncEventsToGoogle(undefined, googleCalendarId || undefined, providerToken || undefined, previousCalendarId || undefined);
+        notify.success("Old calendar cleaned and new calendar synced", { position: "bottom-right" });
+      } catch (e: any) {
+        notify.error(`Cleanup/sync failed: ${e.message}`, { position: "bottom-right" });
+      }
+    }
   };
 
   const connectGoogle = async () => {

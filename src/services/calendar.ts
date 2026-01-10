@@ -63,7 +63,7 @@ export async function deleteEvent(id: string) {
   return true;
 }
 
-export async function syncEventsToGoogle(eventIds?: string[], calendarId?: string, providerToken?: string) {
+export async function syncEventsToGoogle(eventIds?: string[], calendarId?: string, providerToken?: string, cleanupFromCalendarId?: string) {
   const { data: sess } = await supabase.auth.getSession();
   const token = sess.session?.access_token;
   if (!token) throw new Error("Not authenticated");
@@ -71,7 +71,7 @@ export async function syncEventsToGoogle(eventIds?: string[], calendarId?: strin
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ eventIds, calendarId, providerToken }),
+    body: JSON.stringify({ eventIds, calendarId, providerToken, cleanupFromCalendarId }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -81,8 +81,8 @@ export async function syncEventsToGoogle(eventIds?: string[], calendarId?: strin
   return out;
 }
 
-// NEW: Upsert lease expiry events for all non-terminated leases and remove for terminated
-export async function upsertLeaseExpiryEvents(params: { role: Role | null; userId: string | null; agencyId: string | null; alertDays: number; alertTime?: string }) {
+// NEW: Upsert lease expiry events with timed start at chosen HH:MM (agency timezone-aware via edge function)
+export async function upsertLeaseExpiryEvents(params: { role: Role | null; userId: string | null; agencyId: string | null; alertDays: number; alertTime?: string; timezone?: string }) {
   const leases = await fetchLeases(params);
   const { data: userRes } = await supabase.auth.getUser();
   const uid = userRes.user?.id;
@@ -121,14 +121,14 @@ export async function upsertLeaseExpiryEvents(params: { role: Role | null; userI
     if (e.lease_id) existingByLease.set(e.lease_id, e);
   });
 
-  // Parse HH:MM → minutes
+  // Parse HH:MM → use for timed event start on end_date
   const timeStr = (params.alertTime ?? "09:00").slice(0, 5);
   const [hhStr, mmStr] = timeStr.split(":");
-  const timeMinutes = Math.max(0, (Number(hhStr) || 0) * 60 + (Number(mmStr) || 0));
-  // Reminder is set minutes before event start; for an all-day event starting at 00:00 local,
-  // minutes_before = alertDays*1440 - timeMinutes so it fires at <alertDays> days before at HH:MM local.
-  const minutesBeforeBase = Math.max(0, Math.floor(params.alertDays * 24 * 60));
-  const minutesBefore = Math.max(0, minutesBeforeBase - timeMinutes);
+  const hh = Math.max(0, Math.min(23, Number(hhStr) || 0));
+  const mm = Math.max(0, Math.min(59, Number(mmStr) || 0));
+
+  // Reminder minutes before start: N days at the same time
+  const minutesBefore = Math.max(0, Math.floor(params.alertDays * 24 * 60));
 
   const toInsert: any[] = [];
   const toUpdate: { id: string; patch: any }[] = [];
@@ -137,11 +137,9 @@ export async function upsertLeaseExpiryEvents(params: { role: Role | null; userI
   leases.forEach((l) => {
     const leaseId = l.id;
     const isTerminated = l.status === "terminated";
-    const startDate = new Date(l.end_date);
-    const endDate = new Date(l.end_date);
-    endDate.setDate(endDate.getDate() + 1); // all-day event should end next day
-    const startIso = startDate.toISOString();
-    const endIso = endDate.toISOString();
+    const endDateOnly = String(l.end_date).slice(0, 10); // YYYY-MM-DD
+    const startIso = new Date(`${endDateOnly}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00`).toISOString();
+    const endIso = new Date(new Date(startIso).getTime() + 30 * 60 * 1000).toISOString(); // 30-min duration
     const existingEvt = existingByLease.get(leaseId);
 
     if (isTerminated) {
@@ -154,7 +152,7 @@ export async function upsertLeaseExpiryEvents(params: { role: Role | null; userI
       title,
       start: startIso,
       end: endIso,
-      all_day: true,
+      all_day: false, // timed event
       alert_minutes_before: minutesBefore,
       type: "lease_expiry",
       lease_id: leaseId,

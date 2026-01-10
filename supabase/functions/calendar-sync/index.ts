@@ -34,14 +34,13 @@ Deno.serve(async (req: Request) => {
 
   const calendarId = (payload?.calendarId || "primary") as string;
   const providerToken: string | undefined = payload?.providerToken;
-  if (!providerToken) {
-    console.error("[calendar-sync] Missing providerToken");
-    return new Response(JSON.stringify({ error: "Missing provider token from Google OAuth" }), { status: 400, headers: corsHeaders });
-  }
+  const cleanupFromCalendarId: string | undefined = payload?.cleanupFromCalendarId;
 
+  // Use Supabase REST API with user's JWT (RLS applies)
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
+  // Build REST query for events
   const select =
     "id,title,description,start,end,all_day,alert_minutes_before";
   const baseUrl = `${supabaseUrl}/rest/v1/calendar_events`;
@@ -76,6 +75,43 @@ Deno.serve(async (req: Request) => {
     return !Number.isNaN(s.getTime()) && !Number.isNaN(f.getTime());
   });
 
+  // If cleanup requested, delete previous calendar events matching pms_event_id
+  if (cleanupFromCalendarId) {
+    for (const e of sanitized) {
+      try {
+        const listUrlOld = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+          cleanupFromCalendarId
+        )}/events?privateExtendedProperty=${encodeURIComponent(`pms_event_id=${e.id}`)}`;
+        const listOldRes = await fetch(listUrlOld, {
+          method: "GET",
+          headers: { Authorization: `Bearer ${providerToken}` },
+        });
+        if (listOldRes.ok) {
+          const listedOld = await listOldRes.json().catch(() => ({ items: [] }));
+          if (Array.isArray(listedOld.items)) {
+            for (const item of listedOld.items) {
+              const delUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+                cleanupFromCalendarId
+              )}/events/${encodeURIComponent(item.id)}`;
+              const delRes = await fetch(delUrl, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${providerToken}` },
+              });
+              if (!delRes.ok) {
+                const errBody = await delRes.json().catch(() => ({}));
+                console.error("[calendar-sync] delete old error", { id: e.id, status: delRes.status, errBody });
+              } else {
+                console.log("[calendar-sync] deleted old", { id: e.id, eventId: item.id });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("[calendar-sync] cleanup exception", { id: e.id, error: String(err) });
+      }
+    }
+  }
+
   let inserted = 0;
   let updated = 0;
   const errors: Array<{ id: string; message: string }> = [];
@@ -97,8 +133,8 @@ Deno.serve(async (req: Request) => {
       body.start = { date: startDate };
       body.end = { date: endDate };
     } else {
-      body.start = { dateTime: e.start };
-      body.end = { dateTime: e.end };
+      body.start = { dateTime: e.start, timeZone: payload?.timeZone || undefined };
+      body.end = { dateTime: e.end, timeZone: payload?.timeZone || undefined };
     }
     return body;
   }
