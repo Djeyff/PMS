@@ -133,15 +133,13 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
     return m ?? null;
   }, [mgrReports, report.month, report.start_date, report.end_date]);
 
-  // Agency-level totals and fee percent from Manager Report (avg rate used only for explaining base)
+  // Agency-level totals and fee percent (used for fee% and optional avg rate only)
   const feePercent = managerForPeriod ? Number(managerForPeriod.fee_percent || 5) : 5;
   const usdAgencyTotal = managerForPeriod ? Number(managerForPeriod.usd_total || 0) : (totals.usdCash + totals.usdTransfer);
   const dopAgencyTotal = managerForPeriod ? Number(managerForPeriod.dop_total || 0) : (totals.dopCash + totals.dopTransfer);
   const avgRate = managerForPeriod && managerForPeriod.avg_rate != null ? Number(managerForPeriod.avg_rate) : (report.avg_rate != null ? Number(report.avg_rate) : NaN);
-  const feeBaseDop = managerForPeriod ? Number(managerForPeriod.fee_base_dop || 0) : ((Number.isNaN(avgRate) ? 0 : usdAgencyTotal * avgRate) + dopAgencyTotal);
-  const feeDop = managerForPeriod ? Number(managerForPeriod.fee_dop || 0) : (feeBaseDop * (feePercent / 100));
 
-  // Owner-specific fee
+  // Owner-specific fee components
   const ownerUsdTotal = totals.usdCash + totals.usdTransfer;
   const ownerDopTotal = totals.dopCash + totals.dopTransfer;
   const ownerDopCash = totals.dopCash;
@@ -228,18 +226,12 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
               <div>{avgRate && Number.isFinite(avgRate) ? avgRate.toFixed(6) : "—"}</div>
             </div>
           </div>
-          {/* Manager fee math (agency-level), and owner-level fee calculation */}
+          {/* Owner-only manager fee line */}
           <div className="p-3">
             <div className="text-xs font-medium mb-1">Manager fee</div>
             <div className="space-y-1 text-sm">
-              <div>
-                Base: {fmt(dopAgencyTotal, "DOP")} + {usdAgencyTotal.toFixed(2)} USD × {Number.isFinite(avgRate) ? avgRate : "rate ?"} = {fmt(feeBaseDop, "DOP")}
-              </div>
               <div className="font-semibold">
-                {fmt(feeDop, "DOP")} ({feePercent.toFixed(2)}%)
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Owner fee (computed on owner totals): (USD × rate + DOP) × {feePercent.toFixed(2)}% = {fmt(ownerFeeShareDop, "DOP")}
+                (USD × rate + DOP) × {feePercent.toFixed(2)}% = {fmt(ownerFeeShareDop, "DOP")}
               </div>
             </div>
           </div>
