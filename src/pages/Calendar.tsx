@@ -124,7 +124,7 @@ const CalendarPage: React.FC = () => {
 
       const target = googleCalendarId ? `Target calendar: ${googleCalendarId}` : "Default calendar";
       notify.success(
-        providerToken ? (changedCalendar ? "Old calendar cleaned and new calendar synced" : `Sync started • ${target}`) : "Connect Google first to use your account token.",
+        providerToken ? (changedCalendar ? "Old calendar cleaned and new calendar synced" : `Synced • ${target}`) : "Connect Google first.",
         { position: "bottom-right" }
       );
     } catch (e: any) {

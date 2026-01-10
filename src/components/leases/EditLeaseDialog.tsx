@@ -9,6 +9,7 @@ import type { LeaseWithMeta } from "@/services/leases";
 import { updateLease } from "@/services/leases";
 import { toast } from "sonner";
 import KDriveUploader from "@/components/leases/KDriveUploader";
+import Loader from "@/components/loader";
 import { useAuth } from "@/contexts/AuthProvider";
 import { getMyCalendarSettings } from "@/services/calendar-settings";
 import { upsertLeaseExpiryEvents, syncEventsToGoogle } from "@/services/calendar";
@@ -64,6 +65,13 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
     setAnnualIncreasePercent(typeof lease.annual_increase_percent === "number" ? String(lease.annual_increase_percent) : "");
   };
 
+  // Prevent closing while saving
+  const handleOpenChange = (v: boolean) => {
+    if (saving) return; // ignore close while saving
+    setOpen(v);
+    if (!v) reset();
+  };
+
   const onSave = async () => {
     setSaving(true);
     try {
@@ -81,58 +89,69 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
         auto_invoice_minute: autoMinute,
         contract_kdrive_folder_url: kdriveFolderUrl.trim() !== "" ? kdriveFolderUrl.trim() : null,
         contract_kdrive_file_url: kdriveFileUrl.trim() !== "" ? kdriveFileUrl.trim() : null,
-        // ADDED: annual increase
         annual_increase_enabled: annualIncreaseEnabled,
         annual_increase_percent: annualIncreaseEnabled
           ? (annualIncreasePercent === "" ? null : Number(annualIncreasePercent))
           : null,
       });
       toast.success("Lease updated");
-
-      // Auto-update calendar events and sync to Google
-      try {
-        const settings = await getMyCalendarSettings();
-        const agency = profile?.agency_id ? await fetchAgencyById(profile.agency_id) : null;
-
-        await upsertLeaseExpiryEvents({
-          role,
-          userId: user?.id ?? null,
-          agencyId: profile?.agency_id ?? null,
-          alertDays: settings?.lease_alert_days ?? 7,
-          alertTime: settings?.lease_alert_time ?? "09:00",
-          timezone: agency?.timezone ?? "UTC",
-        });
-
-        if (settings?.google_calendar_id && providerToken) {
-          await syncEventsToGoogle(
-            undefined, // sync all updated events
-            settings.google_calendar_id || undefined,
-            providerToken || undefined,
-            undefined,
-            agency?.timezone || undefined
-          );
-        }
-      } catch (err: any) {
-        // We keep lease saved even if sync fails; show info toast
-        toast.info(err?.message ?? "Lease updated; calendar sync will be retried from Calendar page");
-      }
-
+      // Close quickly to feel fast
       setOpen(false);
       onUpdated?.();
+
+      // Fire-and-forget calendar update/sync in background
+      (async () => {
+        try {
+          const settings = await getMyCalendarSettings();
+          const agency = profile?.agency_id ? await fetchAgencyById(profile.agency_id) : null;
+
+          await upsertLeaseExpiryEvents({
+            role,
+            userId: user?.id ?? null,
+            agencyId: profile?.agency_id ?? null,
+            alertDays: settings?.lease_alert_days ?? 7,
+            alertTime: settings?.lease_alert_time ?? "09:00",
+            timezone: agency?.timezone ?? "UTC",
+          });
+
+          if (settings?.google_calendar_id && providerToken) {
+            await syncEventsToGoogle(
+              undefined,
+              settings.google_calendar_id || undefined,
+              providerToken || undefined,
+              undefined,
+              agency?.timezone || undefined
+            );
+          }
+        } catch (err) {
+          // Silently ignore; user already saw lease saved; sync is best-effort
+        } finally {
+          setSaving(false);
+        }
+      })();
     } catch (e: any) {
       console.error("Update lease failed:", e);
       toast.error(e?.message ?? "Failed to update lease");
-    } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button variant="secondary" size="sm">Edit</Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[720px] max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[720px] max-h-[85vh] overflow-y-auto relative">
+        {saving && (
+          <div className="absolute inset-0 bg-black/20 dark:bg-black/40 flex items-center justify-center z-10">
+            <div className="rounded-md bg-background p-4 shadow">
+              <div className="flex items-center gap-3">
+                <Loader />
+                <div className="text-sm">Saving lease…</div>
+              </div>
+            </div>
+          </div>
+        )}
         <DialogHeader>
           <DialogTitle>Edit Lease</DialogTitle>
         </DialogHeader>

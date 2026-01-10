@@ -87,14 +87,14 @@ export async function syncEventsToGoogle(
   return out;
 }
 
-// Upsert lease expiry events (ALL-DAY) with reminder X days before at HH:MM
+// Ensure ALL-DAY expiry; set reminders X days before at HH:MM via alert_minutes_before
 export async function upsertLeaseExpiryEvents(params: {
   role: Role | null;
   userId: string | null;
   agencyId: string | null;
   alertDays: number;
-  alertTime?: string;   // "HH:MM"
-  timezone?: string;    // passthrough (stored only for sync usage)
+  alertTime?: string;
+  timezone?: string;
 }) {
   const leases = await fetchLeases(params);
   const { data: userRes } = await supabase.auth.getUser();
@@ -108,7 +108,6 @@ export async function upsertLeaseExpiryEvents(params: {
     .eq("type", "lease_expiry");
   if (exErr) throw exErr;
 
-  // De-dupe existing
   const byLease: Record<string, any[]> = {};
   (existing ?? []).forEach((e: any) => {
     const key = e.lease_id || "__no_lease__";
@@ -134,11 +133,11 @@ export async function upsertLeaseExpiryEvents(params: {
     if (e.lease_id) existingByLease.set(e.lease_id, e);
   });
 
-  // Compute reminder minutes: X days before at HH:MM => minutesBefore = X*1440 + HH*60 + MM
   const timeStr = (params.alertTime ?? "09:00").slice(0, 5);
   const [hhStr, mmStr] = timeStr.split(":");
   const hh = Math.max(0, Math.min(23, Number(hhStr) || 0));
   const mm = Math.max(0, Math.min(59, Number(mmStr) || 0));
+  // Minutes before midnight on expiry date, so reminder occurs at HH:MM on (expiry - alertDays)
   const minutesBefore = Math.max(0, Math.floor(params.alertDays * 24 * 60) + hh * 60 + mm);
 
   const toInsert: any[] = [];
@@ -148,9 +147,7 @@ export async function upsertLeaseExpiryEvents(params: {
   leases.forEach((l) => {
     const leaseId = l.id;
     const isTerminated = l.status === "terminated";
-    const endDateOnly = String(l.end_date).slice(0, 10); // YYYY-MM-DD
-
-    // All-day event starts at 00:00 local on expiry date; store as ISO date-only window
+    const endDateOnly = String(l.end_date).slice(0, 10);
     const startIso = new Date(`${endDateOnly}T00:00:00`).toISOString();
     const endIso = new Date(new Date(startIso).getTime() + 24 * 60 * 60 * 1000).toISOString();
     const existingEvt = existingByLease.get(leaseId);

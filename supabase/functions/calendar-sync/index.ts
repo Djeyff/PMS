@@ -76,44 +76,90 @@ Deno.serve(async (req: Request) => {
     return !Number.isNaN(s.getTime()) && !Number.isNaN(f.getTime());
   });
 
-  // Cleanup previously synced events on old calendar
+  // Helper: upsert a Google event by key (pms_event_id or pms_reminder_for)
+  async function upsertGoogleEventByKey(calId: string, key: string, keyValue: string, body: any) {
+    const listUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+      calId
+    )}/events?privateExtendedProperty=${encodeURIComponent(`${key}=${keyValue}`)}`;
+    const listRes = await fetch(listUrl, { method: "GET", headers: { Authorization: `Bearer ${providerToken}` } });
+    if (!listRes.ok) {
+      const errBody = await listRes.json().catch(() => ({}));
+      console.error("[calendar-sync] list error", { key, keyValue, status: listRes.status, errBody });
+      return { inserted: 0, updated: 0, error: `List failed: ${listRes.status}` };
+    }
+    const listed = await listRes.json().catch(() => ({ items: [] }));
+    if (Array.isArray(listed.items) && listed.items.length > 0) {
+      const eventId = listed.items[0].id;
+      const updUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(eventId)}`;
+      const updRes = await fetch(updUrl, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${providerToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!updRes.ok) {
+        const errBody = await updRes.json().catch(() => ({}));
+        console.error("[calendar-sync] update error", { key, keyValue, eventId, status: updRes.status, errBody });
+        return { inserted: 0, updated: 0, error: `Update failed: ${updRes.status}` };
+      }
+      return { inserted: 0, updated: 1 };
+    } else {
+      const insUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events`;
+      const insRes = await fetch(insUrl, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${providerToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!insRes.ok) {
+        const errBody = await insRes.json().catch(() => ({}));
+        console.error("[calendar-sync] insert error", { key, keyValue, status: insRes.status, errBody });
+        return { inserted: 0, updated: 0, error: `Insert failed: ${insRes.status}` };
+      }
+      return { inserted: 1, updated: 0 };
+    }
+  }
+
+  // Cleanup both main and reminder events from old calendar if switching
   if (cleanupFromCalendarId) {
     for (const e of sanitized) {
-      try {
-        const listUrlOld = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
-          cleanupFromCalendarId
-        )}/events?privateExtendedProperty=${encodeURIComponent(`pms_event_id=${e.id}`)}`;
-        const listOldRes = await fetch(listUrlOld, {
-          method: "GET",
-          headers: { Authorization: `Bearer ${providerToken}` },
-        });
-        if (listOldRes.ok) {
-          const listedOld = await listOldRes.json().catch(() => ({ items: [] }));
-          if (Array.isArray(listedOld.items)) {
-            for (const item of listedOld.items) {
-              const delUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
-                cleanupFromCalendarId
-              )}/events/${encodeURIComponent(item.id)}`;
-              const delRes = await fetch(delUrl, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${providerToken}` },
-              });
-              if (!delRes.ok) {
-                const errBody = await delRes.json().catch(() => ({}));
-                console.error("[calendar-sync] delete old error", { id: e.id, status: delRes.status, errBody });
-              } else {
-                console.log("[calendar-sync] deleted old", { id: e.id, eventId: item.id });
+      for (const pair of [
+        { key: "pms_event_id", val: e.id },
+        { key: "pms_reminder_for", val: e.id },
+      ]) {
+        try {
+          const listUrlOld = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+            cleanupFromCalendarId
+          )}/events?privateExtendedProperty=${encodeURIComponent(`${pair.key}=${pair.val}`)}`;
+          const listOldRes = await fetch(listUrlOld, { method: "GET", headers: { Authorization: `Bearer ${providerToken}` } });
+          if (listOldRes.ok) {
+            const listedOld = await listOldRes.json().catch(() => ({ items: [] }));
+            if (Array.isArray(listedOld.items)) {
+              for (const item of listedOld.items) {
+                const delUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+                  cleanupFromCalendarId
+                )}/events/${encodeURIComponent(item.id)}`;
+                const delRes = await fetch(delUrl, { method: "DELETE", headers: { Authorization: `Bearer ${providerToken}` } });
+                if (!delRes.ok) {
+                  const errBody = await delRes.json().catch(() => ({}));
+                  console.error("[calendar-sync] delete old error", { id: e.id, status: delRes.status, errBody, key: pair.key });
+                } else {
+                  console.log("[calendar-sync] deleted old", { id: e.id, eventId: item.id, key: pair.key });
+                }
               }
             }
           }
+        } catch (err) {
+          console.error("[calendar-sync] cleanup exception", { id: e.id, error: String(err), key: pair.key });
         }
-      } catch (err) {
-        console.error("[calendar-sync] cleanup exception", { id: e.id, error: String(err) });
       }
     }
   }
 
-  function buildGoogleEventBody(e: any): any {
+  let inserted = 0;
+  let updated = 0;
+  const errors: Array<{ id: string; message: string }> = [];
+
+  // Build bodies
+  function buildMainEventBody(e: any): any {
     const minutes = typeof e.alert_minutes_before === "number" && e.alert_minutes_before > 0 ? e.alert_minutes_before : 0;
     const body: any = {
       summary: e.title,
@@ -124,82 +170,59 @@ Deno.serve(async (req: Request) => {
         overrides: minutes > 0 ? [{ method: "popup", minutes }] : [],
       },
     };
-
-    // For lease expiry: force ALL-DAY event (date-only) so it shows as all-day; reminder fires X days before at HH:MM via minutes
-    if (e.type === "lease_expiry" || e.all_day) {
-      const startDate = new Date(e.start).toISOString().slice(0, 10);
-      const endDate = new Date(e.end).toISOString().slice(0, 10);
-      body.start = { date: startDate };
-      body.end = { date: endDate };
-      return body;
-    }
-
-    // Timed events
-    body.start = { dateTime: e.start, timeZone: timeZone || undefined };
-    body.end = { dateTime: e.end, timeZone: timeZone || undefined };
+    // Always all-day for lease expiry (or when flagged)
+    const startDate = new Date(e.start).toISOString().slice(0, 10);
+    const endDate = new Date(e.end).toISOString().slice(0, 10);
+    body.start = { date: startDate };
+    body.end = { date: endDate };
     return body;
   }
 
-  let inserted = 0;
-  let updated = 0;
-  const errors: Array<{ id: string; message: string }> = [];
+  function buildReminderEventBody(e: any): any {
+    // Derive reminder date/time from alert_minutes_before relative to expiry midnight
+    const total = typeof e.alert_minutes_before === "number" ? e.alert_minutes_before : 0;
+    const days = Math.floor(total / 1440);
+    const hm = total % 1440;
+    const hh = Math.floor(hm / 60);
+    const mm = hm % 60;
+
+    const expiryDate = new Date(e.start);
+    const reminderDate = new Date(expiryDate);
+    reminderDate.setDate(reminderDate.getDate() - days);
+    const y = reminderDate.getFullYear();
+    const m = String(reminderDate.getMonth() + 1).padStart(2, "0");
+    const d = String(reminderDate.getDate()).padStart(2, "0");
+    const hhStr = String(hh).padStart(2, "0");
+    const mmStr = String(mm).padStart(2, "0");
+    const dateTimeStr = `${y}-${m}-${d}T${hhStr}:${mmStr}:00`;
+
+    const body: any = {
+      summary: `Reminder: ${e.title}`,
+      description: e.description ?? "",
+      extendedProperties: { private: { pms_reminder_for: e.id } },
+      start: { dateTime: dateTimeStr, timeZone: timeZone || undefined },
+      end: { dateTime: dateTimeStr, timeZone: timeZone || undefined }, // zero-length reminder marker
+      reminders: { useDefault: false, overrides: [] },
+    };
+    return body;
+  }
 
   for (const e of sanitized) {
     try {
-      const listUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
-        calendarId
-      )}/events?privateExtendedProperty=${encodeURIComponent(`pms_event_id=${e.id}`)}`;
+      // 1) Upsert main all-day event keyed by pms_event_id
+      const mainBody = buildMainEventBody(e);
+      const mainResult = await upsertGoogleEventByKey(calendarId, "pms_event_id", e.id, mainBody);
+      if (mainResult.error) errors.push({ id: e.id, message: mainResult.error });
+      inserted += mainResult.inserted;
+      updated += mainResult.updated;
 
-      const listRes = await fetch(listUrl, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${providerToken}` },
-      });
-
-      if (!listRes.ok) {
-        const errBody = await listRes.json().catch(() => ({}));
-        console.error("[calendar-sync] list error", { id: e.id, status: listRes.status, errBody });
-        errors.push({ id: e.id, message: `List failed: ${listRes.status}` });
-        continue;
-      }
-
-      const listed = await listRes.json().catch(() => ({ items: [] }));
-      const body = buildGoogleEventBody(e);
-
-      if (Array.isArray(listed.items) && listed.items.length > 0) {
-        const eventId = listed.items[0].id;
-        const updUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
-          calendarId
-        )}/events/${encodeURIComponent(eventId)}`;
-        const updRes = await fetch(updUrl, {
-          method: "PATCH",
-          headers: { Authorization: `Bearer ${providerToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!updRes.ok) {
-          const errBody = await updRes.json().catch(() => ({}));
-          console.error("[calendar-sync] update error", { id: e.id, eventId, status: updRes.status, errBody });
-          errors.push({ id: e.id, message: `Update failed: ${updRes.status}` });
-          continue;
-        }
-        updated += 1;
-        console.log("[calendar-sync] updated", { id: e.id, eventId });
-      } else {
-        const insUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
-          calendarId
-        )}/events`;
-        const insRes = await fetch(insUrl, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${providerToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!insRes.ok) {
-          const errBody = await insRes.json().catch(() => ({}));
-          console.error("[calendar-sync] insert error", { id: e.id, status: insRes.status, errBody });
-          errors.push({ id: e.id, message: `Insert failed: ${insRes.status}` });
-          continue;
-        }
-        inserted += 1;
-        console.log("[calendar-sync] inserted", { id: e.id });
+      // 2) Upsert separate timed reminder keyed by pms_reminder_for
+      if (typeof e.alert_minutes_before === "number" && e.alert_minutes_before > 0) {
+        const reminderBody = buildReminderEventBody(e);
+        const remResult = await upsertGoogleEventByKey(calendarId, "pms_reminder_for", e.id, reminderBody);
+        if (remResult.error) errors.push({ id: e.id, message: `Reminder: ${remResult.error}` });
+        inserted += remResult.inserted;
+        updated += remResult.updated;
       }
     } catch (err) {
       console.error("[calendar-sync] exception", { id: e.id, error: String(err) });
@@ -209,8 +232,8 @@ Deno.serve(async (req: Request) => {
 
   console.log("[calendar-sync] done", { inserted, updated, errorsCount: errors.length });
 
-  return new Response(
-    JSON.stringify({ ok: true, calendarId, inserted, updated, errors }),
-    { status: 200, headers: corsHeaders }
-  );
+  return new Response(JSON.stringify({ ok: true, calendarId, inserted, updated, errors }), {
+    status: 200,
+    headers: corsHeaders,
+  });
 });
