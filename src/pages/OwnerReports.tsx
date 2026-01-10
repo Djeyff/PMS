@@ -355,7 +355,7 @@ const OwnerReports = () => {
                   </TableHeader>
                   <TableBody>
                     {savedReports.map((r: OwnerReportRow) => (
-                      <SavedReportRow key={r.id} report={r} onEdited={() => refetchSaved()} ownerNameMap={ownerNameMap} />
+                      <SavedReportRow key={r.id} report={r} onEdited={() => refetchSaved()} />
                     ))}
                   </TableBody>
                 </Table>
@@ -369,11 +369,23 @@ const OwnerReports = () => {
 };
 
 // Helper row component inside this file for saved entries
-function SavedReportRow({ report, onEdited, ownerNameMap }: { report: OwnerReportRow; onEdited: () => void; ownerNameMap: Record<string, string> }) {
+function SavedReportRow({ report, onEdited }: { report: OwnerReportRow; onEdited: () => void }) {
   const [openEdit, setOpenEdit] = useState(false);
   const [openInvoice, setOpenInvoice] = useState(false);
   const [openDelete, setOpenDelete] = useState(false);
   const { toast } = useToast();
+
+  // Helper to format "YYYY-MM" → "Month YYYY"
+  const formatMonthLabel = (ym: string) => {
+    const parts = String(ym ?? "").split("-");
+    if (parts.length !== 2) return ym;
+    const y = Number(parts[0]);
+    const m = Number(parts[1]) - 1;
+    if (!Number.isFinite(y) || !Number.isFinite(m)) return ym;
+    const d = new Date(y, m, 1);
+    const label = d.toLocaleString(undefined, { month: "long", year: "numeric" });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  };
 
   const confirmDelete = async () => {
     try {
@@ -386,12 +398,10 @@ function SavedReportRow({ report, onEdited, ownerNameMap }: { report: OwnerRepor
     }
   };
 
-  const displayOwner = ownerNameMap[report.owner_id] ?? report.owner_id;
-
   return (
     <TableRow>
-      <TableCell>{report.month}</TableCell>
-      <TableCell>{displayOwner}</TableCell>
+      <TableCell>{formatMonthLabel(report.month)}</TableCell>
+      <TableCell>{report.owner_id}</TableCell>
       <TableCell>{fmt(Number(report.usd_total || 0), "USD")}</TableCell>
       <TableCell>{fmt(Number(report.dop_total || 0), "DOP")}</TableCell>
       <TableCell>{report.avg_rate != null ? Number(report.avg_rate).toFixed(6) : "—"}</TableCell>

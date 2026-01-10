@@ -537,6 +537,18 @@ function SavedReportRow({ report, onEdited }: { report: any; onEdited: () => voi
   const { toast } = useToast();
   const { user } = useAuth();
 
+  // Helper to format "YYYY-MM" → "Month YYYY"
+  const formatMonthLabel = (ym: string) => {
+    const parts = String(ym ?? "").split("-");
+    if (parts.length !== 2) return ym;
+    const y = Number(parts[0]);
+    const m = Number(parts[1]) - 1;
+    if (!Number.isFinite(y) || !Number.isFinite(m)) return ym;
+    const d = new Date(y, m, 1);
+    const label = d.toLocaleString(undefined, { month: "long", year: "numeric" });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  };
+
   const confirmDelete = async () => {
     try {
       await deleteManagerReport(report.id);
@@ -560,7 +572,7 @@ function SavedReportRow({ report, onEdited }: { report: any; onEdited: () => voi
 
   return (
     <TableRow>
-      <TableCell>{report.month}</TableCell>
+      <TableCell>{formatMonthLabel(report.month)}</TableCell>
       <TableCell>{fmt(Number(report.usd_total || 0), "USD")}</TableCell>
       <TableCell>{fmt(Number(report.dop_total || 0), "DOP")}</TableCell>
       <TableCell>{report.avg_rate != null ? Number(report.avg_rate).toFixed(6) : "—"}</TableCell>

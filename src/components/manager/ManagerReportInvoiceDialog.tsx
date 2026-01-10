@@ -147,6 +147,18 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
     [ownerRowsWithFee]
   );
 
+  // Format "YYYY-MM" into "Month YYYY" with capitalized month
+  const prettyMonth = useMemo(() => {
+    const parts = String(report.month ?? "").split("-");
+    if (parts.length !== 2) return report.month;
+    const y = Number(parts[0]);
+    const m = Number(parts[1]) - 1;
+    if (!Number.isFinite(y) || !Number.isFinite(m)) return report.month;
+    const d = new Date(y, m, 1);
+    const label = d.toLocaleString(undefined, { month: "long", year: "numeric" });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }, [report.month]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Allow vertical scroll and cap height */}
@@ -163,7 +175,7 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
               </div>
             </div>
             <div className="text-right">
-              <DialogTitle className="text-base font-semibold">Property Manager Report • {report.month}</DialogTitle>
+              <DialogTitle className="text-base font-semibold">Property Manager Report • {prettyMonth}</DialogTitle>
               <div className="text-xs text-gray-600">{String(report.start_date).slice(0,10)} to {String(report.end_date).slice(0,10)}</div>
             </div>
           </div>
