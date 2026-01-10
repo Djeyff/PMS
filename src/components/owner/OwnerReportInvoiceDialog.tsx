@@ -285,7 +285,7 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Cash DOP (after fee)</TableHead>
+                <TableHead>Cash DOP (after manager fee)</TableHead>
                 <TableHead>Cash USD</TableHead>
                 <TableHead>Transfer DOP</TableHead>
                 <TableHead>Transfer USD</TableHead>
