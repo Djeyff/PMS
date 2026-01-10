@@ -13,6 +13,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Calendar as RBCalendar, dateFnsLocalizer, View } from "react-big-calendar";
 import { format, parse, startOfWeek, getDay } from "date-fns";
 import "react-big-calendar/lib/css/react-big-calendar.css";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const locales = {};
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });
@@ -48,6 +49,9 @@ const CalendarPage: React.FC = () => {
   const { role, user, profile, providerToken } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
+
+  // NEW: Google calendars state
+  const [googleCalendars, setGoogleCalendars] = React.useState<Array<{ id: string; summary: string; primary?: boolean }>>([]);
 
   const { data: settings, refetch: refetchSettings } = useQuery({
     queryKey: ["calendar-settings"],
@@ -160,6 +164,44 @@ const CalendarPage: React.FC = () => {
     }
   };
 
+  const loadCalendars = async () => {
+    if (!providerToken) {
+      toast({ title: "Connect Google first", description: "Please click Connect Google and complete sign-in.", variant: "destructive" });
+      return;
+    }
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Not authenticated");
+      const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/calendar-list";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ providerToken }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `Failed to load calendars (${res.status})`);
+      }
+      const out = await res.json();
+      setGoogleCalendars(out?.calendars ?? []);
+      if (out?.email) setGoogleEmail(out.email);
+      // Auto-select primary if none chosen
+      const primary = (out?.calendars ?? []).find((c: any) => c.primary);
+      if (!googleCalendarId && primary?.id) setGoogleCalendarId(primary.id);
+      toast({ title: "Loaded Google calendars", description: `${(out?.calendars ?? []).length} calendars found.` });
+    } catch (e: any) {
+      toast({ title: "Failed to load calendars", description: e.message, variant: "destructive" });
+    }
+  };
+
+  // Auto-load after connect
+  React.useEffect(() => {
+    if (providerToken && googleCalendars.length === 0) {
+      loadCalendars().catch(() => {});
+    }
+  }, [providerToken]);
+
   const [open, setOpen] = React.useState(false);
   const [active, setActive] = React.useState<UiEvent | null>(null);
   const [view, setView] = React.useState<View>("month");
@@ -240,20 +282,33 @@ const CalendarPage: React.FC = () => {
                   />
                 </div>
                 <div className="mt-2">
-                  <div className="text-xs text-muted-foreground">Target Calendar ID</div>
-                  <Input
-                    placeholder="primary or calendarId@group.calendar.google.com"
-                    value={googleCalendarId}
-                    onChange={(e) => setGoogleCalendarId(e.target.value)}
-                  />
+                  <div className="text-xs text-muted-foreground">Target Calendar</div>
+                  <Select value={googleCalendarId} onValueChange={setGoogleCalendarId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose calendar" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {googleCalendars.length === 0 ? (
+                        <SelectItem value={googleCalendarId || ""} disabled>
+                          {googleCalendarId ? googleCalendarId : "No calendars loaded"}
+                        </SelectItem>
+                      ) : (
+                        googleCalendars.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.summary} {c.primary ? "(primary)" : ""}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="mt-2 flex items-center gap-2">
                   <Button variant="outline" size="sm" onClick={connectGoogle}>Connect Google</Button>
+                  <Button variant="outline" size="sm" onClick={loadCalendars}>Load my calendars</Button>
                   <Button size="sm" onClick={saveSettings}>Save</Button>
                 </div>
                 <div className="mt-2 text-xs text-muted-foreground">
-                  If you see "Unsupported provider", enable Google in Supabase (Auth → Providers), add Client ID/Secret, and set Redirect URL to https://app.lasterrenas.properties/calendar.
-                  {providerToken ? " Google is connected." : " Not connected yet."}
+                  Redirect URL: https://app.lasterrenas.properties/calendar. {providerToken ? "Google connected." : "Not connected yet."}
                 </div>
               </div>
             </div>
