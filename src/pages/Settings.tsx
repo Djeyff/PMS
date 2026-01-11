@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAgencyById, updateAgencyTimezone, updateAgencyProfile } from "@/services/agencies";
 import { useTheme } from "@/contexts/ThemeProvider";
-import { uploadLogo, getLogoPublicUrl } from "@/services/branding";
+import { uploadLogo, getLogoPublicUrl, uploadFavicon, getFaviconPublicUrl, applyFavicon } from "@/services/branding";
 
 const Settings = () => {
   const { profile, refreshProfile } = useAuth();
@@ -52,6 +52,7 @@ const Settings = () => {
   const [timezone, setTimezone] = useState<string>(agency?.timezone ?? "UTC");
 
   const [logoUrl, setLogoUrl] = useState<string>("");
+  const [faviconUrl, setFaviconUrl] = useState<string>("");
 
   React.useEffect(() => {
     if (agency?.timezone != null) setTimezone(agency.timezone || "UTC");
@@ -61,6 +62,8 @@ const Settings = () => {
   React.useEffect(() => {
     // Try to load logo preview
     getLogoPublicUrl().then((url) => setLogoUrl(url)).catch(() => setLogoUrl(""));
+    // Try to load favicon preview
+    getFaviconPublicUrl().then((url) => setFaviconUrl(url)).catch(() => setFaviconUrl(""));
   }, []);
 
   const onCreateAgency = async () => {
@@ -126,6 +129,25 @@ const Settings = () => {
       toast.success("Logo uploaded");
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to upload logo");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onUploadFavicon = async (file?: File) => {
+    if (!file) {
+      toast.error("Please select a PNG or ICO file");
+      return;
+    }
+    setSaving(true);
+    try {
+      await uploadFavicon(file);
+      const url = await getFaviconPublicUrl();
+      setFaviconUrl(url);
+      applyFavicon(url);
+      toast.success("Favicon uploaded");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to upload favicon");
     } finally {
       setSaving(false);
     }
@@ -235,6 +257,25 @@ const Settings = () => {
                   </div>
                   <div className="text-xs text-muted-foreground">
                     The logo is stored as branding/logo.png and printed on invoice PDFs.
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Favicon (PNG or ICO)</Label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="file"
+                      accept="image/png,image/x-icon"
+                      onChange={(e) => onUploadFavicon(e.target.files?.[0])}
+                    />
+                    {faviconUrl ? (
+                      <img src={faviconUrl} alt="Favicon" className="h-8 w-8 rounded border" />
+                    ) : (
+                      <div className="text-xs text-muted-foreground">Using default favicon</div>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    This replaces the browser tab icon. If not set, the default /favicon.ico is used.
                   </div>
                 </div>
               </>

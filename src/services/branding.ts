@@ -28,3 +28,32 @@ export async function getLogoPublicUrl() {
   const { data } = supabase.storage.from(BUCKET).getPublicUrl("logo.png");
   return data.publicUrl;
 }
+
+export async function uploadFavicon(file: File) {
+  await ensureBucket();
+  const path = "favicon.png";
+  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+    contentType: file.type || "image/png",
+    upsert: true,
+  });
+  if (error) throw error;
+  return true;
+}
+
+export async function getFaviconPublicUrl() {
+  await ensureBucket();
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl("favicon.png");
+  return data.publicUrl;
+}
+
+export function applyFavicon(url: string) {
+  if (typeof document === "undefined") return;
+  let link = document.querySelector("link[rel='icon']") as HTMLLinkElement | null;
+  if (!link) {
+    link = document.createElement("link");
+    link.rel = "icon";
+    document.head.appendChild(link);
+  }
+  link.type = url.endsWith(".ico") ? "image/x-icon" : "image/png";
+  link.href = url;
+}
