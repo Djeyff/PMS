@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { generateInvoicePDF } from "@/services/invoices";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { openWhatsAppShare } from "@/utils/whatsapp";
 
 type Props = {
   inv: any;
@@ -56,39 +57,63 @@ const InvoiceListItemMobile: React.FC<Props> = ({ inv, onRefetch }) => {
       <div className="mt-3 flex items-center gap-2">
         <Button asChild size="sm" variant="outline"><Link to={`/invoices/${inv.id}`}>View</Link></Button>
         {isAdmin && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="secondary">Generate</Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem
-                onClick={async () => {
-                  try {
-                    await generateInvoicePDF(inv.id, "en", { sendEmail: false, sendWhatsApp: false });
-                    toast.success("Invoice PDF generated in English");
-                    onRefetch && onRefetch();
-                  } catch (e: any) {
-                    toast.error(e.message || "Failed to generate PDF");
+          <>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="secondary">Generate</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem
+                  onClick={async () => {
+                    try {
+                      await generateInvoicePDF(inv.id, "en", { sendEmail: false, sendWhatsApp: false });
+                      toast.success("Invoice PDF generated in English");
+                      onRefetch && onRefetch();
+                    } catch (e: any) {
+                      toast.error(e.message || "Failed to generate PDF");
+                    }
+                  }}
+                >
+                  English
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={async () => {
+                    try {
+                      await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
+                      toast.success("Factura generada en Español");
+                      onRefetch && onRefetch();
+                    } catch (e: any) {
+                      toast.error(e.message || "Failed to generate PDF");
+                    }
+                  }}
+                >
+                  Spanish
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  const out = await generateInvoicePDF(inv.id, "en", { sendEmail: false, sendWhatsApp: false });
+                  const url = out.url;
+                  if (!url) {
+                    toast.info("Invoice generated but no URL returned");
+                    return;
                   }
-                }}
-              >
-                English
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={async () => {
-                  try {
-                    await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
-                    toast.success("Factura generada en Español");
-                    onRefetch && onRefetch();
-                  } catch (e: any) {
-                    toast.error(e.message || "Failed to generate PDF");
-                  }
-                }}
-              >
-                Spanish
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  const tenantName = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Tenant";
+                  const fmtAmt = new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(Number(inv.total_amount));
+                  const text = `Hello ${tenantName}, here is your invoice ${inv.number ?? inv.id} for ${fmtAmt}, due on ${inv.due_date}.\n${url}`;
+                  openWhatsAppShare(inv.tenant?.phone ?? null, text);
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Failed to share via WhatsApp");
+                }
+              }}
+            >
+              WhatsApp
+            </Button>
+          </>
         )}
       </div>
     </div>

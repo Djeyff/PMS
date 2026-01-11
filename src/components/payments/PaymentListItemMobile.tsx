@@ -9,6 +9,7 @@ import EditPaymentDialog from "@/components/payments/EditPaymentDialog";
 import DeletePaymentDialog from "@/components/payments/DeletePaymentDialog";
 import Money from "@/components/Money";
 import { useAuth } from "@/contexts/AuthProvider";
+import { openWhatsAppShare } from "@/utils/whatsapp";
 
 type Props = {
   payment: any;
@@ -124,6 +125,27 @@ const PaymentListItemMobile: React.FC<Props> = ({ payment, onRefetch }) => {
               }}
               onDeleted={() => onRefetch && onRefetch()}
             />
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  const out = await generatePaymentReceiptPDF(payment.id, "en");
+                  const url = out.url;
+                  if (!url) {
+                    toast.info("Receipt generated but no URL returned");
+                    return;
+                  }
+                  const fmtAmt = new Intl.NumberFormat(undefined, { style: "currency", currency: payment.currency }).format(Number(payment.amount));
+                  const text = `Hello ${tenantName}, here is your payment receipt for ${fmtAmt} on ${payment.received_date}.\n${url}`;
+                  openWhatsAppShare(payment.tenant?.phone ?? null, text);
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Failed to share via WhatsApp");
+                }
+              }}
+            >
+              WhatsApp
+            </Button>
           </>
         )}
       </div>

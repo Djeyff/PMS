@@ -15,6 +15,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { useIsMobile } from "@/hooks/use-mobile";
 import PaymentListItemMobile from "@/components/payments/PaymentListItemMobile";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { openWhatsAppShare } from "@/utils/whatsapp";
 
 const Payments = () => {
   const { role, user, profile } = useAuth();
@@ -232,6 +233,27 @@ const Payments = () => {
                                     }}
                                     onDeleted={() => refetch()}
                                   />
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={async () => {
+                                      try {
+                                        const out = await generatePaymentReceiptPDF(p.id, "en");
+                                        const url = out.url;
+                                        if (!url) {
+                                          toast.info("Receipt generated but no URL returned");
+                                          return;
+                                        }
+                                        const fmtAmt = new Intl.NumberFormat(undefined, { style: "currency", currency: p.currency }).format(Number(p.amount));
+                                        const text = `Hello ${tenantName}, here is your payment receipt for ${fmtAmt} on ${p.received_date}.\n${url}`;
+                                        openWhatsAppShare(p.tenant?.phone ?? null, text);
+                                      } catch (e: any) {
+                                        toast.error(e?.message ?? "Failed to share via WhatsApp");
+                                      }
+                                    }}
+                                  >
+                                    WhatsApp
+                                  </Button>
                                 </>
                               )}
                             </div>

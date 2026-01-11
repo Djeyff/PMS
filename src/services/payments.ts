@@ -17,7 +17,7 @@ export type PaymentRow = {
 
 export type PaymentWithMeta = PaymentRow & {
   lease?: { id: string; property?: { id: string; name: string } | null } | null;
-  tenant?: { id: string; first_name: string | null; last_name: string | null } | null;
+  tenant?: { id: string; first_name: string | null; last_name: string | null; phone?: string | null } | null;
 };
 
 function normalizePaymentRow(row: any): PaymentWithMeta {
@@ -45,7 +45,7 @@ function normalizePaymentRow(row: any): PaymentWithMeta {
           property: leaseRel.property ? { id: leaseRel.property.id, name: leaseRel.property.name } : null,
         }
       : null,
-    tenant: tenantRel ? { id: tenantRel.id, first_name: tenantRel.first_name ?? null, last_name: tenantRel.last_name ?? null } : null,
+    tenant: tenantRel ? { id: tenantRel.id, first_name: tenantRel.first_name ?? null, last_name: tenantRel.last_name ?? null, phone: tenantRel.phone ?? null } : null,
   };
 }
 
@@ -57,7 +57,7 @@ export async function fetchPayments(params: { role: Role | null; userId: string 
     .select(`
       id, lease_id, tenant_id, amount, currency, method, received_date, reference, created_at, invoice_id, exchange_rate,
       lease:leases ( id, property:properties ( id, name ) ),
-      tenant:profiles ( id, first_name, last_name )
+      tenant:profiles ( id, first_name, last_name, phone )
     `)
     .order("received_date", { ascending: false });
   if (error) throw error;

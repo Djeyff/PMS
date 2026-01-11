@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { runAutoInvoice } from "@/services/auto-invoice";
 import { useIsMobile } from "@/hooks/use-mobile";
 import InvoiceListItemMobile from "@/components/invoices/InvoiceListItemMobile";
+import { openWhatsAppShare } from "@/utils/whatsapp";
 
 const data = [
   { number: "INV-1001", tenant: "Maria Gomez", due: "2024-08-05", total: 1200, currency: "USD" as const, status: "paid" as const },
@@ -205,6 +206,28 @@ const Invoices = () => {
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={async () => {
+                                    try {
+                                      const out = await generateInvoicePDF(inv.id, "en", { sendEmail: false, sendWhatsApp: false });
+                                      const url = out.url;
+                                      if (!url) {
+                                        toast.info("Invoice generated but no URL returned");
+                                        return;
+                                      }
+                                      const tenantName = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Tenant";
+                                      const fmtAmt = new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(Number(inv.total_amount));
+                                      const text = `Hello ${tenantName}, here is your invoice ${inv.number ?? inv.id} for ${fmtAmt}, due on ${inv.due_date}.\n${url}`;
+                                      openWhatsAppShare(inv.tenant?.phone ?? null, text);
+                                    } catch (e: any) {
+                                      toast.error(e?.message ?? "Failed to share via WhatsApp");
+                                    }
+                                  }}
+                                >
+                                  WhatsApp
+                                </Button>
                                 <EditInvoiceDialog invoice={inv} onUpdated={() => refetch()} />
                                 <DeleteInvoiceDialog id={inv.id} onDeleted={() => refetch()} />
                               </div>
