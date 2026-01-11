@@ -77,7 +77,7 @@ const Maintenance = () => {
             <Button variant="outline" onClick={() => refetch()}>Refresh</Button>
             {overdueOnly ? (
               <>
-                <Badge variant="destructive">Overdue filter</Badge>
+                <Badge variant="destructive" className="bg-red-500/10 text-red-700 border-red-500/20 dark:bg-red-400/10 dark:text-red-300 dark:border-red-400/20">Overdue filter</Badge>
                 <Button
                   variant="outline"
                   size="sm"
@@ -108,12 +108,12 @@ const Maintenance = () => {
             ) : isMobile ? (
               <div>
                 {visible.map((m) => (
-                  <div key={m.id} className="rounded-lg border p-3 bg-card mb-3">
+                  <div key={m.id} className={`rounded-lg border p-3 bg-card mb-3 ${isOverdue(m) ? "border-l-4 border-red-500 dark:border-red-400" : ""}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-medium">
                           {m.title}
-                          {isOverdue(m) ? <span className="ml-2"><Badge variant="destructive">Overdue</Badge></span> : null}
+                          {isOverdue(m) ? <span className="ml-2"><Badge variant="destructive" className="bg-red-500/10 text-red-700 border-red-500/20 dark:bg-red-400/10 dark:text-red-300 dark:border-red-400/20">Overdue</Badge></span> : null}
                         </div>
                         <div className="text-sm text-muted-foreground">
                           {m.property?.name ?? m.property_id.slice(0, 8)}
@@ -122,7 +122,15 @@ const Maintenance = () => {
                       <div className="text-right">
                         <div className="text-xs capitalize">{m.priority}</div>
                         <div className="text-xs capitalize">{m.status.replace("_", " ")}</div>
-                        <div className={`text-xs ${isOverdue(m) ? "text-destructive font-semibold" : ""}`}>{m.due_date ?? "—"}</div>
+                        <div className="text-xs">
+                          {isOverdue(m) ? (
+                            <span className="inline-block rounded px-2 py-0.5 bg-red-500/10 text-red-700 dark:bg-red-400/10 dark:text-red-300 font-semibold">
+                              {m.due_date ?? "—"}
+                            </span>
+                          ) : (
+                            m.due_date ?? "—"
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -166,15 +174,19 @@ const Maintenance = () => {
                     <tr key={m.id}>
                       <TableCell className="font-medium">
                         {m.title}
-                        {isOverdue(m) ? <span className="ml-2"><Badge variant="destructive">Overdue</Badge></span> : null}
+                        {isOverdue(m) ? <span className="ml-2"><Badge variant="destructive" className="bg-red-500/10 text-red-700 border-red-500/20 dark:bg-red-400/10 dark:text-red-300 dark:border-red-400/20">Overdue</Badge></span> : null}
                       </TableCell>
                       <TableCell>{m.property?.name ?? m.property_id.slice(0, 8)}</TableCell>
                       <TableCell className="capitalize">{m.priority}</TableCell>
                       <TableCell className="capitalize">{m.status.replace("_", " ")}</TableCell>
                       <TableCell>
-                        <span className={isOverdue(m) ? "text-destructive font-semibold" : ""}>
-                          {m.due_date ?? "—"}
-                        </span>
+                        {isOverdue(m) ? (
+                          <span className="inline-block rounded px-2 py-0.5 bg-red-500/10 text-red-700 dark:bg-red-400/10 dark:text-red-300 font-semibold">
+                            {m.due_date ?? "—"}
+                          </span>
+                        ) : (
+                          <span>{m.due_date ?? "—"}</span>
+                        )}
                       </TableCell>
                       <TableCell className="space-x-2">
                         {isAdmin ? (

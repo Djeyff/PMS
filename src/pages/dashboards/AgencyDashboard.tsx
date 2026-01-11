@@ -196,18 +196,18 @@ const AgencyDashboard = () => {
             <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(monthlyByMethod.cashDop)} DOP</span>
           </div>
         </Stat>
-        <Stat title="Overdue Invoices" className={(overdueAmounts.usd > 0 || overdueAmounts.dop > 0 || overdueCount > 0) ? "border-destructive/50 bg-destructive/10" : undefined}>
+        <Stat title="Overdue Invoices" className={(overdueAmounts.usd > 0 || overdueAmounts.dop > 0 || overdueCount > 0) ? "border-red-500/30 dark:border-red-400/30 bg-red-500/10 dark:bg-red-400/10" : undefined}>
           <div className="flex flex-col text-base font-normal">
-            <span className={`text-lg font-semibold ${overdueAmounts.usd > 0 ? "text-destructive" : ""}`}>{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(overdueAmounts.usd)} USD</span>
-            <span className={`text-lg font-semibold ${overdueAmounts.dop > 0 ? "text-destructive" : ""}`}>{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(overdueAmounts.dop)} DOP</span>
-            <span className={`text-xs mt-1 ${overdueCount > 0 ? "text-destructive" : "text-muted-foreground"}`}>Count: {overdueCount}</span>
+            <span className={`text-lg font-semibold ${overdueAmounts.usd > 0 ? "text-red-600 dark:text-red-300" : ""}`}>{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(overdueAmounts.usd)} USD</span>
+            <span className={`text-lg font-semibold ${overdueAmounts.dop > 0 ? "text-red-600 dark:text-red-300" : ""}`}>{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(overdueAmounts.dop)} DOP</span>
+            <span className={`text-xs mt-1 ${overdueCount > 0 ? "text-red-600 dark:text-red-300" : "text-muted-foreground"}`}>Count: {overdueCount}</span>
           </div>
         </Stat>
-        <Stat title="Open Maintenance" className={overdueMaintenanceCount > 0 ? "border-destructive/50 bg-destructive/10" : undefined}>
+        <Stat title="Open Maintenance" className={overdueMaintenanceCount > 0 ? "border-red-500/30 dark:border-red-400/30 bg-red-500/10 dark:bg-red-400/10" : undefined}>
           <div className="flex flex-col">
             <span className="text-2xl font-bold">{maintenance?.length ?? 0}</span>
             <span className="text-xs mt-1">
-              Overdue: <Link to="/maintenance?overdue=1" className="text-destructive underline">{overdueMaintenanceCount}</Link>
+              Overdue: <Link to="/maintenance?overdue=1" className="underline text-red-600 dark:text-red-300">{overdueMaintenanceCount}</Link>
             </span>
           </div>
         </Stat>
