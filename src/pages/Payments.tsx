@@ -15,7 +15,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { useIsMobile } from "@/hooks/use-mobile";
 import PaymentListItemMobile from "@/components/payments/PaymentListItemMobile";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { openWhatsAppShare } from "@/utils/whatsapp";
+import { sharePdfToWhatsApp } from "@/utils/whatsapp";
 import { downloadFileFromUrl, buildPdfFileName } from "@/utils/download";
 
 const Payments = () => {
@@ -247,8 +247,9 @@ const Payments = () => {
                                           return;
                                         }
                                         const fmtAmt = new Intl.NumberFormat(undefined, { style: "currency", currency: p.currency }).format(Number(p.amount));
-                                        const text = `Hola ${tenantName}, aquí está su recibo de pago por ${fmtAmt} del ${p.received_date}.\n${url}`;
-                                        openWhatsAppShare(p.tenant?.phone ?? null, text);
+                                        const text = `Hola ${tenantName}, aquí está su recibo de pago por ${fmtAmt} del ${p.received_date}.`;
+                                        const filename = buildPdfFileName(tenantName || "Cliente", propName || "Propiedad", p.received_date);
+                                        await sharePdfToWhatsApp(url, filename, text);
                                       } catch (e: any) {
                                         toast.error(e?.message ?? "Error al compartir por WhatsApp");
                                       }

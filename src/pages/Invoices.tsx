@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { runAutoInvoice } from "@/services/auto-invoice";
 import { useIsMobile } from "@/hooks/use-mobile";
 import InvoiceListItemMobile from "@/components/invoices/InvoiceListItemMobile";
-import { openWhatsAppShare } from "@/utils/whatsapp";
+import { sharePdfToWhatsApp } from "@/utils/whatsapp";
 import { downloadFileFromUrl, buildPdfFileName, buildInvoicePdfFileName } from "@/utils/download";
 
 const data = [
@@ -219,10 +219,12 @@ const Invoices = () => {
                                         toast.info("Factura generada pero sin URL");
                                         return;
                                       }
+                                      const invoiceNumber = inv.number ?? inv.id;
                                       const tenantLabel = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Cliente";
                                       const fmtAmt = new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(Number(inv.total_amount));
-                                      const text = `Hola ${tenantLabel}, aquí está su factura ${inv.number ?? inv.id} por ${fmtAmt}, con vencimiento el ${inv.due_date}.\n${url}`;
-                                      openWhatsAppShare(inv.tenant?.phone ?? null, text);
+                                      const text = `Hola ${tenantLabel}, aquí está su factura ${invoiceNumber} por ${fmtAmt}, con vencimiento el ${inv.due_date}.`;
+                                      const filename = buildInvoicePdfFileName(invoiceNumber, tenantLabel, inv.issue_date);
+                                      await sharePdfToWhatsApp(url, filename, text);
                                     } catch (e: any) {
                                       toast.error(e?.message ?? "Error al compartir por WhatsApp");
                                     }

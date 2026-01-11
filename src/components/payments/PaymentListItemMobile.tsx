@@ -9,7 +9,7 @@ import EditPaymentDialog from "@/components/payments/EditPaymentDialog";
 import DeletePaymentDialog from "@/components/payments/DeletePaymentDialog";
 import Money from "@/components/Money";
 import { useAuth } from "@/contexts/AuthProvider";
-import { openWhatsAppShare } from "@/utils/whatsapp";
+import { sharePdfToWhatsApp } from "@/utils/whatsapp";
 import { downloadFileFromUrl, buildPdfFileName } from "@/utils/download";
 
 type Props = {
@@ -139,8 +139,9 @@ const PaymentListItemMobile: React.FC<Props> = ({ payment, onRefetch }) => {
                     return;
                   }
                   const fmtAmt = new Intl.NumberFormat(undefined, { style: "currency", currency: payment.currency }).format(Number(payment.amount));
-                  const text = `Hola ${tenantName}, aquí está su recibo de pago por ${fmtAmt} del ${payment.received_date}.\n${url}`;
-                  openWhatsAppShare(payment.tenant?.phone ?? null, text);
+                  const text = `Hola ${tenantName}, aquí está su recibo de pago por ${fmtAmt} del ${payment.received_date}.`;
+                  const filename = buildPdfFileName(tenantName || "Cliente", propName || "Propiedad", payment.received_date);
+                  await sharePdfToWhatsApp(url, filename, text);
                 } catch (e: any) {
                   toast.error(e?.message ?? "Error al compartir por WhatsApp");
                 }

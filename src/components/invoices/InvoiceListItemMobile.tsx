@@ -8,7 +8,7 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { generateInvoicePDF } from "@/services/invoices";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { openWhatsAppShare } from "@/utils/whatsapp";
+import { sharePdfToWhatsApp } from "@/utils/whatsapp";
 import { downloadFileFromUrl, buildPdfFileName, buildInvoicePdfFileName } from "@/utils/download";
 
 type Props = {
@@ -106,8 +106,9 @@ const InvoiceListItemMobile: React.FC<Props> = ({ inv, onRefetch }) => {
                   }
                   const tenantLabel = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Cliente";
                   const fmtAmt = new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(Number(inv.total_amount));
-                  const text = `Hola ${tenantLabel}, aquí está su factura ${inv.number ?? inv.id} por ${fmtAmt}, con vencimiento el ${inv.due_date}.\n${url}`;
-                  openWhatsAppShare(inv.tenant?.phone ?? null, text);
+                  const text = `Hola ${tenantLabel}, aquí está su factura ${inv.number ?? inv.id} por ${fmtAmt}, con vencimiento el ${inv.due_date}.`;
+                  const filename = buildInvoicePdfFileName(inv.number ?? inv.id, tenantLabel, inv.issue_date);
+                  await sharePdfToWhatsApp(url, filename, text);
                 } catch (e: any) {
                   toast.error(e?.message ?? "Error al compartir por WhatsApp");
                 }
