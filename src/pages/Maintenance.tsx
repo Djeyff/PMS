@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchMaintenanceRequests, updateMaintenanceStatus } from "@/services/maintenance";
 import NewRequestDialog from "@/components/maintenance/NewRequestDialog";
 import LogsDialog from "@/components/maintenance/LogsDialog";
+import EditMaintenanceDialog from "@/components/maintenance/EditMaintenanceDialog";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fetchAgencyById } from "@/services/agencies";
@@ -105,6 +106,7 @@ const Maintenance = () => {
                           {m.status !== "closed" && (
                             <Button size="sm" variant="outline" onClick={() => onUpdateStatus(m.id, "closed")}>Close</Button>
                           )}
+                          <EditMaintenanceDialog request={m} onUpdated={() => refetch()} size="sm" />
                           <DeleteMaintenanceRequestDialog
                             id={m.id}
                             metadata={{ title: m.title, property_id: m.property?.id ?? m.property_id, status: m.status, due_date: m.due_date }}
@@ -147,6 +149,7 @@ const Maintenance = () => {
                             {m.status !== "closed" && (
                               <Button size="sm" variant="outline" onClick={() => onUpdateStatus(m.id, "closed")}>Close</Button>
                             )}
+                            <EditMaintenanceDialog request={m} onUpdated={() => refetch()} size="sm" />
                             <DeleteMaintenanceRequestDialog
                               id={m.id}
                               metadata={{ title: m.title, property_id: m.property?.id ?? m.property_id, status: m.status, due_date: m.due_date }}
