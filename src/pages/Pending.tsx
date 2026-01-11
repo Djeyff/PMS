@@ -25,7 +25,7 @@ const Pending = () => {
           <p>Your account is awaiting activation. An Agency Admin will assign your role shortly.</p>
           <p>If you believe this is a mistake, please contact your agency administrator.</p>
           <div className="pt-2 flex gap-2">
-            <Button variant="secondary" onClick={() => navigate("/dashboard")}>Retry</Button>
+            <Button variant="secondary" onClick={() => window.location.reload()}>Retry</Button>
             <Button variant="ghost" onClick={() => signOut()}>Sign out</Button>
           </div>
         </CardContent>

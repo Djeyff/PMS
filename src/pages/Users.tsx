@@ -68,7 +68,6 @@ const Users = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>User ID</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Agency</TableHead>
                     <TableHead>Role</TableHead>
@@ -78,7 +77,6 @@ const Users = () => {
                 <TableBody>
                   {rows.map((u) => (
                     <TableRow key={u.id}>
-                      <TableCell className="font-mono text-xs">{u.id}</TableCell>
                       <TableCell>{[u.first_name, u.last_name].filter(Boolean).join(" ") || "—"}</TableCell>
                       <TableCell>{u.agency_id ? "Assigned" : "Unassigned"}</TableCell>
                       <TableCell className="capitalize">{u.role ?? "pending"}</TableCell>
@@ -150,7 +148,6 @@ const Users = () => {
                         <div className="font-medium">
                           {[u.first_name, u.last_name].filter(Boolean).join(" ") || u.email || "—"}
                         </div>
-                        <div className="text-xs text-muted-foreground font-mono">{u.id}</div>
                       </TableCell>
                       <TableCell className="font-mono text-xs">
                         {u.email ?? "—"}
