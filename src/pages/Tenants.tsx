@@ -75,7 +75,7 @@ const Tenants = () => {
                               <Button asChild size="sm" variant="outline">
                                 <Link to={`/tenants/${t.id}/overdue`}>Overdue</Link>
                               </Button>
-                              <EditTenantDialog tenant={{ id: t.id, first_name: t.first_name, last_name: t.last_name }} onUpdated={() => refetch()} />
+                              <EditTenantDialog tenant={{ id: t.id, first_name: t.first_name, last_name: t.last_name, phone: (t as any).phone ?? null, email: (t as any).email ?? null }} onUpdated={() => refetch()} />
                               <DeleteTenantDialog id={t.id} displayName={displayName} onDeleted={() => refetch()} />
                             </div>
                           </TableCell>

@@ -7,13 +7,14 @@ export type UserRow = {
   first_name: string | null;
   last_name: string | null;
   avatar_url: string | null;
+  email: string | null;
 };
 
 export async function fetchUsersForAdmin() {
   // RLS will restrict results to current user and same-agency users
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, role, agency_id, first_name, last_name, avatar_url")
+    .select("id, role, agency_id, first_name, last_name, avatar_url, email")
     .order("updated_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as UserRow[];
@@ -22,7 +23,7 @@ export async function fetchUsersForAdmin() {
 export async function fetchTenantProfilesInAgency(agencyId: string) {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, role, agency_id, first_name, last_name, avatar_url, updated_at")
+    .select("id, role, agency_id, first_name, last_name, avatar_url, updated_at, email")
     .eq("role", "tenant")
     .eq("agency_id", agencyId) // do not include unassigned users
     .order("updated_at", { ascending: false });
@@ -33,7 +34,7 @@ export async function fetchTenantProfilesInAgency(agencyId: string) {
 export async function fetchOwnerProfilesInAgency(agencyId: string) {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, role, agency_id, first_name, last_name, avatar_url, updated_at")
+    .select("id, role, agency_id, first_name, last_name, avatar_url, updated_at, email")
     .eq("role", "owner")
     .eq("agency_id", agencyId) // do not include unassigned users
     .order("updated_at", { ascending: false });
