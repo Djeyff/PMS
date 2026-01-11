@@ -287,7 +287,12 @@ serve(async (req) => {
     const hasBucket = (bucketList ?? []).some((b: any) => b.name === bucketName);
     if (!hasBucket) await service.storage.createBucket(bucketName, { public: false });
 
-    const fileName = `receipt_${paymentId}.pdf`;
+    // NEW: filename tenantname-propertyname-mm-yyyy.pdf
+    const sanitize = (s: string) => s.replace(/\s+/g, "-").replace(/[^\p{L}\p{N}\-_.]/gu, "");
+    const d = new Date(receivedDate);
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = String(d.getFullYear());
+    const fileName = `${sanitize(tenantName)}-${sanitize(propertyName)}-${mm}-${yyyy}.pdf`;
     const path = `${paymentId}/${fileName}`;
     const blob = new Blob([pdfBytes], { type: "application/pdf" });
     const { error: upErr } = await service.storage.from(bucketName).upload(path, blob, { contentType: "application/pdf", upsert: true });

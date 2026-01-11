@@ -9,7 +9,7 @@ import { generateInvoicePDF } from "@/services/invoices";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { openWhatsAppShare } from "@/utils/whatsapp";
-import { downloadFileFromUrl, buildPdfFileName } from "@/utils/download";
+import { downloadFileFromUrl, buildPdfFileName, buildInvoicePdfFileName } from "@/utils/download";
 
 type Props = {
   inv: any;
@@ -126,9 +126,9 @@ const InvoiceListItemMobile: React.FC<Props> = ({ inv, onRefetch }) => {
                     toast.info("Factura generada pero sin URL");
                     return;
                   }
+                  const invoiceNumber = inv.number ?? inv.id;
                   const tenantName = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Cliente";
-                  const propName = inv.lease?.property?.name ?? (inv.lease_id?.slice(0, 8) || "Propiedad");
-                  const filename = buildPdfFileName(tenantName, propName, inv.issue_date);
+                  const filename = buildInvoicePdfFileName(invoiceNumber, tenantName, inv.issue_date);
                   await downloadFileFromUrl(url, filename);
                   onRefetch && onRefetch();
                 } catch (e: any) {

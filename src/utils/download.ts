@@ -22,6 +22,13 @@ export function buildPdfFileName(tenantName: string, propertyName: string, dateS
   return `${t}-${p}-${my}.pdf`;
 }
 
+export function buildInvoicePdfFileName(invoiceNumber: string, tenantName: string, dateStr: string) {
+  const n = sanitizeName(invoiceNumber || "Factura");
+  const t = sanitizeName(tenantName || "Cliente");
+  const my = monthYearFromDate(dateStr);
+  return `${n}-${t}-${my}.pdf`;
+}
+
 export async function downloadFileFromUrl(url: string, filename: string) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to download file (${res.status})`);

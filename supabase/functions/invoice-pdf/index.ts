@@ -272,6 +272,54 @@ serve(async (req) => {
 
   const balance = amount - paidConverted;
 
+  // NEW: Compute previous and overall balances to match InvoiceDetail
+  const tenantIdForBalances = invMeta.tenant_id;
+  let previousBalance = 0;
+  let overallBalance = 0;
+  if (tenantIdForBalances) {
+    // Fetch tenant invoices and payments
+    const { data: tenantInvs } = await service
+      .from("invoices")
+      .select("id, issue_date, currency, total_amount")
+      .eq("tenant_id", tenantIdForBalances);
+
+    const { data: tenantPays } = await service
+      .from("payments")
+      .select("amount, currency, exchange_rate, received_date, tenant_id")
+      .eq("tenant_id", tenantIdForBalances);
+
+    const invCurrency = currency as "USD" | "DOP";
+    const invIssue = issueDate;
+
+    const convertToInvCur = (amt: number, cur: "USD" | "DOP", rate: number | null) => {
+      if (cur === invCurrency) return amt;
+      if (!rate || rate <= 0) return 0;
+      if (invCurrency === "USD" && cur === "DOP") return amt / rate;
+      if (invCurrency === "DOP" && cur === "USD") return amt * rate;
+      return 0;
+    };
+
+    const prevTotals = (tenantInvs ?? [])
+      .filter((i: any) => i.currency === invCurrency && i.issue_date < invIssue && i.id !== inv.id)
+      .reduce((s: number, i: any) => s + Number(i.total_amount || 0), 0);
+
+    const prevPaymentsConverted = (tenantPays ?? [])
+      .filter((p: any) => p.received_date < invIssue)
+      .reduce((s: number, p: any) => s + convertToInvCur(Number(p.amount || 0), p.currency, typeof p.exchange_rate === "number" ? p.exchange_rate : null), 0);
+
+    previousBalance = prevPaymentsConverted - prevTotals;
+
+    const allTotalsToDate = (tenantInvs ?? [])
+      .filter((i: any) => i.currency === invCurrency && i.issue_date <= invIssue)
+      .reduce((s: number, i: any) => s + Number(i.total_amount || 0), 0);
+
+    const allPaymentsToDateConverted = (tenantPays ?? [])
+      .filter((p: any) => p.received_date <= invIssue)
+      .reduce((s: number, p: any) => s + convertToInvCur(Number(p.amount || 0), p.currency, typeof p.exchange_rate === "number" ? p.exchange_rate : null), 0);
+
+    overallBalance = allPaymentsToDateConverted - allTotalsToDate;
+  }
+
   const today = new Date().toISOString().slice(0, 10);
   let displayStatus: string = inv.status || "sent";
   if (balance <= 0) displayStatus = "paid";
@@ -385,6 +433,15 @@ serve(async (req) => {
     page.drawText(fmt(balance, currency), { x: valueX, y, size: 12, font: fontBold });
     y -= 28;
 
+    // NEW: Previous & Overall balances block (match InvoiceDetail)
+    page.drawText(lang === "es" ? "Saldo previo (mismo inquilino)" : "Previous balance (same tenant)", { x: leftX, y, size: 12, font });
+    page.drawText(fmt(previousBalance, currency), { x: valueX, y, size: 12, font });
+    y -= 16;
+
+    page.drawText(lang === "es" ? "Saldo total (incluye esta factura)" : "Overall balance (includes this invoice)", { x: leftX, y, size: 12, fontBold });
+    page.drawText(fmt(overallBalance, currency), { x: valueX, y, size: 12, fontBold });
+    y -= 24;
+
     // Reminder
     page.drawText(lang === "es" ? "Recordatorio" : "Reminder", { x: leftX, y, size: 12, font: fontBold });
     y -= 16;
@@ -400,7 +457,12 @@ serve(async (req) => {
       await service.storage.createBucket(bucketName, { public: false });
     }
 
-    const fileName = `invoice_${inv.id}.pdf`;
+    // NEW: filename invoicenumber-tenantname-mm-yyyy.pdf
+    const sanitize = (s: string) => s.replace(/\s+/g, "-").replace(/[^\p{L}\p{N}\-_.]/gu, "");
+    const d = new Date(issueDate);
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = String(d.getFullYear());
+    const fileName = `${sanitize(invoiceNumber)}-${sanitize(tenantName)}-${mm}-${yyyy}.pdf`;
     const path = `${inv.id}/${fileName}`;
     const blob = new Blob([pdfBytes], { type: "application/pdf" });
     const { error: upErr } = await service.storage.from(bucketName).upload(path, blob, { contentType: "application/pdf", upsert: true });
