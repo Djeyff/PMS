@@ -52,7 +52,14 @@ const Invoices = () => {
       if (balance >= 0) displayStatus = "paid";
       else if (inv.due_date < today && inv.status !== "void") displayStatus = "overdue";
       else if (paidConverted > 0) displayStatus = "partial";
-      return { ...inv, paid: paidConverted, balance, displayStatus };
+      const paymentDatesText = (() => {
+        const raw = (inv.payments ?? [])
+          .map((p: any) => p.received_date)
+          .filter((d: any) => typeof d === "string");
+        const uniqSorted = Array.from(new Set(raw)).sort();
+        return uniqSorted.length ? uniqSorted.join(", ") : "—";
+      })();
+      return { ...inv, paid: paidConverted, balance, displayStatus, paymentDatesText };
     });
   }, [data]);
 
@@ -143,6 +150,7 @@ const Invoices = () => {
                       <TableHead>Due</TableHead>
                       <TableHead>Total</TableHead>
                       <TableHead>Paid</TableHead>
+                      <TableHead>Payment date</TableHead>
                       <TableHead>Balance</TableHead>
                       <TableHead>Status</TableHead>
                       {isAdmin && <TableHead>Actions</TableHead>}
@@ -163,6 +171,7 @@ const Invoices = () => {
                           <TableCell>{inv.due_date}</TableCell>
                           <TableCell>{fmt(Number(inv.total_amount), inv.currency)}</TableCell>
                           <TableCell>{fmt(inv.paid, inv.currency)}</TableCell>
+                          <TableCell className="whitespace-nowrap">{inv.paymentDatesText ?? "—"}</TableCell>
                           <TableCell>{fmt(inv.balance, inv.currency)}</TableCell>
                           <TableCell>
                             {(() => {

@@ -203,6 +203,7 @@ serve(async (req) => {
     monthOf: "Para el mes de",
     receipt: "Recibo",
     invoice: "Factura",
+    paymentDate: "Fecha de pago",
     emailSubject: (n: string) => `Factura ${n}`,
     emailText: (prop: string, tenant: string, amountText: string) =>
       `Estimado equipo,\n\nAdjuntamos la factura generada:\nPropiedad: ${prop}\nInquilino: ${tenant}\nImporte: ${amountText}\n\nGracias,\n${agencyName}`,
@@ -225,6 +226,7 @@ serve(async (req) => {
     monthOf: "For month of",
     receipt: "Receipt",
     invoice: "Invoice",
+    paymentDate: "Payment date",
     emailSubject: (n: string) => `Invoice ${n}`,
     emailText: (prop: string, tenant: string, amountText: string) =>
       `Dear team,\n\nAttached is the generated invoice:\nProperty: ${prop}\nTenant: ${tenant}\nAmount: ${amountText}\n\nRegards,\n${agencyName}`,
@@ -282,6 +284,14 @@ serve(async (req) => {
   const exchangeRateDisplay = (() => {
     const diffPay = payments.find((p: any) => p.exchange_rate && p.currency !== currency);
     return diffPay?.exchange_rate ? String(diffPay.exchange_rate) : "—";
+  })();
+  // Payment date(s) text (unique, sorted)
+  const paymentDatesText = (() => {
+    const raw = (payments ?? [])
+      .map((p: any) => p.received_date)
+      .filter((d: any) => typeof d === "string");
+    const uniqSorted = Array.from(new Set(raw)).sort();
+    return uniqSorted.length ? uniqSorted.join(", ") : "—";
   })();
 
   const balance = amount - paidConverted;
@@ -606,7 +616,7 @@ serve(async (req) => {
     // Two cards (gray bg) side-by-side
     const gap = 16;
     const cardW = (W - M * 2 - gap) / 2;
-    const cardH = 132;
+    const cardH = 180;
 
     // Left card background
     page.drawRectangle({ x: M, y: yCursor - cardH, width: cardW, height: cardH, color: COL_GRAY50, borderColor: COL_GRAY50 });
@@ -621,6 +631,10 @@ serve(async (req) => {
 
     page.drawText(`${t.paid} :`, { x: lx, y: ly, size: 11, font }); ly -= 14;
     page.drawText(fmt(paidConverted, currency), { x: lx, y: ly, size: 11, font }); ly -= 16;
+
+    // Payment date(s)
+    page.drawText(`${t.paymentDate} :`, { x: lx, y: ly, size: 11, font }); ly -= 14;
+    page.drawText(paymentDatesText, { x: lx, y: ly, size: 10, font }); ly -= 16;
 
     page.drawText(`${t.exchange} :`, { x: lx, y: ly, size: 11, font }); ly -= 14;
     page.drawText(exchangeRateDisplay, { x: lx, y: ly, size: 10, font }); ly -= 16;
