@@ -108,16 +108,34 @@ const OwnerDashboard = () => {
   const monthly = (() => {
     const shareMap = myShares ?? new Map<string, number>();
     const list = (payments ?? []).filter((p: any) => (p.received_date ?? "").startsWith(ym));
+    const getPropId = (p: any) => p.lease?.property?.id ?? p.lease?.property_id ?? null;
     const totalBy = (cur: "USD" | "DOP") =>
       list
         .filter((p: any) => p.currency === cur)
         .reduce((sum: number, p: any) => {
-          const propId = p.lease?.property_id;
+          const propId = getPropId(p);
           const percent = propId ? (shareMap.get(propId) ?? 100) : 100;
-          const factor = Math.max(0, Math.min(100, percent)) / 100;
+          const factor = Math.max(0, Math.min(100, Number(percent))) / 100;
           return sum + Number(p.amount || 0) * factor;
         }, 0);
-    return { usd: totalBy("USD"), dop: totalBy("DOP") };
+    // Also split by method for dashboard cards
+    const sumBy = (method: string, cur: "USD" | "DOP") =>
+      list
+        .filter((p: any) => String(p.method) === method && p.currency === cur)
+        .reduce((s: number, p: any) => {
+          const propId = getPropId(p);
+          const percent = propId ? (shareMap.get(propId) ?? 100) : 100;
+          const factor = Math.max(0, Math.min(100, Number(percent))) / 100;
+          return s + Number(p.amount || 0) * factor;
+        }, 0);
+    return {
+      usd: totalBy("USD"),
+      dop: totalBy("DOP"),
+      cashUsd: sumBy("cash", "USD"),
+      cashDop: sumBy("cash", "DOP"),
+      transferUsd: sumBy("bank_transfer", "USD"),
+      transferDop: sumBy("bank_transfer", "DOP"),
+    };
   })();
 
   // NEW: Average exchange rate from this month's payments (fallback to 0 if unknown)
@@ -174,13 +192,18 @@ const OwnerDashboard = () => {
       ) : null}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         <Stat title="My Occupancy" value={occupancy} />
-        <Stat title="My Revenue">
+        <Stat title="Cash (Owner share)">
           <div className="flex flex-col text-base font-normal">
-            <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(monthly.usd)} USD</span>
-            <span className="text-muted-foreground text-sm">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(monthly.dop)} DOP</span>
+            <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(monthly.cashUsd)} USD</span>
+            <span className="text-muted-foreground text-sm">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(monthly.cashDop)} DOP</span>
           </div>
         </Stat>
-        <Stat title="Open Maintenance" value={String(maintenance?.length ?? 0)} />
+        <Stat title="Incomes (Owner share)">
+          <div className="flex flex-col text-base font-normal">
+            <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(monthly.transferUsd)} USD</span>
+            <span className="text-muted-foreground text-sm">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(monthly.transferDop)} DOP</span>
+          </div>
+        </Stat>
       </div>
 
       <Card>

@@ -19,6 +19,7 @@ import { fetchTenantProfilesInAgency, fetchOwnerProfilesInAgency } from "@/servi
 import { fetchAgencyOwnerships } from "@/services/property-owners";
 import { sendOwnerReport } from "@/services/reports";
 import { useToast } from "@/components/ui/use-toast";
+import { fetchMyOwnerships } from "@/services/property-owners";
 
 function fmtMoney(amount: number, currency: "USD" | "DOP") {
   return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
@@ -109,6 +110,13 @@ const Reports = () => {
     queryFn: () => fetchPayments({ role, userId: user?.id ?? null, agencyId }),
   });
 
+  // Owner share map (for owner role)
+  const { data: myShares } = useQuery({
+    queryKey: ["rpt-owner-shares", user?.id],
+    enabled: role === "owner" && !!user?.id,
+    queryFn: () => fetchMyOwnerships(user!.id),
+  });
+
   const { data: invoices } = useQuery({
     queryKey: ["rpt-invoices", role, user?.id, agencyId],
     enabled: !!agencyId && !!role,
@@ -153,10 +161,20 @@ const Reports = () => {
   const revenue = useMemo(() => {
     const inRange = (payments ?? []).filter((p: any) => p.received_date >= startDate && p.received_date <= endDate);
     const byTenant = tenantFilter === "all" ? inRange : inRange.filter((p: any) => p.tenant_id === tenantFilter);
+    
+    const ownerShareOf = (p: any) => {
+      if (role !== "owner") return Number(p.amount || 0);
+      const propId = p.lease?.property?.id ?? p.lease?.property_id ?? null;
+      const percent = propId ? (myShares?.get(propId) ?? 100) : 100;
+      const factor = Math.max(0, Math.min(100, Number(percent))) / 100;
+      return Number(p.amount || 0) * factor;
+    };
+
     const sum = (method: string, currency: "USD" | "DOP") =>
       byTenant
         .filter((p: any) => String(p.method) === method && p.currency === currency)
-        .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+        .reduce((s: number, p: any) => s + ownerShareOf(p), 0);
+
     return {
       bankUsd: sum("bank_transfer", "USD"),
       bankDop: sum("bank_transfer", "DOP"),
@@ -164,7 +182,7 @@ const Reports = () => {
       cashDop: sum("cash", "DOP"),
       rows: byTenant,
     };
-  }, [payments, startDate, endDate, tenantFilter]);
+  }, [payments, startDate, endDate, tenantFilter, role, myShares]);
 
   // Invoice aging
   const aging = useMemo(() => {
@@ -218,16 +236,23 @@ const Reports = () => {
     const rows = revenue.rows.map((p: any) => {
       const propName = p.lease?.property?.name ?? "—";
       const tenantName = [p.tenant?.first_name, p.tenant?.last_name].filter(Boolean).join(" ") || "—";
+      const ownerShareAmount = (() => {
+        if (role !== "owner") return Number(p.amount || 0);
+        const propId = p.lease?.property?.id ?? p.lease?.property_id ?? null;
+        const percent = propId ? (myShares?.get(propId) ?? 100) : 100;
+        const factor = Math.max(0, Math.min(100, Number(percent))) / 100;
+        return Number(p.amount || 0) * factor;
+      })();
       return {
         date: p.received_date,
         property: propName,
         tenant: tenantName,
         method: String(p.method).replace("_", " "),
-        amount: fmtMoney(Number(p.amount), p.currency),
+        amount: fmtMoney(ownerShareAmount, p.currency),
       };
     });
     return rows;
-  }, [revenue.rows]);
+  }, [revenue.rows, role, myShares]);
 
   // Build CSV for a single owner (aggregated totals only for simplicity)
   const ownerCsvFor = (ownerId: string) => {

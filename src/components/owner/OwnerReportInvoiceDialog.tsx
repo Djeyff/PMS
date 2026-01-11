@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
 import { fetchPayments } from "@/services/payments";
 import { fetchAgencyOwnerships } from "@/services/property-owners";
+import { fetchMyOwnerships } from "@/services/property-owners";
 import type { OwnerReportRow } from "@/services/owner-reports";
 import { fetchOwnerProfilesInAgency } from "@/services/users";
 import { fetchAgencyById } from "@/services/agencies";
@@ -63,6 +64,13 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
     queryFn: () => fetchAgencyOwnerships(agencyId!),
   });
 
+  // NEW: owner's own ownerships when viewing as owner
+  const { data: myOwnerships } = useQuery({
+    queryKey: ["owner-invoice-my-ownerships", user?.id],
+    enabled: open && !!report && !isAdmin && !!user?.id,
+    queryFn: () => fetchMyOwnerships(user!.id),
+  });
+
   const { data: owners } = useQuery({
     queryKey: ["owner-invoice-owners", agencyId],
     enabled: open && !!agencyId && isAdmin && !!report,
@@ -85,9 +93,20 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
 
   const ownerRows = useMemo(() => {
     const map = new Map<string, { date: string; property: string; method: string; usd: number; dop: number; rate: number | null; assigned: boolean }>();
-    const ownerProps = (ownerships ?? []).filter((o) => o.owner_id === report.owner_id);
-    const ownedPropIds = new Set(ownerProps.map((o) => o.property_id));
-    const percentByProp = new Map<string, number>(ownerProps.map((o) => [o.property_id, o.ownership_percent == null ? 100 : Number(o.ownership_percent)]));
+
+    // Build owned set and percents depending on role
+    let ownedPropIds = new Set<string>();
+    let percentByProp = new Map<string, number>();
+
+    if (isAdmin) {
+      const ownerProps = (ownerships ?? []).filter((o) => o.owner_id === report.owner_id);
+      ownedPropIds = new Set(ownerProps.map((o) => o.property_id));
+      percentByProp = new Map(ownerProps.map((o) => [o.property_id, o.ownership_percent == null ? 100 : Number(o.ownership_percent)]));
+    } else {
+      const entries = Array.from((myOwnerships ?? new Map<string, number>()).entries());
+      ownedPropIds = new Set(entries.map(([pid]) => pid));
+      percentByProp = new Map(entries.map(([pid, percent]) => [pid, percent == null ? 100 : Number(percent)]));
+    }
 
     (filteredPayments ?? []).forEach((p: any) => {
       const propId = p.lease?.property?.id || p.lease?.property_id || null;
@@ -115,7 +134,7 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
     });
 
     return Array.from(map.values());
-  }, [filteredPayments, ownerships, report.owner_id]);
+  }, [filteredPayments, ownerships, myOwnerships, report.owner_id, isAdmin]);
 
   const totals = useMemo(() => {
     const usdCash = ownerRows.filter((r) => r.method === "Cash").reduce((s, r) => s + r.usd, 0);

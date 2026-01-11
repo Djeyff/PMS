@@ -55,7 +55,16 @@ const PaymentListItemMobile: React.FC<Props> = ({ payment, onRefetch }) => {
       <div className="grid grid-cols-2 gap-3 mt-3 text-sm">
         <div>
           <div className="text-muted-foreground">Amount</div>
-          <div className="font-medium"><Money amount={Number(payment.amount)} currency={payment.currency} /></div>
+          <div className="font-medium">
+            <Money
+              amount={
+                role === "owner" && typeof payment.ownerShareAmount === "number"
+                  ? Number(payment.ownerShareAmount)
+                  : Number(payment.amount)
+              }
+              currency={payment.currency}
+            />
+          </div>
         </div>
         <div>
           <div className="text-muted-foreground">Reference</div>
