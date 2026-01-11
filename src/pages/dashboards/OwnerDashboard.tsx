@@ -9,6 +9,7 @@ import { fetchMyOwnerships } from "@/services/property-owners";
 import { fetchMaintenanceRequests } from "@/services/maintenance";
 import { fetchInvoices } from "@/services/invoices";
 import { listOwnerReports, type OwnerReportRow } from "@/services/owner-reports";
+import { Link } from "react-router-dom";
 
 const Stat = ({ title, value, children }: { title: string; value?: string; children?: React.ReactNode }) => (
   <Card>
@@ -213,6 +214,9 @@ const OwnerDashboard = () => {
                     <div className="text-sm text-muted-foreground">Issued: {inv.issue_date} • Due: {inv.due_date}</div>
                     <div className="text-sm">Last partial payment: {partialDate ?? "—"}</div>
                     <div className="text-sm">Remaining: {remainingText}</div>
+                    <div className="text-xs">
+                      <Link to={`/invoices/${inv.id}`} className="underline">View invoice</Link>
+                    </div>
                   </li>
                 );
               })}
@@ -228,12 +232,29 @@ const OwnerDashboard = () => {
         <CardContent className="text-sm text-muted-foreground">
           {(payments ?? []).slice(0, 5).length === 0
             ? "No payments yet."
-            : (payments ?? []).slice(0, 5).map((p: any) => (
-                <div key={p.id} className="flex justify-between">
-                  <span>{p.received_date}</span>
-                  <span>{new Intl.NumberFormat(undefined, { style: "currency", currency: p.currency }).format(p.amount)}</span>
-                </div>
-              ))}
+            : (payments ?? []).slice(0, 5).map((p: any) => {
+                const propId = p.lease?.property?.id ?? p.lease?.property_id ?? null;
+                const percent = propId ? (myShares?.get(propId) ?? null) : null;
+                const shareAmt = percent != null
+                  ? Number(p.amount || 0) * Math.max(0, Math.min(100, percent)) / 100
+                  : null;
+                const amtText = new Intl.NumberFormat(undefined, { style: "currency", currency: p.currency }).format(p.amount);
+                const shareText = shareAmt != null
+                  ? new Intl.NumberFormat(undefined, { style: "currency", currency: p.currency }).format(shareAmt)
+                  : "—";
+                return (
+                  <div key={p.id} className="space-y-1">
+                    <div className="flex justify-between">
+                      <span>{p.received_date}</span>
+                      <span>{amtText}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span>Owner share{percent != null ? ` (${Math.round(percent)}%)` : ""}</span>
+                      <span>{shareText}</span>
+                    </div>
+                  </div>
+                );
+              })}
         </CardContent>
       </Card>
 
@@ -250,8 +271,8 @@ const OwnerDashboard = () => {
                 <thead>
                   <tr className="text-left">
                     <th className="py-2 pr-4">Period</th>
-                    <th className="py-2 pr-4">USD total</th>
-                    <th className="py-2 pr-4">DOP total</th>
+                    <th className="py-2 pr-4">USD (Your share)</th>
+                    <th className="py-2 pr-4">DOP (Your share)</th>
                     <th className="py-2 pr-4">Fee (DOP)</th>
                     <th className="py-2 pr-4">Cash after fee (DOP)</th>
                   </tr>
