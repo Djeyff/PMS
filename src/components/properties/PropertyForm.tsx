@@ -37,16 +37,10 @@ const PropertyForm = ({ agencyId, onCreated }: Props) => {
     }
     setSaving(true);
     try {
-      // Normalize type to match DB constraint expected values
-      const normalizedType =
-        type === "colmado" ? ("Colmado" as any) :
-        type === "banca" ? ("Banca" as any) :
-        (type as any);
-
       await createProperty({
         agency_id: agencyId,
         name,
-        type: normalizedType,
+        type,
         city: city || undefined,
         bedrooms: bedrooms === "" ? undefined : Number(bedrooms),
         location_group: locationGroup || undefined,
