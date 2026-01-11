@@ -21,7 +21,7 @@ export async function logAction(params: {
   const { data: userRes } = await supabase.auth.getUser();
   const uid = userRes.user?.id;
   if (!uid) throw new Error("Not authenticated");
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("activity_logs")
     .insert({
       user_id: uid,
@@ -29,11 +29,9 @@ export async function logAction(params: {
       entity_type: params.entity_type,
       entity_id: params.entity_id ?? null,
       metadata: params.metadata ?? null,
-    })
-    .select("id")
-    .single();
+    });
   if (error) throw error;
-  return data.id as string;
+  return true;
 }
 
 export async function fetchActivityLogsByAgency(agencyId: string) {
