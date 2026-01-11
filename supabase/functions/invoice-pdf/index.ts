@@ -496,9 +496,13 @@ serve(async (req) => {
     // Vertical lines
     for (let i = 1; i < cols; i++) {
       const x = tableX + i * colW;
+      // Keep the vertical lines inside the outer border (avoid overshoot)
+      const topY = yCursor; // top edge of the outer border
+      const bottomY = yCursor - headerH - rowH - 4; // bottom edge of the outer border
+      const inset = 1; // stay within the 1pt border
       page.drawLine({
-        start: { x, y: yCursor - headerH - rowH - 4 },
-        end: { x, y: yCursor + 4 },
+        start: { x, y: bottomY + inset },
+        end: { x, y: topY - inset },
         color: COL_BORDER,
         thickness: 1,
       });
