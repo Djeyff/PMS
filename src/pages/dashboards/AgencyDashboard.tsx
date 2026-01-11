@@ -9,6 +9,7 @@ import { fetchInvoices } from "@/services/invoices";
 import { fetchProperties } from "@/services/properties";
 import { fetchMaintenanceRequests } from "@/services/maintenance";
 import { parseISO, differenceInCalendarDays, format } from "date-fns";
+import { Link } from "react-router-dom";
 
 const Stat = ({ title, value, children }: { title: string; value?: string; children?: React.ReactNode }) => (
   <Card>
@@ -46,7 +47,7 @@ const AgencyDashboard = () => {
     enabled: !!role && !!user && !!profile?.agency_id,
   });
 
-  const { data: maintenance } = useQuery({
+  const { data: maintenance, refetch: refetchMaintenance } = useQuery({
     queryKey: ["dashboard-maintenance", role, user?.id, profile?.agency_id],
     queryFn: () => fetchMaintenanceRequests({ agencyId: profile!.agency_id!, status: ["open", "in_progress"] }),
     enabled: !!role && !!user && !!profile?.agency_id,
@@ -254,6 +255,9 @@ const AgencyDashboard = () => {
                       <div className="font-medium">{propName} — {tenantName}</div>
                       <div className="text-sm text-muted-foreground">{inv.due_date}</div>
                       <div className="text-sm">Remaining: {remainingText}</div>
+                      <div className="text-xs">
+                        <Link to={`/invoices/${inv.id}`} className="underline">View invoice</Link>
+                      </div>
                     </li>
                   );
                 })}
@@ -288,6 +292,9 @@ const AgencyDashboard = () => {
                       <div className="text-sm text-muted-foreground">Invoice: {inv.issue_date} • Due: {inv.due_date}</div>
                       <div className="text-sm">Last partial payment: {partialDate ?? "—"}</div>
                       <div className="text-sm">Remaining: {remainingText}</div>
+                      <div className="text-xs">
+                        <Link to={`/invoices/${inv.id}`} className="underline">View invoice</Link>
+                      </div>
                     </li>
                   );
                 })}
@@ -299,8 +306,16 @@ const AgencyDashboard = () => {
 
       <div className="grid gap-4 grid-cols-1">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex items-center justify-between">
             <CardTitle>Upcoming Maintenance</CardTitle>
+            <button
+              type="button"
+              className="text-xs underline"
+              onClick={() => refetchMaintenance()}
+              aria-label="Refresh maintenance"
+            >
+              Refresh
+            </button>
           </CardHeader>
           <CardContent className="space-y-2">
             {(upcomingMaintenance ?? []).length === 0 ? (
@@ -321,6 +336,9 @@ const AgencyDashboard = () => {
                     <div className="text-right">
                       <div className="text-sm text-muted-foreground">{m.due_date}</div>
                       <div className="text-xs capitalize text-muted-foreground">{m.status.replace("_", " ")}</div>
+                      <div className="text-xs">
+                        <Link to={`/maintenance?id=${m.id}`} className="underline">View</Link>
+                      </div>
                     </div>
                   </li>
                 ))}
