@@ -127,6 +127,30 @@ const AgencyDashboard = () => {
     return list;
   })();
 
+  // NEW: Helper for converted remaining and last partial date
+  const computeRemaining = (inv: any) => {
+    const currency = inv.currency as "USD" | "DOP";
+    const total = Number(inv.total_amount || 0);
+    const paidConverted = (inv.payments ?? []).reduce((sum: number, p: any) => {
+      const amt = Number(p.amount || 0);
+      if (p.currency === currency) return sum + amt;
+      const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : null;
+      if (!rate || rate <= 0) return sum;
+      if (currency === "USD" && p.currency === "DOP") return sum + amt / rate;
+      if (currency === "DOP" && p.currency === "USD") return sum + amt * rate;
+      return sum;
+    }, 0);
+    return Math.max(0, total - paidConverted);
+  };
+
+  const lastPaymentDate = (inv: any) => {
+    const dates = (inv.payments ?? []).map((p: any) => String(p.received_date || "")).filter(Boolean);
+    return dates.length ? dates.sort().slice(-1)[0] : null;
+  };
+
+  // NEW: All partial invoices
+  const partialInvoices = (invoices ?? []).filter((inv: any) => String(inv.status) === "partial");
+
   const upcomingExpirations = (() => {
     const now = new Date();
     const list = (leases ?? []).filter((l: any) => {
@@ -238,6 +262,41 @@ const AgencyDashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* NEW: Partial Invoices (ALL) */}
+      <div className="grid gap-4 grid-cols-1">
+        <Card>
+          <CardHeader>
+            <CardTitle>Partial Invoices</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {partialInvoices.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No partial invoices.</div>
+            ) : (
+              <ul className="space-y-3">
+                {partialInvoices.map((inv: any) => {
+                  const remaining = computeRemaining(inv);
+                  const remainingText = new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(remaining);
+                  const propName = inv.lease?.property?.name ?? (inv.lease_id ? inv.lease_id.slice(0, 8) : "Property");
+                  const tenantName =
+                    [inv.tenant?.first_name ?? "", inv.tenant?.last_name ?? ""].filter(Boolean).join(" ") ||
+                    (inv.tenant_id ? inv.tenant_id.slice(0, 6) : "Tenant");
+                  const partialDate = lastPaymentDate(inv);
+                  return (
+                    <li key={inv.id} className="space-y-1">
+                      <div className="font-medium">{propName} — {tenantName}</div>
+                      <div className="text-sm text-muted-foreground">Invoice: {inv.issue_date} • Due: {inv.due_date}</div>
+                      <div className="text-sm">Last partial payment: {partialDate ?? "—"}</div>
+                      <div className="text-sm">Remaining: {remainingText}</div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="grid gap-4 grid-cols-1">
         <Card>
           <CardHeader>

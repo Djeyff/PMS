@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { fetchLeases } from "@/services/leases";
 import { useIsMobile } from "@/hooks/use-mobile";
 import PropertyListItemMobile from "@/components/properties/PropertyListItemMobile";
+import { fetchMyOwnerships } from "@/services/property-owners";
 
 // sample data removed
 
@@ -36,6 +37,13 @@ const Properties = () => {
     queryKey: ["properties-leases", role, user?.id, profile?.agency_id],
     enabled: !!role && !!profile?.agency_id,
     queryFn: () => fetchLeases({ role, userId: user?.id ?? null, agencyId: profile?.agency_id ?? null }),
+  });
+
+  // NEW: Owner's share map (only when viewing as owner)
+  const { data: myShares } = useQuery({
+    queryKey: ["properties-myshares", user?.id],
+    enabled: role === "owner" && !!user?.id,
+    queryFn: () => fetchMyOwnerships(user!.id),
   });
 
   const canCreate = role === "agency_admin";
@@ -178,37 +186,48 @@ const Properties = () => {
                             <TableHead className="whitespace-nowrap">Name</TableHead>
                             <TableHead className="whitespace-nowrap">Type</TableHead>
                             <TableHead className="whitespace-nowrap">Status</TableHead>
+                            <TableHead className="whitespace-nowrap">My Share</TableHead>
                             <TableHead className="whitespace-nowrap">Bedrooms</TableHead>
                             <TableHead className="whitespace-nowrap">City</TableHead>
                             {canCreate && <TableHead>Actions</TableHead>}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {items.map((p: any) => (
-                            <TableRow key={p.id}>
-                              <TableCell className="font-medium whitespace-nowrap">{p.name}</TableCell>
-                              <TableCell className="capitalize whitespace-nowrap">{p.type}</TableCell>
-                              <TableCell>
-                                {occupiedProps.has(p.id) ? (
-                                  <span className="text-green-600 font-medium">Occupied</span>
-                                ) : (
-                                  <span className="text-red-600 font-medium">Vacant</span>
-                                )}
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap">{p.bedrooms ?? "-"}</TableCell>
-                              <TableCell className="whitespace-nowrap">{p.city ?? "-"}</TableCell>
-                              {canCreate && (
+                          {items.map((p: any) => {
+                            const sharePercent = role === "owner" ? (myShares?.get(p.id) ?? null) : null;
+                            return (
+                              <TableRow key={p.id}>
+                                <TableCell className="font-medium whitespace-nowrap">{p.name}</TableCell>
+                                <TableCell className="capitalize whitespace-nowrap">{p.type}</TableCell>
                                 <TableCell>
-                                  <div className="flex gap-2">
-                                    <EditPropertyDialog property={p} onUpdated={() => refetch()} />
-                                    <PropertyOwnersDialog propertyId={p.id} />
-                                    <AssignTenantDialog propertyId={p.id} onAssigned={() => refetch()} />
-                                    <DeletePropertyDialog id={p.id} name={p.name} onDeleted={() => refetch()} />
-                                  </div>
+                                  {occupiedProps.has(p.id) ? (
+                                    <span className="text-green-600 font-medium">Occupied</span>
+                                  ) : (
+                                    <span className="text-red-600 font-medium">Vacant</span>
+                                  )}
                                 </TableCell>
-                              )}
-                            </TableRow>
-                          ))}
+                                <TableCell className="whitespace-nowrap">
+                                  {role === "owner" ? (
+                                    sharePercent != null ? `${Math.round(sharePercent)}%` : "—"
+                                  ) : (
+                                    "—"
+                                  )}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">{p.bedrooms ?? "-"}</TableCell>
+                                <TableCell className="whitespace-nowrap">{p.city ?? "-"}</TableCell>
+                                {canCreate && (
+                                  <TableCell>
+                                    <div className="flex gap-2">
+                                      <EditPropertyDialog property={p} onUpdated={() => refetch()} />
+                                      <PropertyOwnersDialog propertyId={p.id} />
+                                      <AssignTenantDialog propertyId={p.id} onAssigned={() => refetch()} />
+                                      <DeletePropertyDialog id={p.id} name={p.name} onDeleted={() => refetch()} />
+                                    </div>
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     )}

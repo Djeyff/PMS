@@ -6,6 +6,8 @@ import { fetchProperties } from "@/services/properties";
 import { fetchLeases } from "@/services/leases";
 import { fetchPayments } from "@/services/payments";
 import { fetchMyOwnerships } from "@/services/property-owners";
+import { fetchMaintenanceRequests } from "@/services/maintenance";
+import { fetchInvoices } from "@/services/invoices";
 
 const Stat = ({ title, value, children }: { title: string; value?: string; children?: React.ReactNode }) => (
   <Card>
@@ -43,6 +45,20 @@ const OwnerDashboard = () => {
     enabled: role === "owner" && !!user,
   });
 
+  // NEW: Owner maintenance requests (open/in_progress) for the agency; RLS limits to owner's properties
+  const { data: maintenance } = useQuery({
+    queryKey: ["owner-maintenance", role, user?.id, profile?.agency_id],
+    queryFn: () => fetchMaintenanceRequests({ agencyId: profile!.agency_id!, status: ["open", "in_progress"] }),
+    enabled: role === "owner" && !!user && !!profile?.agency_id,
+  });
+
+  // NEW: Owner invoices (RLS restricts to owned properties)
+  const { data: invoices } = useQuery({
+    queryKey: ["owner-invoices", role, user?.id],
+    queryFn: fetchInvoices,
+    enabled: role === "owner" && !!user,
+  });
+
   const hasNoProps = (props?.length ?? 0) === 0;
 
   const occupancy = (() => {
@@ -59,8 +75,8 @@ const OwnerDashboard = () => {
     return `${Math.round((occupied.size / totalProps) * 100)}%`;
   })();
 
+  const ym = new Date().toISOString().slice(0, 7);
   const monthly = (() => {
-    const ym = new Date().toISOString().slice(0, 7);
     const shareMap = myShares ?? new Map<string, number>();
     const list = (payments ?? []).filter((p: any) => (p.received_date ?? "").startsWith(ym));
     const totalBy = (cur: "USD" | "DOP") =>
@@ -74,6 +90,44 @@ const OwnerDashboard = () => {
         }, 0);
     return { usd: totalBy("USD"), dop: totalBy("DOP") };
   })();
+
+  // NEW: Average exchange rate from this month's payments (fallback to 0 if unknown)
+  const avgRate = (() => {
+    const list = (payments ?? []).filter((p: any) => (p.received_date ?? "").startsWith(ym));
+    const rates = list.map((p: any) => Number(p.exchange_rate)).filter((r) => Number.isFinite(r) && r > 0);
+    if (rates.length === 0) return 0;
+    return rates.reduce((s, r) => s + r, 0) / rates.length;
+  })();
+
+  // NEW: Net after fee (DOP) — fee applied to USD (converted) + DOP totals, deducted from DOP cash portion
+  const feePercent = 5;
+  const dopTotal = monthly.dop + monthly.usd * avgRate;
+  const feeDop = dopTotal * (feePercent / 100);
+  const feeDeducted = Math.min(feeDop, monthly.dop);
+  const dopAfterFee = Math.max(0, monthly.dop - feeDeducted);
+
+  // NEW: Partial invoices list and helper to compute remaining and last partial date
+  const partialInvoices = (invoices ?? []).filter((inv: any) => String(inv.status) === "partial");
+
+  const computeRemaining = (inv: any) => {
+    const currency = inv.currency as "USD" | "DOP";
+    const total = Number(inv.total_amount || 0);
+    const paidConverted = (inv.payments ?? []).reduce((sum: number, p: any) => {
+      const amt = Number(p.amount || 0);
+      if (p.currency === currency) return sum + amt;
+      const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : null;
+      if (!rate || rate <= 0) return sum;
+      if (currency === "USD" && p.currency === "DOP") return sum + amt / rate;
+      if (currency === "DOP" && p.currency === "USD") return sum + amt * rate;
+      return sum;
+    }, 0);
+    return Math.max(0, total - paidConverted);
+  };
+
+  const lastPaymentDate = (inv: any) => {
+    const dates = (inv.payments ?? []).map((p: any) => String(p.received_date || "")).filter(Boolean);
+    return dates.length ? dates.sort().slice(-1)[0] : null;
+  };
 
   return (
     <div className="space-y-6">
@@ -97,8 +151,53 @@ const OwnerDashboard = () => {
             <span className="text-muted-foreground text-sm">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(monthly.dop)} DOP</span>
           </div>
         </Stat>
-        <Stat title="Open Maintenance" value="0" />
+        <Stat title="Open Maintenance" value={String(maintenance?.length ?? 0)} />
       </div>
+
+      {/* NEW: Net after management fee (DOP) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Net After Management Fee</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm">
+          <div className="flex flex-col gap-1">
+            <div>Fee percent: <strong>{feePercent}%</strong></div>
+            <div>Fee (DOP): <strong>{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(feeDeducted)}</strong></div>
+            <div>Cash after fee (DOP): <strong>{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(dopAfterFee)}</strong></div>
+            <div className="text-xs text-muted-foreground">USD converted using average rate from this month's payments{avgRate ? ` (~${avgRate.toFixed(4)})` : ""}.</div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* NEW: Partial Invoices (ALL) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Partial Invoices</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {partialInvoices.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No partial invoices.</div>
+          ) : (
+            <ul className="space-y-3">
+              {partialInvoices.map((inv: any) => {
+                const remaining = computeRemaining(inv);
+                const remainingText = new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(remaining);
+                const propName = inv.lease?.property?.name ?? (inv.lease_id ? inv.lease_id.slice(0, 8) : "Property");
+                const partialDate = lastPaymentDate(inv);
+                return (
+                  <li key={inv.id} className="space-y-1">
+                    <div className="font-medium">{propName} — {inv.number ?? inv.id.slice(0, 8)}</div>
+                    <div className="text-sm text-muted-foreground">Issued: {inv.issue_date} • Due: {inv.due_date}</div>
+                    <div className="text-sm">Last partial payment: {partialDate ?? "—"}</div>
+                    <div className="text-sm">Remaining: {remainingText}</div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Recent Payments</CardTitle>
