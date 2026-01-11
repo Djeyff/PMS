@@ -3,6 +3,7 @@ import AppShell from "@/components/layout/AppShell";
 import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchUsersForAdmin, updateUserRoleAndAgency, type UserRow } from "@/services/users";
+import { assignUserByEmail } from "@/services/users";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -188,6 +189,55 @@ const Users = () => {
                 </TableBody>
               </Table>
             )}
+            {/* Assign user by email (for users not visible due to security) */}
+            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-[2fr,1fr,auto] items-end">
+              <div>
+                <div className="text-sm text-muted-foreground">User email</div>
+                <input
+                  type="email"
+                  className="w-full border rounded px-3 py-2 text-sm"
+                  placeholder="user@example.com"
+                  id="assign-email"
+                />
+              </div>
+              <div>
+                <div className="text-sm text-muted-foreground">Role</div>
+                <Select defaultValue="tenant">
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tenant">Tenant</SelectItem>
+                    <SelectItem value="owner">Owner</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={async () => {
+                  const emailInput = document.getElementById("assign-email") as HTMLInputElement | null;
+                  const roleTrigger = document.querySelector("[aria-expanded]") as HTMLElement | null;
+                  const email = (emailInput?.value || "").trim();
+                  // Fallback: read role value from the Select by inspecting the trigger text
+                  const roleText = roleTrigger?.querySelector("[data-placeholder]")?.textContent || "Tenant";
+                  const role = roleText.toLowerCase() === "owner" ? "owner" : "tenant";
+                  if (!email) {
+                    toast.error("Please enter an email");
+                    return;
+                  }
+                  try {
+                    await assignUserByEmail({ email, role: role as "owner" | "tenant" });
+                    toast.success("User assigned to your agency");
+                    qc.invalidateQueries({ queryKey: ["admin-users"] });
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed to assign user");
+                  }
+                }}
+                disabled={!agencyId}
+              >
+                Assign by email
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

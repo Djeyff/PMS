@@ -43,6 +43,8 @@ const OwnerDashboard = () => {
     enabled: role === "owner" && !!user,
   });
 
+  const hasNoProps = (props?.length ?? 0) === 0;
+
   const occupancy = (() => {
     const totalProps = props?.length ?? 0;
     if (totalProps === 0) return "0%";
@@ -75,6 +77,18 @@ const OwnerDashboard = () => {
 
   return (
     <div className="space-y-6">
+      {hasNoProps ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Access pending</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm">
+            <div className="font-medium">No Properties Assigned to you yet.</div>
+            <div className="mt-1">Your account is awaiting activation. An Agency Admin will assign your role shortly.</div>
+            <div className="mt-1 text-muted-foreground">If you believe this is a mistake, please contact your agency administrator.</div>
+          </CardContent>
+        </Card>
+      ) : null}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         <Stat title="My Occupancy" value={occupancy} />
         <Stat title="My Revenue">

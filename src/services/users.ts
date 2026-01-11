@@ -100,3 +100,20 @@ export async function updateUserRoleAndAgency(params: {
   if (error) throw error;
   return data;
 }
+
+export async function assignUserByEmail(params: { email: string; role: "owner" | "tenant" }) {
+  const { data: sess } = await supabase.auth.getSession();
+  const token = sess.session?.access_token;
+  if (!token) throw new Error("Not authenticated");
+  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/assign-user";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ email: params.email, role: params.role }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `Failed to assign user (${res.status})`);
+  }
+  return await res.json();
+}
