@@ -34,8 +34,16 @@ const ActivityLog = () => {
 
   const rows = useMemo(() => {
     let r = (data ?? []);
-    if (entityFilter !== "all") {
-      r = r.filter((x) => x.entity_type === entityFilter);
+    if (entityFilter === "auto_invoice") {
+      // Show only auto-invoice actions when filter is selected
+      r = r.filter((x) => String(x.action).toLowerCase().includes("auto_invoice"));
+    } else {
+      // Filter by entity type when a specific entity is selected
+      if (entityFilter !== "all") {
+        r = r.filter((x) => x.entity_type === entityFilter);
+      }
+      // Hide auto-invoice actions by default
+      r = r.filter((x) => !String(x.action).toLowerCase().includes("auto_invoice"));
     }
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -118,7 +126,25 @@ const ActivityLog = () => {
             ) : isLoading ? (
               <div className="text-sm text-muted-foreground">Loading...</div>
             ) : (rows?.length ?? 0) === 0 ? (
-              <div className="text-sm text-muted-foreground">No activity yet.</div>
+              <div className="space-y-3">
+                <div className="text-sm text-muted-foreground">
+                  {entityFilter === "all" && !search
+                    ? "No activity yet."
+                    : "No activity for this filter."}
+                </div>
+                <div>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setEntityFilter("all");
+                      setSearch("");
+                      refetch();
+                    }}
+                  >
+                    Back to All
+                  </Button>
+                </div>
+              </div>
             ) : (
               <div className="space-y-3">
                 <div className="flex flex-col sm:flex-row gap-3">
@@ -135,6 +161,7 @@ const ActivityLog = () => {
                       <SelectItem value="lease">Lease</SelectItem>
                       <SelectItem value="property">Property</SelectItem>
                       <SelectItem value="profile">Profile</SelectItem>
+                      <SelectItem value="auto_invoice">Auto-Invoice</SelectItem>
                     </SelectContent>
                   </Select>
                   <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
