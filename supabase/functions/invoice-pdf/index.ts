@@ -362,6 +362,46 @@ serve(async (req) => {
       const w = f.widthOfTextAtSize(text, size);
       page.drawText(text, { x: xRight - w, y, size, font: f, color });
     }
+    // Add a helper to wrap text within a maximum width and return height used
+    function drawWrappedText({
+      text,
+      x,
+      y,
+      maxWidth,
+      size,
+      f = font,
+      color = COL_TEXT,
+      lineGap = 3,
+    }: {
+      text: string;
+      x: number;
+      y: number;
+      maxWidth: number;
+      size: number;
+      f?: any;
+      color?: any;
+      lineGap?: number;
+    }) {
+      const words = String(text || "").split(/\s+/);
+      const lines: string[] = [];
+      let line = "";
+      for (const w of words) {
+        const test = line ? line + " " + w : w;
+        const width = f.widthOfTextAtSize(test, size);
+        if (width <= maxWidth || line === "") {
+          line = test;
+        } else {
+          lines.push(line);
+          line = w;
+        }
+      }
+      if (line) lines.push(line);
+      const lineHeight = size + lineGap;
+      lines.forEach((ln, i) => {
+        page.drawText(ln, { x, y: y - i * lineHeight, size, font: f, color });
+      });
+      return lines.length * lineHeight - lineGap;
+    }
 
     // Header: logo + agency name/address on left, titles on right
     let yCursor = H - M;
@@ -591,8 +631,10 @@ serve(async (req) => {
     // Right card content
     let rx = M + cardW + gap + 12;
     let ry = yCursor - 18;
+    const valueRightX = M + cardW + gap + cardW - 12;
     page.drawText(`${t.balance} :`, { x: rx, y: ry, size: 11, font: fontBold });
-    drawTextRight(fmt(balance, currency), M + cardW + gap + cardW - 12, ry, 13, fontBold); ry -= 18;
+    drawTextRight(fmt(balance, currency), valueRightX, ry, 13, fontBold);
+    ry -= 18;
 
     // Divider (border-t)
     page.drawLine({
@@ -603,13 +645,43 @@ serve(async (req) => {
     });
     ry -= 16;
 
-    // Previous balance row
-    page.drawText(t.prevBalance, { x: rx, y: ry, size: 11, font, color: COL_MUTED });
-    drawTextRight(fmt(previousBalance, currency), M + cardW + gap + cardW - 12, ry, 11, font); ry -= 16;
+    // Previous balance row (wrapped label)
+    {
+      const prevValText = fmt(previousBalance, currency);
+      const prevValW = font.widthOfTextAtSize(prevValText, 11);
+      const labelMaxW = Math.max(60, valueRightX - prevValW - 8 - rx);
+      const usedH = drawWrappedText({
+        text: t.prevBalance,
+        x: rx,
+        y: ry,
+        maxWidth: labelMaxW,
+        size: 11,
+        f: font,
+        color: COL_MUTED,
+        lineGap: 2,
+      });
+      drawTextRight(prevValText, valueRightX, ry, 11, font);
+      ry -= Math.max(16, usedH + 2);
+    }
 
-    // Overall balance row (bold)
-    page.drawText(t.overallBalance, { x: rx, y: ry, size: 11, font: fontBold });
-    drawTextRight(fmt(overallBalance, currency), M + cardW + gap + cardW - 12, ry, 11, fontBold);
+    // Overall balance row (wrapped label, bold)
+    {
+      const overallValText = fmt(overallBalance, currency);
+      const overallValW = fontBold.widthOfTextAtSize(overallValText, 11);
+      const labelMaxW = Math.max(60, valueRightX - overallValW - 8 - rx);
+      drawWrappedText({
+        text: t.overallBalance,
+        x: rx,
+        y: ry,
+        maxWidth: labelMaxW,
+        size: 11,
+        f: fontBold,
+        color: COL_TEXT,
+        lineGap: 2,
+      });
+      drawTextRight(overallValText, valueRightX, ry, 11, fontBold);
+      // This is the last row in the card; no further vertical shift needed
+    }
 
     // Move cursor below cards
     yCursor = yCursor - cardH - 20;
