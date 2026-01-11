@@ -311,12 +311,12 @@ const OwnerReports = () => {
           {isAdmin ? (
             <div>
               <div className="text-sm text-muted-foreground">Owner</div>
-              <Select value={ownerId} onValueChange={setOwnerId}>
+              <Select value={ownerId} onValueChange={(v) => setOwnerId(v === "__all__" ? "" : v)}>
                 <SelectTrigger className="w-[260px]">
                   <SelectValue placeholder="Select owner" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All owners</SelectItem>
+                  <SelectItem value="__all__">All owners</SelectItem>
                   {(owners ?? []).map((o) => (
                     <SelectItem key={o.id} value={o.id}>
                       {[o.first_name, o.last_name].filter(Boolean).join(" ") || o.id}
