@@ -286,13 +286,13 @@ const InvoiceDetail = () => {
         <div className="text-right">
           <div className="text-xl font-semibold leading-tight">{lang === "es" ? "Factura" : "Invoice"}</div>
           <div className="mt-2 space-x-2 print:hidden flex items-center gap-2">
-            <Button variant="secondary" asChild><Link to="/invoices">{t.back}</Link></Button>
+            <Button variant="secondary" size="sm" asChild><Link to="/invoices">{t.back}</Link></Button>
             {signedUrl ? (
-              <Button asChild><a href={signedUrl} target="_blank" rel="noreferrer">{t.openPdf}</a></Button>
+              <Button size="sm" asChild><a href={signedUrl} target="_blank" rel="noreferrer">{t.openPdf}</a></Button>
             ) : null}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="secondary">{lang === "es" ? "Generar PDF" : "Generate PDF"}</Button>
+                <Button variant="secondary" size="sm">{lang === "es" ? "Generar PDF" : "Generate PDF"}</Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 <DropdownMenuItem
@@ -329,7 +329,7 @@ const InvoiceDetail = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button onClick={() => window.print()}>{t.print}</Button>
+            <Button size="sm" onClick={() => window.print()}>{t.print}</Button>
           </div>
         </div>
       </div>
