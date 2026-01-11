@@ -171,6 +171,13 @@
   opacity: 0.8;
 }
 
+/* NEW: dark theme fixes for datetime-local and time inputs */
+.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+.dark input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.2);
+  opacity: 0.8;
+}
+
 /* React Big Calendar – dark theme overrides */
 .dark .rbc-calendar {
   background-color: hsl(var(--card)) !important;
