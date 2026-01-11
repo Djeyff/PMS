@@ -102,6 +102,8 @@ const ManagerReport = () => {
   useEffect(() => {
     // Reset generated state on month change; only sync dates when a real month is selected
     setGenerated(false);
+    // Clear avg rate so a new month's suggestion can auto-fill
+    setAvgRateInput("");
     const m = months.find((mm) => mm.value === monthValue);
     if (m) {
       setStartDate(m.start);
@@ -166,6 +168,13 @@ const ManagerReport = () => {
     };
     loadRate();
   }, [startDate, endDate, filteredPayments]);
+
+  // NEW: Auto-fill the input when a suggested rate is available (users can still edit/clear it)
+  useEffect(() => {
+    if (suggestedRate != null && (avgRateInput.trim() === "")) {
+      setAvgRateInput(suggestedRate.toFixed(6));
+    }
+  }, [suggestedRate, avgRateInput]);
 
   // Build owner breakdown (pro-rata by ownership percent for each property)
   const ownerRows: OwnerRow[] = useMemo(() => {
