@@ -85,7 +85,8 @@ export async function updateUserRoleAndAgency(params: {
     .single();
   if (tgtErr) throw tgtErr;
 
-  if (target.agency_id !== myProfile.agency_id) {
+  // If the target has a different non-null agency, block; if null, allow attaching to my agency
+  if (target.agency_id && target.agency_id !== myProfile.agency_id) {
     throw new Error("Cannot modify users outside your agency");
   }
 

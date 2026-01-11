@@ -40,6 +40,10 @@ const Users = () => {
   });
 
   const rows = useMemo(() => (data ?? []) as UserRow[], [data]);
+  const pendingRows = useMemo(
+    () => rows.filter((u) => !u.role || !u.agency_id),
+    [rows]
+  );
 
   return (
     <AppShell>
@@ -83,6 +87,74 @@ const Users = () => {
                           onValueChange={(v) => {
                             if (v === "pending") return;
                             // Only allow 'owner' or 'tenant' from client-side
+                            if (v === "agency_admin") {
+                              toast.error("Assigning Agency Admin must be done through a secure server workflow.");
+                              return;
+                            }
+                            mutation.mutate({ userId: u.id, role: v as "owner" | "tenant" });
+                          }}
+                        >
+                          <SelectTrigger className="w-[160px]">
+                            <SelectValue placeholder="Set role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="owner">Owner</SelectItem>
+                            <SelectItem value="tenant">Tenant</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            const nextRole = u.role === "owner" || u.role === "tenant" ? u.role : "tenant";
+                            mutation.mutate({ userId: u.id, role: nextRole });
+                          }}
+                          disabled={!agencyId || pending === u.id}
+                        >
+                          {pending === u.id ? "Saving..." : "Assign to my agency"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+        {/* Pending Approval subsection */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Pending Approval</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="text-sm text-muted-foreground">Loading...</div>
+            ) : pendingRows.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No pending users.</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User ID</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Assign</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pendingRows.map((u) => (
+                    <TableRow key={u.id}>
+                      <TableCell className="font-mono text-xs">{u.id}</TableCell>
+                      <TableCell>{[u.first_name, u.last_name].filter(Boolean).join(" ") || "—"}</TableCell>
+                      <TableCell className="font-mono text-xs">{u.email ?? "—"}</TableCell>
+                      <TableCell className="capitalize">{u.role ? u.role : "pending"}</TableCell>
+                      <TableCell className="space-x-2">
+                        <Select
+                          value={u.role ?? "pending"}
+                          onValueChange={(v) => {
+                            if (v === "pending") return;
                             if (v === "agency_admin") {
                               toast.error("Assigning Agency Admin must be done through a secure server workflow.");
                               return;
