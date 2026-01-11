@@ -131,19 +131,7 @@ const ManagerReport = () => {
     queryFn: () => fetchAgencyOwnerships(agencyId!),
   });
 
-  useEffect(() => {
-    const loadRate = async () => {
-      if (!startDate || !endDate) return;
-      try {
-        const avg = await fetchMonthlyAvgRate(startDate, endDate);
-        setSuggestedRate(avg);
-      } catch {
-        setSuggestedRate(null);
-      }
-    };
-    loadRate();
-  }, [startDate, endDate]);
-
+  // Declare filteredPayments BEFORE useEffect(loadRate) to avoid TS2448
   const filteredPayments = useMemo(() => {
     const rows = payments ?? [];
     if (!startDate || !endDate) return rows;
@@ -152,6 +140,32 @@ const ManagerReport = () => {
       return d >= startDate && d <= endDate;
     });
   }, [payments, startDate, endDate]);
+
+  useEffect(() => {
+    const loadRate = async () => {
+      if (!startDate || !endDate) return;
+
+      // First, try to derive the average from payments in the selected period
+      const paymentRates = (filteredPayments ?? [])
+        .map((p: any) => (typeof p.exchange_rate === "number" ? Number(p.exchange_rate) : null))
+        .filter((n) => n != null && Number.isFinite(n) && n > 0) as number[];
+
+      if (paymentRates.length > 0) {
+        const avgFromPayments = paymentRates.reduce((s, n) => s + n, 0) / paymentRates.length;
+        setSuggestedRate(avgFromPayments);
+        return;
+      }
+
+      // Fallback: query monthly average from exchange_rates table
+      try {
+        const avg = await fetchMonthlyAvgRate(startDate, endDate);
+        setSuggestedRate(avg);
+      } catch {
+        setSuggestedRate(null);
+      }
+    };
+    loadRate();
+  }, [startDate, endDate, filteredPayments]);
 
   // Build owner breakdown (pro-rata by ownership percent for each property)
   const ownerRows: OwnerRow[] = useMemo(() => {
