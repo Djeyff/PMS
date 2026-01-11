@@ -284,8 +284,7 @@ const InvoiceDetail = () => {
           </div>
         </div>
         <div className="text-right">
-          <div className="text-xl font-semibold leading-tight">{lang === "es" ? "Recibo" : "Receipt"}</div>
-          <div className="text-sm text-gray-600">{lang === "es" ? "Factura" : "Invoice"}</div>
+          <div className="text-xl font-semibold leading-tight">{lang === "es" ? "Factura" : "Invoice"}</div>
           <div className="mt-2 space-x-2 print:hidden flex items-center gap-2">
             <Button variant="secondary" asChild><Link to="/invoices">{t.back}</Link></Button>
             {signedUrl ? (

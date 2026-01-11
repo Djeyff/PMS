@@ -243,7 +243,6 @@ serve(async (req) => {
 
     // Titles
     page.drawText(t.receiptTitleTop, { x: M, y: contentStartY, size: 22, font: fontBold });
-    page.drawText(t.invoiceTitleSub, { x: M, y: contentStartY - 18, size: 12, font });
 
     // Info grid aligned to margins with shared baseline
     const leftX = M;

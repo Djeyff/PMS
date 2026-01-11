@@ -392,9 +392,8 @@ serve(async (req) => {
       page.drawText(agencyAddress, { x: textX, y: blockTop - 26, size: 9, font, color: COL_MUTED });
     }
 
-    // Right-aligned title block ("Recibo" top, "Factura" sub)
-    drawTextRight(lang === "es" ? "Recibo" : "Receipt", W - M, blockTop - 10, 18, fontBold);
-    drawTextRight(lang === "es" ? "Factura" : "Invoice", W - M, blockTop - 26, 10, font, COL_MUTED);
+    // Title: show only Factura/Invoice
+    drawTextRight(lang === "es" ? "Factura" : "Invoice", W - M, blockTop - 10, 18, fontBold);
 
     // Move cursor below header
     yCursor = blockTop - 52;
