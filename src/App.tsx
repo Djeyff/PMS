@@ -257,7 +257,7 @@ const App = () => (
                   path="/security"
                   element={
                     <ProtectedRoute>
-                      <RoleGate allow={["agency_admin"]}>
+                      <RoleGate allow={["agency_admin", "owner", "tenant"]}>
                         <Security />
                       </RoleGate>
                     </ProtectedRoute>
