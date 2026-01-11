@@ -267,7 +267,7 @@ const AgencyDashboard = () => {
       <div className="grid gap-4 grid-cols-1">
         <Card>
           <CardHeader>
-            <CardTitle>Partial Invoices</CardTitle>
+            <CardTitle className="text-orange-600">Partial Invoices</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {partialInvoices.length === 0 ? (

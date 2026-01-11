@@ -120,9 +120,9 @@ const OwnerReports = () => {
   }, [owners]);
 
   const { data: savedReports, refetch: refetchSaved } = useQuery({
-    queryKey: ["owner-saved-reports", agencyId, ownerId],
-    enabled: !!agencyId && isAdmin,
-    queryFn: () => listOwnerReports(agencyId!, ownerId || undefined),
+    queryKey: ["owner-saved-reports", agencyId, ownerId || (isOwner ? user?.id : "")],
+    enabled: !!agencyId && (!!ownerId || isOwner),
+    queryFn: () => listOwnerReports(agencyId!, (isOwner ? user?.id : ownerId) || undefined),
   });
 
   useEffect(() => {
@@ -576,9 +576,20 @@ function SavedReportRow({
       <TableCell>{fmt(ownerDopAfterFee, "DOP")}</TableCell>
       <TableCell className="print:hidden">
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setOpenEdit(true)}>Edit</Button>
-          <Button size="sm" onClick={() => setOpenInvoice(true)}>Invoice-style</Button>
-          <Button variant="destructive" size="sm" onClick={() => setOpenDelete(true)}>Delete</Button>
+          {/** Admin can edit/delete; owners read-only */}
+          {(typeof window !== 'undefined' && window.location.pathname === '/owner-reports')
+            ? null
+            : null}
+          {/** We can infer role by presence of admin-only props; simpler: hide Edit/Delete when not admin by checking if ownerNameMap has multiple owners (admin view) */}
+          {Object.keys(ownerNameMap || {}).length > 0 ? (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setOpenEdit(true)}>Edit</Button>
+              <Button size="sm" onClick={() => setOpenInvoice(true)}>View</Button>
+              <Button variant="destructive" size="sm" onClick={() => setOpenDelete(true)}>Delete</Button>
+            </>
+          ) : (
+            <Button size="sm" onClick={() => setOpenInvoice(true)}>View</Button>
+          )}
         </div>
         <EditOwnerReportDialog
           report={report}

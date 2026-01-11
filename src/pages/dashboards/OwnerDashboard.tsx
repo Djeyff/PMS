@@ -196,7 +196,7 @@ const OwnerDashboard = () => {
       {/* NEW: Partial Invoices (ALL) */}
       <Card>
         <CardHeader>
-          <CardTitle>Partial Invoices</CardTitle>
+          <CardTitle className="text-orange-600">Partial Invoices</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {partialInvoices.length === 0 ? (
@@ -255,59 +255,6 @@ const OwnerDashboard = () => {
                   </div>
                 );
               })}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Saved Owner Reports</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {!savedReports || savedReports.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No saved reports yet.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left">
-                    <th className="py-2 pr-4">Period</th>
-                    <th className="py-2 pr-4">USD (Your share)</th>
-                    <th className="py-2 pr-4">DOP (Your share)</th>
-                    <th className="py-2 pr-4">Fee (DOP)</th>
-                    <th className="py-2 pr-4">Cash after fee (DOP)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(savedReports as OwnerReportRow[]).map((r) => {
-                    const usdTotal = Number(r.usd_total || 0);
-                    const dopCash = Number(r.dop_cash_total || 0);
-                    const dopTransfer = Number(r.dop_transfer_total || 0);
-                    const dopTotal = Number(r.dop_total || dopCash + dopTransfer);
-                    const avgRate = r.avg_rate != null ? Number(r.avg_rate) : 0;
-
-                    // Fee based on total in DOP-equivalent (USD converted by avg_rate) + DOP totals
-                    const feeShareDop = ((usdTotal * avgRate) + dopTotal) * (feePercentSaved / 100);
-                    // Deduct fee from cash portion only (matches admin report logic)
-                    const feeDeducted = Math.min(feeShareDop, dopCash);
-                    const dopAfterFee = Math.max(0, dopCash - feeDeducted);
-
-                    return (
-                      <tr key={r.id} className="border-t">
-                        <td className="py-2 pr-4">{formatMonthLabel(r.month)}</td>
-                        <td className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(usdTotal)}</td>
-                        <td className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(dopTotal)}</td>
-                        <td className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(feeDeducted)}</td>
-                        <td className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(dopAfterFee)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <div className="text-xs text-muted-foreground mt-2">
-                Net is shown as cash after fee; fee percent assumed {feePercentSaved}%.
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>
