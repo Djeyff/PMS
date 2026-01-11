@@ -147,7 +147,7 @@ const PaymentListItemMobile: React.FC<Props> = ({ payment, onRefetch }) => {
                 }
               }}
             >
-              WhatsApp
+              QuickShare
             </Button>
             <Button
               size="sm"

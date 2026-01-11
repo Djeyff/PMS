@@ -255,7 +255,7 @@ const Payments = () => {
                                       }
                                     }}
                                   >
-                                    WhatsApp
+                                    QuickShare
                                   </Button>
                                   {/* NEW: Download receipt PDF */}
                                   <Button

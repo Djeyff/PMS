@@ -285,7 +285,7 @@ serve(async (req) => {
     const diffPay = payments.find((p: any) => p.exchange_rate && p.currency !== currency);
     return diffPay?.exchange_rate ? String(diffPay.exchange_rate) : "—";
   })();
-  // Payment date(s) text (unique, sorted)
+  // Unique, sorted payment dates (YYYY-MM-DD)
   const paymentDatesText = (() => {
     const raw = (payments ?? [])
       .map((p: any) => p.received_date)
@@ -616,7 +616,7 @@ serve(async (req) => {
     // Two cards (gray bg) side-by-side
     const gap = 16;
     const cardW = (W - M * 2 - gap) / 2;
-    const cardH = 180;
+    const cardH = 164;
 
     // Left card background
     page.drawRectangle({ x: M, y: yCursor - cardH, width: cardW, height: cardH, color: COL_GRAY50, borderColor: COL_GRAY50 });
@@ -631,8 +631,7 @@ serve(async (req) => {
 
     page.drawText(`${t.paid} :`, { x: lx, y: ly, size: 11, font }); ly -= 14;
     page.drawText(fmt(paidConverted, currency), { x: lx, y: ly, size: 11, font }); ly -= 16;
-
-    // Payment date(s)
+    // Payment dates
     page.drawText(`${t.paymentDate} :`, { x: lx, y: ly, size: 11, font }); ly -= 14;
     page.drawText(paymentDatesText, { x: lx, y: ly, size: 10, font }); ly -= 16;
 

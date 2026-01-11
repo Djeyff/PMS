@@ -228,18 +228,17 @@ const Invoices = () => {
                                         toast.info("Factura generada pero sin URL");
                                         return;
                                       }
-                                      const invoiceNumber = inv.number ?? inv.id;
                                       const tenantLabel = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Cliente";
                                       const fmtAmt = new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(Number(inv.total_amount));
-                                      const text = `Hola ${tenantLabel}, aquí está su factura ${invoiceNumber} por ${fmtAmt}, con vencimiento el ${inv.due_date}.`;
-                                      const filename = buildInvoicePdfFileName(invoiceNumber, tenantLabel, inv.issue_date);
+                                      const text = `Hola ${tenantLabel}, aquí está su factura ${inv.number ?? inv.id} por ${fmtAmt}, con vencimiento el ${inv.due_date}.`;
+                                      const filename = buildInvoicePdfFileName(inv.number ?? inv.id, tenantLabel, inv.issue_date);
                                       await sharePdfToWhatsApp(url, filename, text);
                                     } catch (e: any) {
                                       toast.error(e?.message ?? "Error al compartir por WhatsApp");
                                     }
                                   }}
                                 >
-                                  WhatsApp
+                                  QuickShare
                                 </Button>
                                 <Button
                                   size="sm"

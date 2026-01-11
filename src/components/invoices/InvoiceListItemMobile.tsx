@@ -114,7 +114,7 @@ const InvoiceListItemMobile: React.FC<Props> = ({ inv, onRefetch }) => {
                 }
               }}
             >
-              WhatsApp
+              QuickShare
             </Button>
             <Button
               size="sm"
