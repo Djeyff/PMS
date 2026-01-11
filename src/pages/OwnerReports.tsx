@@ -437,7 +437,7 @@ const OwnerReports = () => {
           <Card>
             <CardHeader className="flex items-center justify-between">
               <CardTitle>Saved Owner Reports</CardTitle>
-              <div className="text-sm text-muted-foreground">Edit the average rate or delete a saved statement; open invoice-style view.</div>
+              <div className="text-sm text-muted-foreground">Edit the average rate or delete a saved statement; open view.</div>
             </CardHeader>
             <CardContent>
               {!savedReports || savedReports.length === 0 ? (
@@ -476,6 +476,7 @@ const OwnerReports = () => {
                           onEdited={() => refetchSaved()}
                           ownerNameMap={ownerNameMap}
                           mgrReports={mgrReports ?? []}
+                          isAdmin={isAdmin}
                         />
                       ))}
                     </TableBody>
@@ -496,11 +497,13 @@ function SavedReportRow({
   onEdited,
   ownerNameMap,
   mgrReports,
+  isAdmin,
 }: {
   report: OwnerReportRow;
   onEdited: () => void;
   ownerNameMap: Record<string, string>;
   mgrReports: any[];
+  isAdmin: boolean;
 }) {
   const [openEdit, setOpenEdit] = useState(false);
   const [openInvoice, setOpenInvoice] = useState(false);
@@ -576,12 +579,7 @@ function SavedReportRow({
       <TableCell>{fmt(ownerDopAfterFee, "DOP")}</TableCell>
       <TableCell className="print:hidden">
         <div className="flex gap-2">
-          {/** Admin can edit/delete; owners read-only */}
-          {(typeof window !== 'undefined' && window.location.pathname === '/owner-reports')
-            ? null
-            : null}
-          {/** We can infer role by presence of admin-only props; simpler: hide Edit/Delete when not admin by checking if ownerNameMap has multiple owners (admin view) */}
-          {Object.keys(ownerNameMap || {}).length > 0 ? (
+          {isAdmin ? (
             <>
               <Button variant="outline" size="sm" onClick={() => setOpenEdit(true)}>Edit</Button>
               <Button size="sm" onClick={() => setOpenInvoice(true)}>View</Button>

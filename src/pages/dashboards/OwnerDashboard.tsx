@@ -9,6 +9,7 @@ import { fetchMyOwnerships } from "@/services/property-owners";
 import { fetchMaintenanceRequests } from "@/services/maintenance";
 import { fetchInvoices } from "@/services/invoices";
 import { listOwnerReports, type OwnerReportRow } from "@/services/owner-reports";
+import OwnerReportInvoiceDialog from "@/components/owner/OwnerReportInvoiceDialog";
 import { Link } from "react-router-dom";
 
 const Stat = ({ title, value, children }: { title: string; value?: string; children?: React.ReactNode }) => (
@@ -67,6 +68,9 @@ const OwnerDashboard = () => {
     enabled: role === "owner" && !!user?.id && !!profile?.agency_id,
     queryFn: () => listOwnerReports(profile!.agency_id!, user!.id),
   });
+
+  // Local state for viewing a saved owner report
+  const [openReport, setOpenReport] = React.useState<OwnerReportRow | null>(null);
 
   // Helper to format month label
   const formatMonthLabel = (ym?: string) => {
@@ -178,17 +182,13 @@ const OwnerDashboard = () => {
         <Stat title="Open Maintenance" value={String(maintenance?.length ?? 0)} />
       </div>
 
-      {/* NEW: Net after management fee (DOP) */}
       <Card>
         <CardHeader>
-          <CardTitle>Net After Management Fee</CardTitle>
+          <CardTitle>Owner Cash After Fee</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm">
-          <div className="flex flex-col gap-1">
-            <div>Fee percent: <strong>{feePercent}%</strong></div>
-            <div>Fee (DOP): <strong>{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(feeDeducted)}</strong></div>
-            <div>Cash after fee (DOP): <strong>{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(dopAfterFee)}</strong></div>
-            <div className="text-xs text-muted-foreground">USD converted using average rate from this month's payments{avgRate ? ` (~${avgRate.toFixed(4)})` : ""}.</div>
+        <CardContent>
+          <div className="text-2xl font-semibold">
+            {new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(dopAfterFee)}
           </div>
         </CardContent>
       </Card>
@@ -222,6 +222,62 @@ const OwnerDashboard = () => {
               })}
             </ul>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Saved Owner Reports (read-only for owners) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Saved Owner Reports</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!savedReports || savedReports.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No saved reports yet.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left">
+                    <th className="py-2 pr-4">Month</th>
+                    <th className="py-2 pr-4">USD (Your share)</th>
+                    <th className="py-2 pr-4">DOP (Your share)</th>
+                    <th className="py-2 pr-4">Avg rate</th>
+                    <th className="py-2 pr-4">Cash after fee (DOP)</th>
+                    <th className="py-2 pr-4">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(savedReports as OwnerReportRow[]).map((r) => {
+                    const usdTotal = Number(r.usd_total || 0);
+                    const dopCash = Number(r.dop_cash_total || 0);
+                    const dopTransfer = Number(r.dop_transfer_total || 0);
+                    const dopTotal = Number(r.dop_total || dopCash + dopTransfer);
+                    const avgR = r.avg_rate != null ? Number(r.avg_rate) : 0;
+                    const feeShareDop = ((usdTotal * avgR) + dopTotal) * (feePercentSaved / 100);
+                    const feeDeductedSaved = Math.min(feeShareDop, dopCash);
+                    const dopAfterFeeSaved = Math.max(0, dopCash - feeDeductedSaved);
+                    return (
+                      <tr key={r.id} className="border-t">
+                        <td className="py-2 pr-4">{formatMonthLabel(r.month)}</td>
+                        <td className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(usdTotal)}</td>
+                        <td className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(dopTotal)}</td>
+                        <td className="py-2 pr-4">{avgR ? avgR.toFixed(6) : "—"}</td>
+                        <td className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(dopAfterFeeSaved)}</td>
+                        <td className="py-2 pr-4">
+                          <button className="underline" onClick={() => setOpenReport(r)}>View</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <OwnerReportInvoiceDialog
+            report={openReport as any}
+            open={!!openReport}
+            onOpenChange={(v) => !v && setOpenReport(null)}
+          />
         </CardContent>
       </Card>
 
