@@ -433,60 +433,60 @@ const OwnerReports = () => {
           </CardContent>
         </Card>
 
-        {/* Saved Reports list */}
-        {isAdmin && (
-          <Card>
-            <CardHeader className="flex items-center justify-between">
-              <CardTitle>Saved Owner Reports</CardTitle>
-              <div className="text-sm text-muted-foreground">Edit the average rate or delete a saved statement; open view.</div>
-            </CardHeader>
-            <CardContent>
-              {!savedReports || savedReports.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No saved reports yet.</div>
-              ) : isMobile ? (
-                <div>
-                  {savedReports.map((r: any) => (
-                    <SavedOwnerReportItemMobile
-                      key={r.id}
-                      report={r}
-                      ownerName={ownerNameMap[r.owner_id] ?? r.owner_id}
-                      onEdited={() => refetchSaved()}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Month</TableHead>
-                        <TableHead>Owner</TableHead>
-                        <TableHead>USD total</TableHead>
-                        <TableHead>DOP total</TableHead>
-                        <TableHead>Avg rate</TableHead>
-                        <TableHead>Fee share (DOP)</TableHead>
-                        <TableHead>DOP after fee</TableHead>
-                        <TableHead className="print:hidden">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {savedReports.map((r: OwnerReportRow) => (
-                        <SavedReportRow
-                          key={r.id}
-                          report={r}
-                          onEdited={() => refetchSaved()}
-                          ownerNameMap={ownerNameMap}
-                          mgrReports={mgrReports ?? []}
-                          isAdmin={isAdmin}
-                        />
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
+        {/* Saved Reports list (owners: read-only with View; admins: edit/delete/view) */}
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <CardTitle>Saved Owner Reports</CardTitle>
+            <div className="text-sm text-muted-foreground">
+              {isAdmin ? "Edit, delete or view saved statements." : "View your saved statements."}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {!savedReports || savedReports.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No saved reports yet.</div>
+            ) : isMobile ? (
+              <div>
+                {savedReports.map((r: any) => (
+                  <SavedOwnerReportItemMobile
+                    key={r.id}
+                    report={r}
+                    ownerName={ownerNameMap[r.owner_id] ?? (isAdmin ? r.owner_id : "You")}
+                    onEdited={() => refetchSaved()}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Month</TableHead>
+                      <TableHead>Owner</TableHead>
+                      <TableHead>USD total</TableHead>
+                      <TableHead>DOP total</TableHead>
+                      <TableHead>Avg rate</TableHead>
+                      <TableHead>Fee share (DOP)</TableHead>
+                      <TableHead>DOP after fee</TableHead>
+                      <TableHead className="print:hidden">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {savedReports.map((r: OwnerReportRow) => (
+                      <SavedReportRow
+                        key={r.id}
+                        report={r}
+                        onEdited={() => refetchSaved()}
+                        ownerNameMap={ownerNameMap}
+                        mgrReports={mgrReports ?? []}
+                        isAdmin={isAdmin}
+                      />
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </AppShell>
   );

@@ -1,5 +1,6 @@
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
 import { fetchProperties } from "@/services/properties";
@@ -235,18 +236,18 @@ const OwnerDashboard = () => {
             <div className="text-sm text-muted-foreground">No saved reports yet.</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left">
-                    <th className="py-2 pr-4">Month</th>
-                    <th className="py-2 pr-4">USD (Your share)</th>
-                    <th className="py-2 pr-4">DOP (Your share)</th>
-                    <th className="py-2 pr-4">Avg rate</th>
-                    <th className="py-2 pr-4">Cash after fee (DOP)</th>
-                    <th className="py-2 pr-4">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="py-2 pr-4">Month</TableHead>
+                    <TableHead className="py-2 pr-4">USD (Your share)</TableHead>
+                    <TableHead className="py-2 pr-4">DOP (Your share)</TableHead>
+                    <TableHead className="py-2 pr-4">Avg rate</TableHead>
+                    <TableHead className="py-2 pr-4">Cash after fee (DOP)</TableHead>
+                    <TableHead className="py-2 pr-4">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {(savedReports as OwnerReportRow[]).map((r) => {
                     const usdTotal = Number(r.usd_total || 0);
                     const dopCash = Number(r.dop_cash_total || 0);
@@ -257,20 +258,20 @@ const OwnerDashboard = () => {
                     const feeDeductedSaved = Math.min(feeShareDop, dopCash);
                     const dopAfterFeeSaved = Math.max(0, dopCash - feeDeductedSaved);
                     return (
-                      <tr key={r.id} className="border-t">
-                        <td className="py-2 pr-4">{formatMonthLabel(r.month)}</td>
-                        <td className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(usdTotal)}</td>
-                        <td className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(dopTotal)}</td>
-                        <td className="py-2 pr-4">{avgR ? avgR.toFixed(6) : "—"}</td>
-                        <td className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(dopAfterFeeSaved)}</td>
-                        <td className="py-2 pr-4">
+                      <TableRow key={r.id} className="border-t">
+                        <TableCell className="py-2 pr-4">{formatMonthLabel(r.month)}</TableCell>
+                        <TableCell className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(usdTotal)}</TableCell>
+                        <TableCell className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(dopTotal)}</TableCell>
+                        <TableCell className="py-2 pr-4">{avgR ? avgR.toFixed(6) : "—"}</TableCell>
+                        <TableCell className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(dopAfterFeeSaved)}</TableCell>
+                        <TableCell className="py-2 pr-4">
                           <button className="underline" onClick={() => setOpenReport(r)}>View</button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
           <OwnerReportInvoiceDialog
