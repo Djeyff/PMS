@@ -120,9 +120,9 @@ const OwnerReports = () => {
   }, [owners]);
 
   const { data: savedReports, refetch: refetchSaved } = useQuery({
-    queryKey: ["owner-saved-reports", agencyId, ownerId || (isOwner ? user?.id : "")],
-    enabled: !!agencyId && (!!ownerId || isOwner),
-    queryFn: () => listOwnerReports(agencyId!, (isOwner ? user?.id : ownerId) || undefined),
+    queryKey: ["owner-saved-reports", agencyId, isOwner ? user?.id : ownerId],
+    enabled: !!agencyId,
+    queryFn: () => listOwnerReports(agencyId!, isOwner ? user!.id : ownerId || undefined),
   });
 
   useEffect(() => {
@@ -316,6 +316,7 @@ const OwnerReports = () => {
                   <SelectValue placeholder="Select owner" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="">All owners</SelectItem>
                   {(owners ?? []).map((o) => (
                     <SelectItem key={o.id} value={o.id}>
                       {[o.first_name, o.last_name].filter(Boolean).join(" ") || o.id}
