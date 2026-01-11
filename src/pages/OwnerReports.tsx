@@ -451,14 +451,21 @@ const OwnerReports = () => {
               <div className="text-sm text-muted-foreground">No saved reports yet.</div>
             ) : isMobile ? (
               <div>
-                {savedReports.map((r: any) => (
-                  <SavedOwnerReportItemMobile
-                    key={r.id}
-                    report={r}
-                    ownerName={ownerNameMap[r.owner_id] ?? (isAdmin ? r.owner_id : "You")}
-                    onEdited={() => refetchSaved()}
-                  />
-                ))}
+                {savedReports.map((r: any) => {
+                  const selfName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ");
+                  const label =
+                    r.owner_id === user?.id
+                      ? (selfName ? `${selfName} (You)` : "You")
+                      : (ownerNameMap[r.owner_id] ?? r.owner_id);
+                  return (
+                    <SavedOwnerReportItemMobile
+                      key={r.id}
+                      report={r}
+                      ownerName={label}
+                      onEdited={() => refetchSaved()}
+                    />
+                  );
+                })}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -515,8 +522,13 @@ function SavedReportRow({
   const [openInvoice, setOpenInvoice] = useState(false);
   const [openDelete, setOpenDelete] = useState(false);
   const { toast } = useToast();
+  const { user, profile } = useAuth();
 
-  const displayOwner = ownerNameMap[report.owner_id] ?? report.owner_id;
+  const selfName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ");
+  const displayOwner =
+    report.owner_id === user?.id
+      ? (selfName ? `${selfName} (You)` : "You")
+      : (ownerNameMap[report.owner_id] ?? report.owner_id);
 
   const formatMonthLabel = (ym?: string) => {
     const parts = String(ym ?? "").split("-");
