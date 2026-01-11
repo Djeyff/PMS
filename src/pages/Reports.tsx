@@ -20,6 +20,7 @@ import { fetchAgencyOwnerships } from "@/services/property-owners";
 import { sendOwnerReport } from "@/services/reports";
 import { useToast } from "@/components/ui/use-toast";
 import { fetchMyOwnerships } from "@/services/property-owners";
+import { supabase } from "@/integrations/supabase/client";
 
 function fmtMoney(amount: number, currency: "USD" | "DOP") {
   return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
@@ -109,6 +110,52 @@ const Reports = () => {
     enabled: !!agencyId && !!role,
     queryFn: () => fetchPayments({ role, userId: user?.id ?? null, agencyId }),
   });
+
+  // ADD: derive average USD/DOP rate for the selected range (from payments; fallback to exchange_rates)
+  const [avgRate, setAvgRate] = useState<number | null>(null);
+
+  React.useEffect(() => {
+    const loadRate = async () => {
+      if (!startDate || !endDate) {
+        setAvgRate(null);
+        return;
+      }
+      const inRange = (payments ?? []).filter((p: any) => {
+        const d = String(p.received_date ?? "").slice(0, 10);
+        return d >= startDate && d <= endDate;
+      });
+      const paymentRates = inRange
+        .map((p: any) => (typeof p.exchange_rate === "number" ? Number(p.exchange_rate) : null))
+        .filter((n: any) => n != null && Number.isFinite(n) && n > 0) as number[];
+
+      if (paymentRates.length > 0) {
+        const avg = paymentRates.reduce((s, n) => s + n, 0) / paymentRates.length;
+        setAvgRate(avg);
+        return;
+      }
+
+      // Fallback to exchange_rates table
+      const { data, error } = await supabase
+        .from("exchange_rates")
+        .select("rate")
+        .gte("date", startDate)
+        .lte("date", endDate)
+        .eq("base_currency", "USD")
+        .eq("target_currency", "DOP");
+      if (error) {
+        setAvgRate(null);
+        return;
+      }
+      const rates = (data ?? []).map((r: any) => Number(r.rate)).filter((n) => Number.isFinite(n) && n > 0);
+      if (rates.length === 0) {
+        setAvgRate(null);
+      } else {
+        const avg = rates.reduce((s, n) => s + n, 0) / rates.length;
+        setAvgRate(avg);
+      }
+    };
+    loadRate();
+  }, [payments, startDate, endDate]);
 
   // Owner share map (for owner role)
   const { data: myShares } = useQuery({
@@ -230,6 +277,19 @@ const Reports = () => {
     });
     return Array.from(result.entries()).map(([ownerId, val]) => ({ ownerId, ...val }));
   }, [ownerships, payments, startDate, endDate, isAdmin]);
+
+  // Enrich owner payout rows with fee and payoutAfterFee using avgRate and 5%
+  const ownerPayoutRowsWithFee = useMemo(() => {
+    const rate = Number.isFinite(Number(avgRate)) && (avgRate ?? 0) > 0 ? (avgRate as number) : NaN;
+    const feePct = 0.05; // 5%
+    return ownerPayoutRows.map((r) => {
+      const baseDop = (Number.isNaN(rate) ? 0 : r.usd * rate) + r.dop;
+      const feeDop = baseDop * feePct;
+      const feeDeducted = Math.min(feeDop, r.dop);
+      const payoutAfterFee = Math.max(0, r.dop - feeDeducted);
+      return { ...r, feeDop: feeDeducted, payoutAfterFee };
+    });
+  }, [ownerPayoutRows, avgRate]);
 
   // Tenant payment history table rows (filtered by tenant)
   const tenantHistoryRows = useMemo(() => {
@@ -525,7 +585,7 @@ const Reports = () => {
                     exportCSV(
                       "owner_payouts.csv",
                       ["Owner", "USD", "DOP"],
-                      ownerPayoutRows
+                      ownerPayoutRowsWithFee
                         .filter((r) => (ownerFilter === "all" ? true : r.ownerId === ownerFilter))
                         .map((r) => [r.name, r.usd.toFixed(2), r.dop.toFixed(2)])
                     )
@@ -541,12 +601,19 @@ const Reports = () => {
             <CardContent>
               {isMobile ? (
                 <div>
-                  {ownerPayoutRows
+                  {ownerPayoutRowsWithFee
                     .filter((r) => (ownerFilter === "all" ? true : r.ownerId === ownerFilter))
                     .map((r) => (
-                      <OwnerPayoutItemMobile key={r.ownerId} name={r.name} usd={r.usd} dop={r.dop} />
+                      <OwnerPayoutItemMobile
+                        key={r.ownerId}
+                        name={r.name}
+                        usd={r.usd}
+                        dop={r.dop}
+                        feeDop={r.feeDop}
+                        payoutAfterFee={r.payoutAfterFee}
+                      />
                     ))}
-                  {ownerPayoutRows.length === 0 && (
+                  {ownerPayoutRowsWithFee.length === 0 && (
                     <div className="text-muted-foreground text-sm">No payouts in range.</div>
                   )}
                 </div>
@@ -557,21 +624,25 @@ const Reports = () => {
                       <TableHead>Owner</TableHead>
                       <TableHead>USD</TableHead>
                       <TableHead>DOP</TableHead>
+                      <TableHead>Mgmt fee (DOP)</TableHead>
+                      <TableHead>Payout (DOP after fee)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {ownerPayoutRows
+                    {ownerPayoutRowsWithFee
                       .filter((r) => (ownerFilter === "all" ? true : r.ownerId === ownerFilter))
                       .map((r) => (
                         <TableRow key={r.ownerId}>
                           <TableCell>{r.name}</TableCell>
                           <TableCell>{fmtMoney(r.usd, "USD")}</TableCell>
                           <TableCell>{fmtMoney(r.dop, "DOP")}</TableCell>
+                          <TableCell>{fmtMoney(r.feeDop ?? 0, "DOP")}</TableCell>
+                          <TableCell>{fmtMoney(r.payoutAfterFee ?? r.dop, "DOP")}</TableCell>
                         </TableRow>
                       ))}
-                    {ownerPayoutRows.length === 0 && (
+                    {ownerPayoutRowsWithFee.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={3} className="text-muted-foreground text-sm">No payouts in range.</TableCell>
+                        <TableCell colSpan={5} className="text-muted-foreground text-sm">No payouts in range.</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
