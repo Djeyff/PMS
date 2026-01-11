@@ -1,49 +1,64 @@
 import { supabase } from "@/integrations/supabase/client";
 
-const BUCKET = "branding";
-
-async function ensureBucket() {
-  const { data: buckets } = await supabase.storage.listBuckets();
-  const exists = (buckets ?? []).some((b: any) => b.name === BUCKET);
-  if (!exists) {
-    // Create as PRIVATE bucket instead of public
-    await supabase.storage.createBucket(BUCKET, { public: false });
+// Helper: file to base64 (no data URL prefix)
+async function fileToBase64(file: File): Promise<string> {
+  const buf = await file.arrayBuffer()
+  const bytes = new Uint8Array(buf)
+  let binary = ""
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i])
   }
+  // btoa is available in browsers
+  return btoa(binary)
 }
 
 export async function uploadLogo(file: File) {
-  await ensureBucket();
-  const path = "logo.png";
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-    contentType: file.type || "image/png",
-    upsert: true,
-  });
-  if (error) throw error;
-  return true;
+  const { data: sess } = await supabase.auth.getSession()
+  const token = sess.session?.access_token
+  if (!token) throw new Error("Not authenticated")
+
+  const base64 = await fileToBase64(file)
+  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/branding-upload"
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "logo", contentType: file.type || "image/png", content: base64 })
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error || `Upload failed (${res.status})`)
+  }
+  return true
 }
 
 export async function getLogoPublicUrl() {
-  await ensureBucket();
-  // If the bucket is private, this returns a non-accessible URL; callers should switch to signed URLs if needed.
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl("logo.png");
-  return data.publicUrl;
+  // Return public URL (bucket is set to public by the edge function)
+  const { data } = supabase.storage.from("branding").getPublicUrl("logo.png")
+  return data.publicUrl
 }
 
 export async function uploadFavicon(file: File) {
-  await ensureBucket();
-  const path = "favicon.png";
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-    contentType: file.type || "image/png",
-    upsert: true,
-  });
-  if (error) throw error;
-  return true;
+  const { data: sess } = await supabase.auth.getSession()
+  const token = sess.session?.access_token
+  if (!token) throw new Error("Not authenticated")
+
+  const base64 = await fileToBase64(file)
+  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/branding-upload"
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "favicon", contentType: file.type || "image/png", content: base64 })
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error || `Upload failed (${res.status})`)
+  }
+  return true
 }
 
 export async function getFaviconPublicUrl() {
-  await ensureBucket();
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl("favicon.png");
-  return data.publicUrl;
+  const { data } = supabase.storage.from("branding").getPublicUrl("favicon.png")
+  return data.publicUrl
 }
 
 export function applyFavicon(url: string) {
