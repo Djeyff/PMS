@@ -170,3 +170,106 @@
   filter: invert(1) brightness(1.2);
   opacity: 0.8;
 }
+
+/* React Big Calendar – dark theme overrides */
+.dark .rbc-calendar {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+}
+
+/* Toolbar */
+.dark .rbc-toolbar {
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.5rem !important;
+  padding: 0.25rem !important;
+  background-color: transparent !important;
+  color: hsl(var(--foreground)) !important;
+}
+.dark .rbc-toolbar .rbc-toolbar-label {
+  color: hsl(var(--foreground)) !important;
+}
+.dark .rbc-toolbar button {
+  background-color: transparent !important;
+  color: hsl(var(--foreground)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+}
+.dark .rbc-toolbar button:hover {
+  background-color: hsl(var(--accent)) !important;
+  color: hsl(var(--accent-foreground)) !important;
+}
+.dark .rbc-toolbar button.rbc-active,
+.dark .rbc-toolbar button:active {
+  background-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  border-color: hsl(var(--primary)) !important;
+}
+
+/* Grid, borders, headers */
+.dark .rbc-month-view,
+.dark .rbc-time-view {
+  border-color: hsl(var(--border)) !important;
+}
+.dark .rbc-header {
+  background: transparent !important;
+  color: hsl(var(--muted-foreground)) !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+}
+.dark .rbc-month-row,
+.dark .rbc-day-bg,
+.dark .rbc-time-view .rbc-time-content,
+.dark .rbc-timeslot-group,
+.dark .rbc-time-header {
+  border-color: hsl(var(--border)) !important;
+}
+
+/* Date cells */
+.dark .rbc-date-cell,
+.dark .rbc-time-header-gutter,
+.dark .rbc-time-gutter {
+  color: hsl(var(--muted-foreground)) !important;
+}
+.dark .rbc-date-cell a {
+  color: inherit !important;
+}
+
+/* Off-range days */
+.dark .rbc-off-range-bg {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+.dark .rbc-off-range {
+  color: hsl(var(--muted-foreground)) !important;
+  opacity: 0.7 !important;
+}
+
+/* Today highlight */
+.dark .rbc-today {
+  background-color: rgba(59, 130, 246, 0.10) !important; /* blue-500 @ 10% */
+}
+
+/* Events */
+.dark .rbc-event,
+.dark .rbc-day-slot .rbc-background-event {
+  background-color: hsl(var(--primary)) !important;
+  border-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+.dark .rbc-event.rbc-selected {
+  background-color: hsl(var(--primary)) !important;
+}
+.dark .rbc-show-more {
+  color: hsl(var(--primary)) !important;
+}
+
+/* Popup overlay */
+.dark .rbc-overlay {
+  background: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Slot selection */
+.dark .rbc-slot-selection {
+  background: rgba(59, 130, 246, 0.15) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
