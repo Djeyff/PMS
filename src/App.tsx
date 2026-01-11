@@ -191,7 +191,7 @@ const App = () => (
                   path="/settings"
                   element={
                     <ProtectedRoute>
-                      <RoleGate allow={["agency_admin"]}>
+                      <RoleGate allow={["agency_admin", "owner", "tenant"]}>
                         <Settings />
                       </RoleGate>
                     </ProtectedRoute>
@@ -237,7 +237,7 @@ const App = () => (
                   path="/owner-reports"
                   element={
                     <ProtectedRoute>
-                      <RoleGate allow={["agency_admin"]}>
+                      <RoleGate allow={["agency_admin", "owner"]}>
                         <OwnerReports />
                       </RoleGate>
                     </ProtectedRoute>

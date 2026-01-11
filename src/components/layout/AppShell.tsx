@@ -7,11 +7,20 @@ import { useAuth } from "@/contexts/AuthProvider";
 import type { Role } from "@/contexts/AuthProvider";
 import CurrencySelector from "@/components/CurrencySelector";
 import MobileNav from "@/components/layout/mobile-nav";
+import { useQuery } from "@tanstack/react-query";
+import { fetchAgencyById } from "@/services/agencies";
 
 const AppShell = ({ children }: { children: React.ReactNode }) => {
-  const { role, signOut } = useAuth();
+  const { role, signOut, profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  const { data: agency } = useQuery({
+    queryKey: ["appshell-agency", profile?.agency_id],
+    enabled: !!profile?.agency_id,
+    queryFn: () => fetchAgencyById(profile!.agency_id!),
+  });
+  const brandName = agency?.name ?? "PMS";
 
   const navItems: { to: string; label: string; icon: any; roles: Role[] }[] = [
     { to: "/dashboard", label: "Dashboard", icon: Home, roles: ["agency_admin", "owner", "tenant"] as Role[] },
@@ -24,13 +33,13 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
     { to: "/maintenance", label: "Maintenance", icon: Wrench, roles: ["agency_admin", "owner", "tenant"] as Role[] },
     { to: "/reports", label: "Reports", icon: BarChart3, roles: ["agency_admin", "owner"] as Role[] },
     { to: "/manager-report", label: "Manager Report", icon: UserCog, roles: ["agency_admin"] as Role[] },
-    { to: "/owner-reports", label: "Owner Reports", icon: UserCog, roles: ["agency_admin"] as Role[] },
+    { to: "/owner-reports", label: "Owner Reports", icon: UserCog, roles: ["agency_admin", "owner"] as Role[] },
     { to: "/calendar", label: "Calendar", icon: CalendarIcon, roles: ["agency_admin", "owner", "tenant"] as Role[] },
     { to: "/outstanding", label: "Outstanding", icon: History, roles: ["agency_admin"] as Role[] },
     { to: "/logs", label: "Activity Log", icon: History, roles: ["agency_admin"] as Role[] },
     { to: "/users", label: "Users", icon: Users, roles: ["agency_admin"] as Role[] },
     { to: "/security", label: "Security", icon: Shield, roles: ["agency_admin"] as Role[] },
-    { to: "/settings", label: "Settings", icon: Settings, roles: ["agency_admin"] as Role[] },
+    { to: "/settings", label: "Settings", icon: Settings, roles: ["agency_admin", "owner", "tenant"] as Role[] },
   ];
 
   return (
@@ -38,7 +47,7 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
       <div className="flex min-h-screen bg-background text-foreground">
         <Sidebar className="hidden md:flex">
           <SidebarHeader>
-            <Link to="/dashboard" className="font-semibold text-lg">PMS</Link>
+            <Link to="/dashboard" className="font-semibold text-lg">{brandName}</Link>
           </SidebarHeader>
           <SidebarContent>
             <SidebarGroup>
@@ -73,7 +82,7 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
             style={{ paddingTop: "env(safe-area-inset-top)" }}
           >
             <div className="md:hidden">
-              <Link to="/dashboard" className="font-semibold text-lg">PMS</Link>
+              <Link to="/dashboard" className="font-semibold text-lg">{brandName}</Link>
             </div>
             <div className="flex-1" />
             <div className="flex items-center gap-3">

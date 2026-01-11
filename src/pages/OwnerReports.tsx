@@ -20,6 +20,7 @@ import SavedOwnerReportItemMobile from "@/components/owner/SavedOwnerReportItemM
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { listManagerReports } from "@/services/manager-reports";
+import { fetchMyOwnerships } from "@/services/property-owners";
 
 function fmt(amount: number, currency: "USD" | "DOP") {
   return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
@@ -64,6 +65,7 @@ const OwnerReports = () => {
   const { role, user, profile } = useAuth();
   const { toast } = useToast();
   const isAdmin = role === "agency_admin";
+  const isOwner = role === "owner";
   const agencyId = profile?.agency_id ?? null;
 
   const months = useMemo(() => monthList(12), []);
@@ -72,7 +74,7 @@ const OwnerReports = () => {
   const [startDate, setStartDate] = useState<string>(months[0]?.start ?? "");
   const [endDate, setEndDate] = useState<string>(months[0]?.end ?? "");
 
-  const [ownerId, setOwnerId] = useState<string>("");
+  const [ownerId, setOwnerId] = useState<string>(isAdmin ? "" : (user?.id ?? ""));
 
   const [avgRateInput, setAvgRateInput] = useState<string>("");
   const [suggestedRate, setSuggestedRate] = useState<number | null>(null);
@@ -89,6 +91,12 @@ const OwnerReports = () => {
     queryFn: () => fetchAgencyOwnerships(agencyId!),
   });
 
+  const { data: myOwnerships } = useQuery({
+    queryKey: ["owner-my-ownerships", user?.id],
+    enabled: isOwner && !!user?.id,
+    queryFn: () => fetchMyOwnerships(user!.id),
+  });
+
   const { data: owners } = useQuery({
     queryKey: ["owner-owners", agencyId],
     enabled: !!agencyId && isAdmin,
@@ -97,7 +105,7 @@ const OwnerReports = () => {
 
   const { data: mgrReports } = useQuery({
     queryKey: ["owner-mgr-reports", agencyId],
-    enabled: !!agencyId,
+    enabled: !!agencyId && isAdmin,
     queryFn: () => listManagerReports(agencyId!),
   });
 
@@ -148,13 +156,46 @@ const OwnerReports = () => {
   }, [payments, startDate, endDate]);
 
   const ownerProps = useMemo(() => {
-    if (!ownerId) return [];
-    return (ownerships ?? []).filter((o) => o.owner_id === ownerId);
-  }, [ownerships, ownerId]);
+    if (isAdmin) {
+      if (!ownerId) return [];
+      return (ownerships ?? []).filter((o) => o.owner_id === ownerId);
+    }
+    // Owner: use my ownerships directly
+    return (myOwnerships ?? []);
+  }, [ownerships, ownerId, myOwnerships, isAdmin]);
 
-  const ownedPropIds = useMemo(() => new Set(ownerProps.map((o) => o.property_id)), [ownerProps]);
+  // Normalized list so we can safely map regardless of array or Map form
+  const ownerPropItems = useMemo(() => {
+    if (Array.isArray(ownerProps)) {
+      return ownerProps.map((o: any) => ({
+        property_id: o.property_id,
+        ownership_percent: o.ownership_percent,
+      }));
+    }
+    if (ownerProps instanceof Map) {
+      return Array.from(ownerProps.entries()).map(([property_id, percent]) => ({
+        property_id,
+        ownership_percent: percent as number | null,
+      }));
+    }
+    return [];
+  }, [ownerProps]);
 
-  const percentByProp = useMemo(() => new Map<string, number>(ownerProps.map((o) => [o.property_id, o.ownership_percent == null ? 100 : Number(o.ownership_percent)])), [ownerProps]);
+  const ownedPropIds = useMemo(
+    () => new Set(ownerPropItems.map((o) => o.property_id)),
+    [ownerPropItems]
+  );
+
+  const percentByProp = useMemo(
+    () =>
+      new Map<string, number>(
+        ownerPropItems.map((o) => [
+          o.property_id,
+          o.ownership_percent == null ? 100 : Number(o.ownership_percent),
+        ])
+      ),
+    [ownerPropItems]
+  );
 
   const rows = useMemo(() => {
     const list: Array<{ property: string; date: string; method: string; assigned: boolean; usd: number; dop: number; rate: number | null }> = [];
@@ -182,6 +223,28 @@ const OwnerReports = () => {
     const dopTransfer = rows.filter((r) => r.method === "Transfer").reduce((s, r) => s + r.dop, 0);
     return { usdCash, dopCash, usdTransfer, dopTransfer };
   }, [rows]);
+
+  // Effective rate to use in fee calculations
+  const effectiveRate = useMemo(() => {
+    const fromInput = avgRateInput && Number(avgRateInput) > 0 ? Number(avgRateInput) : null;
+    return fromInput ?? (suggestedRate != null ? Number(suggestedRate) : 0);
+  }, [avgRateInput, suggestedRate]);
+
+  const feePercent = useMemo(() => {
+    if (isAdmin && mgrReports && mgrReports.length > 0) {
+      const m = (mgrReports as any[])[0];
+      return Number(m?.fee_percent ?? 5);
+    }
+    return 5;
+  }, [isAdmin, mgrReports]);
+
+  const ownerUsdTotal = useMemo(() => totals.usdCash + totals.usdTransfer, [totals]);
+  const ownerDopCash = useMemo(() => totals.dopCash, [totals]);
+  const ownerDopTransfer = useMemo(() => totals.dopTransfer, [totals]);
+  const ownerDopTotal = useMemo(() => ownerDopCash + ownerDopTransfer, [ownerDopCash, ownerDopTransfer]);
+  const ownerFeeShareDop = useMemo(() => ((ownerUsdTotal * effectiveRate) + ownerDopTotal) * (feePercent / 100), [ownerUsdTotal, effectiveRate, ownerDopTotal, feePercent]);
+  const ownerFeeDeducted = useMemo(() => Math.min(ownerFeeShareDop, ownerDopCash), [ownerFeeShareDop, ownerDopCash]);
+  const ownerDopAfterFee = useMemo(() => Math.max(0, ownerDopCash - ownerFeeDeducted), [ownerDopCash, ownerFeeDeducted]);
 
   const applySuggestedRate = () => {
     if (suggestedRate == null) {
@@ -245,21 +308,25 @@ const OwnerReports = () => {
               </div>
             </div>
           </div>
-          <div>
-            <div className="text-sm text-muted-foreground">Owner</div>
-            <Select value={ownerId} onValueChange={setOwnerId}>
-              <SelectTrigger className="w-[260px]">
-                <SelectValue placeholder="Select owner" />
-              </SelectTrigger>
-              <SelectContent>
-                {(owners ?? []).map((o) => (
-                  <SelectItem key={o.id} value={o.id}>
-                    {[o.first_name, o.last_name].filter(Boolean).join(" ") || o.id}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {isAdmin ? (
+            <div>
+              <div className="text-sm text-muted-foreground">Owner</div>
+              <Select value={ownerId} onValueChange={setOwnerId}>
+                <SelectTrigger className="w-[260px]">
+                  <SelectValue placeholder="Select owner" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(owners ?? []).map((o) => (
+                    <SelectItem key={o.id} value={o.id}>
+                      {[o.first_name, o.last_name].filter(Boolean).join(" ") || o.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">Owner: You</div>
+          )}
         </div>
 
         <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
@@ -287,6 +354,18 @@ const OwnerReports = () => {
               {avgRateInput ? avgRateInput : suggestedRate != null ? suggestedRate.toFixed(6) : "—"}
             </CardContent>
           </Card>
+          {isOwner && (
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Your Management Fee</CardTitle></CardHeader>
+              <CardContent>
+                <div className="text-sm">
+                  <div>Fee percent: <span className="font-medium">{feePercent}%</span></div>
+                  <div>Fee (DOP): <span className="font-medium">{fmt(ownerFeeDeducted, "DOP")}</span></div>
+                  <div>Cash after fee (DOP): <span className="font-medium">{fmt(ownerDopAfterFee, "DOP")}</span></div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         <Card>
@@ -354,56 +433,58 @@ const OwnerReports = () => {
         </Card>
 
         {/* Saved Reports list */}
-        <Card>
-          <CardHeader className="flex items-center justify-between">
-            <CardTitle>Saved Owner Reports</CardTitle>
-            <div className="text-sm text-muted-foreground">Edit the average rate or delete a saved statement; open invoice-style view.</div>
-          </CardHeader>
-          <CardContent>
-            {!savedReports || savedReports.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No saved reports yet.</div>
-            ) : isMobile ? (
-              <div>
-                {savedReports.map((r: any) => (
-                  <SavedOwnerReportItemMobile
-                    key={r.id}
-                    report={r}
-                    ownerName={ownerNameMap[r.owner_id] ?? r.owner_id}
-                    onEdited={() => refetchSaved()}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Month</TableHead>
-                      <TableHead>Owner</TableHead>
-                      <TableHead>USD total</TableHead>
-                      <TableHead>DOP total</TableHead>
-                      <TableHead>Avg rate</TableHead>
-                      <TableHead>Fee share (DOP)</TableHead>
-                      <TableHead>DOP after fee</TableHead>
-                      <TableHead className="print:hidden">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {savedReports.map((r: OwnerReportRow) => (
-                      <SavedReportRow
-                        key={r.id}
-                        report={r}
-                        onEdited={() => refetchSaved()}
-                        ownerNameMap={ownerNameMap}
-                        mgrReports={mgrReports ?? []}
-                      />
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {isAdmin && (
+          <Card>
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle>Saved Owner Reports</CardTitle>
+              <div className="text-sm text-muted-foreground">Edit the average rate or delete a saved statement; open invoice-style view.</div>
+            </CardHeader>
+            <CardContent>
+              {!savedReports || savedReports.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No saved reports yet.</div>
+              ) : isMobile ? (
+                <div>
+                  {savedReports.map((r: any) => (
+                    <SavedOwnerReportItemMobile
+                      key={r.id}
+                      report={r}
+                      ownerName={ownerNameMap[r.owner_id] ?? r.owner_id}
+                      onEdited={() => refetchSaved()}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Month</TableHead>
+                        <TableHead>Owner</TableHead>
+                        <TableHead>USD total</TableHead>
+                        <TableHead>DOP total</TableHead>
+                        <TableHead>Avg rate</TableHead>
+                        <TableHead>Fee share (DOP)</TableHead>
+                        <TableHead>DOP after fee</TableHead>
+                        <TableHead className="print:hidden">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {savedReports.map((r: OwnerReportRow) => (
+                        <SavedReportRow
+                          key={r.id}
+                          report={r}
+                          onEdited={() => refetchSaved()}
+                          ownerNameMap={ownerNameMap}
+                          mgrReports={mgrReports ?? []}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </AppShell>
   );
