@@ -7,6 +7,7 @@ export type CalendarSettings = {
   lease_alert_days: number;
   lease_alert_time?: string | null; // NEW: HH:MM
   updated_at?: string;
+  timezone?: string | null; // NEW: per-user timezone
 };
 
 export async function getMyCalendarSettings(): Promise<CalendarSettings | null> {

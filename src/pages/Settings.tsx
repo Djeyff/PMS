@@ -13,9 +13,11 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchAgencyById, updateAgencyTimezone, updateAgencyProfile } from "@/services/agencies";
 import { useTheme } from "@/contexts/ThemeProvider";
 import { uploadLogo, getLogoPublicUrl, uploadFavicon, getFaviconPublicUrl, applyFavicon } from "@/services/branding";
+import { getMyCalendarSettings, saveMyCalendarSettings } from "@/services/calendar-settings";
+import { updateMyProfile } from "@/services/users";
 
 const Settings = () => {
-  const { profile, refreshProfile } = useAuth();
+  const { profile, refreshProfile, role } = useAuth();
   const { theme, setTheme } = useTheme();
   const [pendingTheme, setPendingTheme] = useState<"light" | "dark">(theme);
   const [savingTheme, setSavingTheme] = useState(false);
@@ -29,6 +31,25 @@ const Settings = () => {
     queryKey: ["agency", profile?.agency_id],
     enabled: hasAgency,
     queryFn: () => fetchAgencyById(profile!.agency_id!),
+  });
+
+  // NEW: My profile states
+  const [myFirstName, setMyFirstName] = useState<string>(profile?.first_name ?? "");
+  const [myLastName, setMyLastName] = useState<string>(profile?.last_name ?? "");
+  const [myPhone, setMyPhone] = useState<string>((profile as any)?.phone ?? "");
+  const [savingMyProfile, setSavingMyProfile] = useState(false);
+
+  React.useEffect(() => {
+    setMyFirstName(profile?.first_name ?? "");
+    setMyLastName(profile?.last_name ?? "");
+    setMyPhone((profile as any)?.phone ?? "");
+  }, [profile?.first_name, profile?.last_name, (profile as any)?.phone]);
+
+  // Load per-user calendar settings
+  const { data: myCalSettings } = useQuery({
+    queryKey: ["my-calendar-settings"],
+    queryFn: getMyCalendarSettings,
+    enabled: !!profile?.id,
   });
 
   // Branding states
@@ -50,14 +71,22 @@ const Settings = () => {
     { value: "America/Los_Angeles", label: "GMT-8/7 — Los Angeles" },
   ];
   const [timezone, setTimezone] = useState<string>(agency?.timezone ?? "UTC");
+  const [myTimezone, setMyTimezone] = useState<string>(myCalSettings?.timezone ?? "UTC");
+
+  React.useEffect(() => {
+    if (agency?.timezone != null) setTimezone(agency.timezone || "UTC");
+  }, [agency?.timezone]);
+
+  React.useEffect(() => {
+    if (myCalSettings?.timezone != null) setMyTimezone(myCalSettings.timezone || "UTC");
+  }, [myCalSettings?.timezone]);
 
   const [logoUrl, setLogoUrl] = useState<string>("");
   const [faviconUrl, setFaviconUrl] = useState<string>("");
 
   React.useEffect(() => {
-    if (agency?.timezone != null) setTimezone(agency.timezone || "UTC");
     if (agency?.address != null) setAddress(agency.address || "");
-  }, [agency?.timezone, agency?.address]);
+  }, [agency?.address]);
 
   React.useEffect(() => {
     // Try to load logo preview
@@ -96,6 +125,37 @@ const Settings = () => {
       toast.error(e?.message ?? "Failed to update timezone");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // NEW: Save my personal timezone
+  const onSaveMyTimezone = async () => {
+    setSaving(true);
+    try {
+      await saveMyCalendarSettings({ timezone: myTimezone });
+      toast.success("Your timezone was saved");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save your timezone");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // NEW: Save my profile info
+  const onSaveMyProfile = async () => {
+    setSavingMyProfile(true);
+    try {
+      await updateMyProfile({
+        first_name: myFirstName,
+        last_name: myLastName,
+        phone: myPhone,
+      });
+      await refreshProfile();
+      toast.success("Profile updated");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to update profile");
+    } finally {
+      setSavingMyProfile(false);
     }
   };
 
@@ -157,153 +217,221 @@ const Settings = () => {
     <AppShell>
       <div className="space-y-6 max-w-2xl">
         <h1 className="text-xl font-semibold">Settings</h1>
+
+        {/* NEW: My Settings (visible to all roles) */}
         <Card>
           <CardHeader>
-            <CardTitle>Agency Setup</CardTitle>
+            <CardTitle>My Settings</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {hasAgency ? (
-              <>
-                <div className="space-y-2 text-sm">
-                  <div className="text-muted-foreground">Status</div>
-                  <div className="rounded-md border p-3">
-                    You are assigned to an agency. You can now manage users and properties.
-                  </div>
-                </div>
+            {/* Profile */}
+            <div className="space-y-2">
+              <Label>First Name</Label>
+              <Input
+                value={myFirstName}
+                onChange={(e) => setMyFirstName(e.target.value)}
+                placeholder="Your first name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Last Name</Label>
+              <Input
+                value={myLastName}
+                onChange={(e) => setMyLastName(e.target.value)}
+                placeholder="Your last name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Phone</Label>
+              <Input
+                value={myPhone}
+                onChange={(e) => setMyPhone(e.target.value)}
+                placeholder="+1 555 123 4567"
+              />
+            </div>
+            <div className="pt-2">
+              <Button onClick={onSaveMyProfile} disabled={savingMyProfile}>
+                {savingMyProfile ? "Saving..." : "Save Profile"}
+              </Button>
+            </div>
 
-                <div className="space-y-2">
-                  <Label>Theme</Label>
-                  <div className="flex items-center gap-2">
-                    <Select value={pendingTheme} onValueChange={(v) => setPendingTheme(v as "light" | "dark")}>
-                      <SelectTrigger className="w-[200px]">
-                        <SelectValue placeholder="Select theme" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="light">Light</SelectItem>
-                        <SelectItem value="dark">Dark</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant="outline"
-                      onClick={async () => {
-                        setSavingTheme(true);
-                        setTheme(pendingTheme);
-                        toast.success("Theme saved");
-                        setSavingTheme(false);
-                      }}
-                      disabled={savingTheme}
-                    >
-                      {savingTheme ? "Saving..." : "Save Theme"}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Timezone</Label>
-                  <Select value={timezone} onValueChange={(v) => setTimezone(v)}>
-                    <SelectTrigger className="w-[280px]">
-                      <SelectValue placeholder="Select timezone" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIMEZONES.map((tz) => (
-                        <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <div className="pt-2">
-                    <Button variant="outline" onClick={onSaveTimezone} disabled={saving}>
-                      {saving ? "Saving..." : "Save Timezone"}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Agency Name</Label>
-                  <Input
-                    value={agencyDisplayName}
-                    onChange={(e) => setAgencyDisplayName(e.target.value)}
-                    placeholder="Las Terrenas Properties"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Invoice Address (shown on PDF)</Label>
-                  <Input
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="278 calle Duarte, LTI building, Las Terrenas"
-                  />
-                </div>
-
-                <div className="pt-2">
-                  <Button onClick={onSaveAgencyInfo} disabled={saving}>
-                    {saving ? "Saving..." : "Save Agency Info"}
-                  </Button>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Brand Logo (PNG)</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="file"
-                      accept="image/png"
-                      onChange={(e) => onUploadLogo(e.target.files?.[0])}
-                    />
-                    {logoUrl ? (
-                      <img src={logoUrl} alt="Logo" className="h-10 w-auto rounded border" />
-                    ) : (
-                      <div className="text-xs text-muted-foreground">No logo uploaded</div>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    The logo is stored as branding/logo.png and printed on invoice PDFs.
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Favicon (PNG or ICO)</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="file"
-                      accept="image/png,image/x-icon"
-                      onChange={(e) => onUploadFavicon(e.target.files?.[0])}
-                    />
-                    {faviconUrl ? (
-                      <img src={faviconUrl} alt="Favicon" className="h-8 w-8 rounded border" />
-                    ) : (
-                      <div className="text-xs text-muted-foreground">Using default favicon</div>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    This replaces the browser tab icon. If not set, the default /favicon.ico is used.
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Label>Agency Name</Label>
-                  <Input value={agencyName} onChange={(e) => setAgencyName(e.target.value)} placeholder="Your Agency LLC" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Default Currency</Label>
-                  <Select value={currency} onValueChange={(v) => setCurrency(v as "USD" | "DOP")}>
-                    <SelectTrigger className="w-[160px]">
-                      <SelectValue placeholder="Currency" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="DOP">DOP</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button onClick={onCreateAgency} disabled={saving}>
-                  {saving ? "Creating..." : "Create Agency"}
+            {/* Theme */}
+            <div className="space-y-2">
+              <Label>Theme</Label>
+              <div className="flex items-center gap-2">
+                <Select value={pendingTheme} onValueChange={(v) => setPendingTheme(v as "light" | "dark")}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Select theme" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="light">Light</SelectItem>
+                    <SelectItem value="dark">Dark</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    setSavingTheme(true);
+                    setTheme(pendingTheme);
+                    toast.success("Theme saved");
+                    setSavingTheme(false);
+                  }}
+                  disabled={savingTheme}
+                >
+                  {savingTheme ? "Saving..." : "Save Theme"}
                 </Button>
-              </>
-            )}
+              </div>
+            </div>
+
+            {/* Personal Timezone */}
+            <div className="space-y-2">
+              <Label>My Timezone</Label>
+              <Select value={myTimezone} onValueChange={(v) => setMyTimezone(v)}>
+                <SelectTrigger className="w-[280px]">
+                  <SelectValue placeholder="Select timezone" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIMEZONES.map((tz) => (
+                    <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="pt-2">
+                <Button variant="outline" onClick={onSaveMyTimezone} disabled={saving}>
+                  {saving ? "Saving..." : "Save My Timezone"}
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
+
+        {/* Agency Setup: only visible for admins */}
+        {role === "agency_admin" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Agency Setup</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {hasAgency ? (
+                <>
+                  <div className="space-y-2 text-sm">
+                    <div className="text-muted-foreground">Status</div>
+                    <div className="rounded-md border p-3">
+                      You are assigned to an agency. You can now manage users and properties.
+                    </div>
+                  </div>
+
+                  {/* Agency Timezone */}
+                  <div className="space-y-2">
+                    <Label>Agency Timezone</Label>
+                    <Select value={timezone} onValueChange={(v) => setTimezone(v)}>
+                      <SelectTrigger className="w-[280px]">
+                        <SelectValue placeholder="Select timezone" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TIMEZONES.map((tz) => (
+                          <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="pt-2">
+                      <Button variant="outline" onClick={onSaveTimezone} disabled={saving}>
+                        {saving ? "Saving..." : "Save Agency Timezone"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Agency Name */}
+                  <div className="space-y-2">
+                    <Label>Agency Name</Label>
+                    <Input
+                      value={agencyDisplayName}
+                      onChange={(e) => setAgencyDisplayName(e.target.value)}
+                      placeholder="Las Terrenas Properties"
+                    />
+                  </div>
+
+                  {/* Address */}
+                  <div className="space-y-2">
+                    <Label>Invoice Address (shown on PDF)</Label>
+                    <Input
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      placeholder="278 calle Duarte, LTI building, Las Terrenas"
+                    />
+                  </div>
+
+                  <div className="pt-2">
+                    <Button onClick={onSaveAgencyInfo} disabled={saving}>
+                      {saving ? "Saving..." : "Save Agency Info"}
+                    </Button>
+                  </div>
+
+                  {/* Branding */}
+                  <div className="space-y-2">
+                    <Label>Brand Logo (PNG)</Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="file"
+                        accept="image/png"
+                        onChange={(e) => onUploadLogo(e.target.files?.[0])}
+                      />
+                      {logoUrl ? (
+                        <img src={logoUrl} alt="Logo" className="h-10 w-auto rounded border" />
+                      ) : (
+                        <div className="text-xs text-muted-foreground">No logo uploaded</div>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      The logo is stored as branding/logo.png and printed on invoice PDFs.
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Favicon (PNG or ICO)</Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="file"
+                        accept="image/png,image/x-icon"
+                        onChange={(e) => onUploadFavicon(e.target.files?.[0])}
+                      />
+                      {faviconUrl ? (
+                        <img src={faviconUrl} alt="Favicon" className="h-8 w-8 rounded border" />
+                      ) : (
+                        <div className="text-xs text-muted-foreground">Using default favicon</div>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      This replaces the browser tab icon. If not set, the default /favicon.ico is used.
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label>Agency Name</Label>
+                    <Input value={agencyName} onChange={(e) => setAgencyName(e.target.value)} placeholder="Your Agency LLC" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Default Currency</Label>
+                    <Select value={currency} onValueChange={(v) => setCurrency(v as "USD" | "DOP")}>
+                      <SelectTrigger className="w-[160px]">
+                        <SelectValue placeholder="Currency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="USD">USD</SelectItem>
+                        <SelectItem value="DOP">DOP</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button onClick={onCreateAgency} disabled={saving}>
+                    {saving ? "Creating..." : "Create Agency"}
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </AppShell>
   );

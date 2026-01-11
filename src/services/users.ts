@@ -42,6 +42,28 @@ export async function fetchOwnerProfilesInAgency(agencyId: string) {
   return (data ?? []) as UserRow[];
 }
 
+export async function updateMyProfile(patch: {
+  first_name?: string | null;
+  last_name?: string | null;
+  phone?: string | null;
+  avatar_url?: string | null;
+  email?: string | null;
+}) {
+  const { data: ures } = await supabase.auth.getUser();
+  const uid = ures.user?.id;
+  if (!uid) throw new Error("Not authenticated");
+
+  // Update only allowed fields; RLS enforces that role and agency_id remain unchanged
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({ ...patch })
+    .eq("id", uid)
+    .select("id")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 // Restrict client-side updates: only allow changing role within the same agency,
 // and disallow elevating to agency_admin from the client.
 export async function updateUserRoleAndAgency(params: {
