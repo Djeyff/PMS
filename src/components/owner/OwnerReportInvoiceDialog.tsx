@@ -15,7 +15,7 @@ import { getLogoPublicUrl } from "@/services/branding";
 import { listManagerReports } from "@/services/manager-reports";
 
 type Props = {
-  report: OwnerReportRow;
+  report: OwnerReportRow | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
 };
@@ -25,20 +25,23 @@ function fmt(amount: number, currency: "USD" | "DOP") {
 }
 
 const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange }) => {
+  // Early exit: do not render or run logic if dialog isn't open or report is missing
+  if (!open || !report) return null;
+
   const { role, user, profile } = useAuth();
   const agencyId = profile?.agency_id ?? null;
   const isAdmin = role === "agency_admin";
 
   const { data: agency } = useQuery({
     queryKey: ["owner-invoice-agency", agencyId],
-    enabled: open && !!agencyId,
+    enabled: open && !!agencyId && !!report,
     queryFn: () => fetchAgencyById(agencyId!),
   });
 
   // Load manager reports for fee info
   const { data: mgrReports } = useQuery({
     queryKey: ["owner-invoice-mgr", agencyId],
-    enabled: open && !!agencyId,
+    enabled: open && !!agencyId && !!report,
     queryFn: () => listManagerReports(agencyId!),
   });
 
@@ -50,19 +53,19 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
 
   const { data: payments } = useQuery({
     queryKey: ["owner-invoice-payments", role, user?.id, agencyId],
-    enabled: open && !!role && !!agencyId,
+    enabled: open && !!role && !!agencyId && !!report,
     queryFn: () => fetchPayments({ role, userId: user?.id ?? null, agencyId }),
   });
 
   const { data: ownerships } = useQuery({
     queryKey: ["owner-invoice-ownerships", agencyId],
-    enabled: open && !!agencyId && isAdmin,
+    enabled: open && !!agencyId && isAdmin && !!report,
     queryFn: () => fetchAgencyOwnerships(agencyId!),
   });
 
   const { data: owners } = useQuery({
     queryKey: ["owner-invoice-owners", agencyId],
-    enabled: open && !!agencyId && isAdmin,
+    enabled: open && !!agencyId && isAdmin && !!report,
     queryFn: () => fetchOwnerProfilesInAgency(agencyId!),
   });
 
