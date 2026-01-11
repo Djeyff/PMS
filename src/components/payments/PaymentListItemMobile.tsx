@@ -10,6 +10,7 @@ import DeletePaymentDialog from "@/components/payments/DeletePaymentDialog";
 import Money from "@/components/Money";
 import { useAuth } from "@/contexts/AuthProvider";
 import { openWhatsAppShare } from "@/utils/whatsapp";
+import { downloadFileFromUrl, buildPdfFileName } from "@/utils/download";
 
 type Props = {
   payment: any;
@@ -130,21 +131,47 @@ const PaymentListItemMobile: React.FC<Props> = ({ payment, onRefetch }) => {
               variant="secondary"
               onClick={async () => {
                 try {
-                  const out = await generatePaymentReceiptPDF(payment.id, "en");
+                  // Default to Spanish
+                  const out = await generatePaymentReceiptPDF(payment.id, "es");
                   const url = out.url;
                   if (!url) {
-                    toast.info("Receipt generated but no URL returned");
+                    toast.info("Recibo generado pero sin URL");
                     return;
                   }
                   const fmtAmt = new Intl.NumberFormat(undefined, { style: "currency", currency: payment.currency }).format(Number(payment.amount));
-                  const text = `Hello ${tenantName}, here is your payment receipt for ${fmtAmt} on ${payment.received_date}.\n${url}`;
+                  const text = `Hola ${tenantName}, aquí está su recibo de pago por ${fmtAmt} del ${payment.received_date}.\n${url}`;
                   openWhatsAppShare(payment.tenant?.phone ?? null, text);
                 } catch (e: any) {
-                  toast.error(e?.message ?? "Failed to share via WhatsApp");
+                  toast.error(e?.message ?? "Error al compartir por WhatsApp");
                 }
               }}
             >
               WhatsApp
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                try {
+                  const out = await generatePaymentReceiptPDF(payment.id, "es");
+                  const url = out.url;
+                  if (!url) {
+                    toast.info("Recibo generado pero sin URL");
+                    return;
+                  }
+                  const filename = buildPdfFileName(
+                    tenantName || "Cliente",
+                    propName || "Propiedad",
+                    payment.received_date
+                  );
+                  await downloadFileFromUrl(url, filename);
+                  onRefetch && onRefetch();
+                } catch (e: any) {
+                  toast.error(e?.message ?? "No se pudo descargar el PDF");
+                }
+              }}
+            >
+              Download PDF
             </Button>
           </>
         )}

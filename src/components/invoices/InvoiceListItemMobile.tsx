@@ -9,6 +9,7 @@ import { generateInvoicePDF } from "@/services/invoices";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { openWhatsAppShare } from "@/utils/whatsapp";
+import { downloadFileFromUrl, buildPdfFileName } from "@/utils/download";
 
 type Props = {
   inv: any;
@@ -96,22 +97,46 @@ const InvoiceListItemMobile: React.FC<Props> = ({ inv, onRefetch }) => {
               variant="secondary"
               onClick={async () => {
                 try {
-                  const out = await generateInvoicePDF(inv.id, "en", { sendEmail: false, sendWhatsApp: false });
+                  // Default to Spanish
+                  const out = await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
                   const url = out.url;
                   if (!url) {
-                    toast.info("Invoice generated but no URL returned");
+                    toast.info("Factura generada pero sin URL");
                     return;
                   }
-                  const tenantName = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Tenant";
+                  const tenantLabel = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Cliente";
                   const fmtAmt = new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(Number(inv.total_amount));
-                  const text = `Hello ${tenantName}, here is your invoice ${inv.number ?? inv.id} for ${fmtAmt}, due on ${inv.due_date}.\n${url}`;
+                  const text = `Hola ${tenantLabel}, aquí está su factura ${inv.number ?? inv.id} por ${fmtAmt}, con vencimiento el ${inv.due_date}.\n${url}`;
                   openWhatsAppShare(inv.tenant?.phone ?? null, text);
                 } catch (e: any) {
-                  toast.error(e?.message ?? "Failed to share via WhatsApp");
+                  toast.error(e?.message ?? "Error al compartir por WhatsApp");
                 }
               }}
             >
               WhatsApp
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                try {
+                  const out = await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
+                  const url = out.url;
+                  if (!url) {
+                    toast.info("Factura generada pero sin URL");
+                    return;
+                  }
+                  const tenantName = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Cliente";
+                  const propName = inv.lease?.property?.name ?? (inv.lease_id?.slice(0, 8) || "Propiedad");
+                  const filename = buildPdfFileName(tenantName, propName, inv.issue_date);
+                  await downloadFileFromUrl(url, filename);
+                  onRefetch && onRefetch();
+                } catch (e: any) {
+                  toast.error(e?.message ?? "No se pudo descargar el PDF");
+                }
+              }}
+            >
+              Download PDF
             </Button>
           </>
         )}

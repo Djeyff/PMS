@@ -19,6 +19,7 @@ import { runAutoInvoice } from "@/services/auto-invoice";
 import { useIsMobile } from "@/hooks/use-mobile";
 import InvoiceListItemMobile from "@/components/invoices/InvoiceListItemMobile";
 import { openWhatsAppShare } from "@/utils/whatsapp";
+import { downloadFileFromUrl, buildPdfFileName } from "@/utils/download";
 
 const data = [
   { number: "INV-1001", tenant: "Maria Gomez", due: "2024-08-05", total: 1200, currency: "USD" as const, status: "paid" as const },
@@ -211,22 +212,46 @@ const Invoices = () => {
                                   variant="secondary"
                                   onClick={async () => {
                                     try {
-                                      const out = await generateInvoicePDF(inv.id, "en", { sendEmail: false, sendWhatsApp: false });
+                                      // Default to Spanish for WhatsApp
+                                      const out = await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
                                       const url = out.url;
                                       if (!url) {
-                                        toast.info("Invoice generated but no URL returned");
+                                        toast.info("Factura generada pero sin URL");
                                         return;
                                       }
-                                      const tenantName = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Tenant";
+                                      const tenantLabel = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Cliente";
                                       const fmtAmt = new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(Number(inv.total_amount));
-                                      const text = `Hello ${tenantName}, here is your invoice ${inv.number ?? inv.id} for ${fmtAmt}, due on ${inv.due_date}.\n${url}`;
+                                      const text = `Hola ${tenantLabel}, aquí está su factura ${inv.number ?? inv.id} por ${fmtAmt}, con vencimiento el ${inv.due_date}.\n${url}`;
                                       openWhatsAppShare(inv.tenant?.phone ?? null, text);
                                     } catch (e: any) {
-                                      toast.error(e?.message ?? "Failed to share via WhatsApp");
+                                      toast.error(e?.message ?? "Error al compartir por WhatsApp");
                                     }
                                   }}
                                 >
                                   WhatsApp
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={async () => {
+                                    try {
+                                      const out = await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
+                                      const url = out.url;
+                                      if (!url) {
+                                        toast.info("Factura generada pero sin URL");
+                                        return;
+                                      }
+                                      const tenantName = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Cliente";
+                                      const propName = inv.lease?.property?.name ?? (inv.lease_id?.slice(0, 8) || "Propiedad");
+                                      const filename = buildPdfFileName(tenantName, propName, inv.issue_date);
+                                      await downloadFileFromUrl(url, filename);
+                                      toast.success("PDF descargado");
+                                    } catch (e: any) {
+                                      toast.error(e?.message ?? "No se pudo descargar el PDF");
+                                    }
+                                  }}
+                                >
+                                  Download PDF
                                 </Button>
                                 <EditInvoiceDialog invoice={inv} onUpdated={() => refetch()} />
                                 <DeleteInvoiceDialog id={inv.id} onDeleted={() => refetch()} />

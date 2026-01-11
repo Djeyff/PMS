@@ -16,6 +16,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import PaymentListItemMobile from "@/components/payments/PaymentListItemMobile";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { openWhatsAppShare } from "@/utils/whatsapp";
+import { downloadFileFromUrl, buildPdfFileName } from "@/utils/download";
 
 const Payments = () => {
   const { role, user, profile } = useAuth();
@@ -238,21 +239,47 @@ const Payments = () => {
                                     variant="secondary"
                                     onClick={async () => {
                                       try {
-                                        const out = await generatePaymentReceiptPDF(p.id, "en");
+                                        // Default to Spanish for WhatsApp
+                                        const out = await generatePaymentReceiptPDF(p.id, "es");
                                         const url = out.url;
                                         if (!url) {
-                                          toast.info("Receipt generated but no URL returned");
+                                          toast.info("Recibo generado pero sin URL");
                                           return;
                                         }
                                         const fmtAmt = new Intl.NumberFormat(undefined, { style: "currency", currency: p.currency }).format(Number(p.amount));
-                                        const text = `Hello ${tenantName}, here is your payment receipt for ${fmtAmt} on ${p.received_date}.\n${url}`;
+                                        const text = `Hola ${tenantName}, aquí está su recibo de pago por ${fmtAmt} del ${p.received_date}.\n${url}`;
                                         openWhatsAppShare(p.tenant?.phone ?? null, text);
                                       } catch (e: any) {
-                                        toast.error(e?.message ?? "Failed to share via WhatsApp");
+                                        toast.error(e?.message ?? "Error al compartir por WhatsApp");
                                       }
                                     }}
                                   >
                                     WhatsApp
+                                  </Button>
+                                  {/* NEW: Download receipt PDF */}
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={async () => {
+                                      try {
+                                        const out = await generatePaymentReceiptPDF(p.id, "es");
+                                        const url = out.url;
+                                        if (!url) {
+                                          toast.info("Recibo generado pero sin URL");
+                                          return;
+                                        }
+                                        const filename = buildPdfFileName(
+                                          tenantName || "Cliente",
+                                          propName || "Propiedad",
+                                          p.received_date
+                                        );
+                                        await downloadFileFromUrl(url, filename);
+                                      } catch (e: any) {
+                                        toast.error(e?.message ?? "No se pudo descargar el PDF");
+                                      }
+                                    }}
+                                  >
+                                    Download PDF
                                   </Button>
                                 </>
                               )}
