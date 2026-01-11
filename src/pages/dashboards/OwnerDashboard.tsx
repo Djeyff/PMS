@@ -8,6 +8,7 @@ import { fetchPayments } from "@/services/payments";
 import { fetchMyOwnerships } from "@/services/property-owners";
 import { fetchMaintenanceRequests } from "@/services/maintenance";
 import { fetchInvoices } from "@/services/invoices";
+import { listOwnerReports, type OwnerReportRow } from "@/services/owner-reports";
 
 const Stat = ({ title, value, children }: { title: string; value?: string; children?: React.ReactNode }) => (
   <Card>
@@ -58,6 +59,28 @@ const OwnerDashboard = () => {
     queryFn: fetchInvoices,
     enabled: role === "owner" && !!user,
   });
+
+  // NEW: Saved Owner Reports for this owner
+  const { data: savedReports } = useQuery({
+    queryKey: ["owner-saved-reports-dashboard", profile?.agency_id, user?.id],
+    enabled: role === "owner" && !!user?.id && !!profile?.agency_id,
+    queryFn: () => listOwnerReports(profile!.agency_id!, user!.id),
+  });
+
+  // Helper to format month label
+  const formatMonthLabel = (ym?: string) => {
+    const parts = String(ym ?? "").split("-");
+    if (parts.length !== 2) return ym ?? "";
+    const y = Number(parts[0]);
+    const m = Number(parts[1]) - 1;
+    if (!Number.isFinite(y) || !Number.isFinite(m)) return ym ?? "";
+    const d = new Date(y, m, 1);
+    const label = d.toLocaleString(undefined, { month: "long", year: "numeric" });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  };
+
+  // NEW: default fee percent used in Saved Owner Reports section
+  const feePercentSaved = 5;
 
   const hasNoProps = (props?.length ?? 0) === 0;
 
@@ -211,6 +234,59 @@ const OwnerDashboard = () => {
                   <span>{new Intl.NumberFormat(undefined, { style: "currency", currency: p.currency }).format(p.amount)}</span>
                 </div>
               ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Saved Owner Reports</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!savedReports || savedReports.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No saved reports yet.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left">
+                    <th className="py-2 pr-4">Period</th>
+                    <th className="py-2 pr-4">USD total</th>
+                    <th className="py-2 pr-4">DOP total</th>
+                    <th className="py-2 pr-4">Fee (DOP)</th>
+                    <th className="py-2 pr-4">Cash after fee (DOP)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(savedReports as OwnerReportRow[]).map((r) => {
+                    const usdTotal = Number(r.usd_total || 0);
+                    const dopCash = Number(r.dop_cash_total || 0);
+                    const dopTransfer = Number(r.dop_transfer_total || 0);
+                    const dopTotal = Number(r.dop_total || dopCash + dopTransfer);
+                    const avgRate = r.avg_rate != null ? Number(r.avg_rate) : 0;
+
+                    // Fee based on total in DOP-equivalent (USD converted by avg_rate) + DOP totals
+                    const feeShareDop = ((usdTotal * avgRate) + dopTotal) * (feePercentSaved / 100);
+                    // Deduct fee from cash portion only (matches admin report logic)
+                    const feeDeducted = Math.min(feeShareDop, dopCash);
+                    const dopAfterFee = Math.max(0, dopCash - feeDeducted);
+
+                    return (
+                      <tr key={r.id} className="border-t">
+                        <td className="py-2 pr-4">{formatMonthLabel(r.month)}</td>
+                        <td className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(usdTotal)}</td>
+                        <td className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(dopTotal)}</td>
+                        <td className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(feeDeducted)}</td>
+                        <td className="py-2 pr-4">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(dopAfterFee)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div className="text-xs text-muted-foreground mt-2">
+                Net is shown as cash after fee; fee percent assumed {feePercentSaved}%.
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
