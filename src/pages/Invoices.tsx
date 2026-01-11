@@ -20,6 +20,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import InvoiceListItemMobile from "@/components/invoices/InvoiceListItemMobile";
 import { sharePdfToWhatsApp } from "@/utils/whatsapp";
 import { downloadFileFromUrl, buildPdfFileName, buildInvoicePdfFileName } from "@/utils/download";
+import { getTenantNamesForInvoices } from "@/services/tenant-names";
 
 const data = [
   { number: "INV-1001", tenant: "Maria Gomez", due: "2024-08-05", total: 1200, currency: "USD" as const, status: "paid" as const },
@@ -34,6 +35,14 @@ const Invoices = () => {
     queryKey: ["invoices"],
     queryFn: fetchInvoices,
   });
+
+  // Owner-only: fetch tenant names mapping for displayed invoices
+  const ownerTenantNamesQuery = useQuery({
+    queryKey: ["owner-tenant-names", (data ?? []).map((d: any) => d.id)],
+    enabled: role === "owner" && !!data && (data as any[]).length > 0,
+    queryFn: () => getTenantNamesForInvoices((data as any[]).map((d: any) => d.id)),
+  });
+  const ownerTenantNames = (ownerTenantNamesQuery.data ?? {}) as Record<string, string>;
 
   const rows = useMemo(() => {
     return (data ?? []).map((inv: any) => {
@@ -159,7 +168,9 @@ const Invoices = () => {
                   <TableBody>
                     {sortedRows.map((inv: any) => {
                       const propName = inv.lease?.property?.name ?? inv.lease_id?.slice(0, 8);
-                      const tenantName = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || inv.tenant_id?.slice(0, 6);
+                      const tenantName = role === "owner"
+                        ? (ownerTenantNames[inv.id] ?? ([inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "—"))
+                        : ([inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || inv.tenant_id?.slice(0, 6));
                       const fmt = (amt: number, cur: string) =>
                         new Intl.NumberFormat(undefined, { style: "currency", currency: cur }).format(amt);
                       return (

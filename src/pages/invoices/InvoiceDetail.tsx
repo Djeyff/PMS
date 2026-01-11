@@ -9,9 +9,12 @@ import { fetchPaymentsByTenant } from "@/services/payments";
 import { getInvoiceSignedUrlByInvoiceId, generateInvoicePDF } from "@/services/invoices";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthProvider";
+import { getTenantNamesForInvoices } from "@/services/tenant-names";
 
 const InvoiceDetail = () => {
   const { id } = useParams<{ id: string }>();
+  const { role } = useAuth();
 
   const { data: inv, isLoading, isError, refetch } = useQuery({
     queryKey: ["invoice-detail", id],
@@ -37,6 +40,16 @@ const InvoiceDetail = () => {
     queryKey: ["invoice-agency", agencyId],
     enabled: !!agencyId,
     queryFn: () => fetchAgencyById(agencyId!),
+  });
+
+  // Owner-only: fetch tenant name for this invoice if needed
+  const { data: ownerNameMap } = useQuery({
+    queryKey: ["owner-tenant-name-detail", inv?.id],
+    enabled: !!inv?.id && role === "owner",
+    queryFn: async () => {
+      const m = await getTenantNamesForInvoices([inv!.id]);
+      return m;
+    },
   });
 
   const [logoUrl, setLogoUrl] = React.useState<string>("");
@@ -74,7 +87,9 @@ const InvoiceDetail = () => {
   if (!inv) return <div className="p-6">Invoice not found. <Link to="/invoices" className="underline text-blue-600">Back</Link></div>;
 
   const propName = inv.lease?.property?.name ?? inv.lease_id?.slice(0, 8);
-  const tenantName = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || inv.tenant_id?.slice(0, 6);
+  const tenantName = role === "owner"
+    ? ((ownerNameMap ?? {})[inv.id] ?? ([inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "—"))
+    : ([inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || inv.tenant_id?.slice(0, 6));
   const lang = inv?.pdf_lang === "es" ? "es" : "en";
   const t = lang === "es"
     ? {
