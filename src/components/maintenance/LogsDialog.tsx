@@ -13,7 +13,7 @@ const LogsDialog = ({ request, tz, onUpdated }: { request: MaintenanceRow; tz?: 
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const isAdmin = role === "agency_admin";
 
   const { data, isLoading, refetch } = useQuery({
@@ -59,7 +59,14 @@ const LogsDialog = ({ request, tz, onUpdated }: { request: MaintenanceRow; tz?: 
             ) : (
               <ul className="divide-y">
                 {(data ?? []).map((l) => {
-                  const author = [l.user?.first_name ?? "", l.user?.last_name ?? ""].filter(Boolean).join(" ") || "—";
+                  // Prefer joined author name; if unavailable (due to RLS), show "You" when it's your note, else a generic label
+                  const joinedName = [l.user?.first_name ?? "", l.user?.last_name ?? ""].filter(Boolean).join(" ");
+                  const author =
+                    joinedName
+                      ? joinedName
+                      : (l.user_id && user?.id && l.user_id === user.id)
+                        ? "You"
+                        : "Agency team";
                   const when = tz ? formatDateTimeInTZ(l.created_at, tz) : new Date(l.created_at).toISOString().slice(0, 16).replace("T", " ");
                   return (
                     <li key={l.id} className="p-3 text-sm">

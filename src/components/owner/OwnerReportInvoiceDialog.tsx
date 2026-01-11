@@ -78,9 +78,16 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
   });
 
   const ownerName = useMemo(() => {
+    // Owner backend: use signed-in profile name (with "(You)"), avoid showing UUID
+    if (!isAdmin) {
+      const name = [profile?.first_name ?? "", profile?.last_name ?? ""].filter(Boolean).join(" ");
+      return name ? `${name} (You)` : "You";
+    }
+    // Admin backend: look up owner in agency owner list
     const o = (owners ?? []).find((x) => x.id === report.owner_id);
-    return [o?.first_name ?? "", o?.last_name ?? ""].filter(Boolean).join(" ") || report.owner_id;
-  }, [owners, report.owner_id]);
+    const name = [o?.first_name ?? "", o?.last_name ?? ""].filter(Boolean).join(" ");
+    return name || report.owner_id;
+  }, [isAdmin, owners, report.owner_id, profile?.first_name, profile?.last_name]);
 
   const filteredPayments = useMemo(() => {
     const s = String(report.start_date).slice(0, 10);
