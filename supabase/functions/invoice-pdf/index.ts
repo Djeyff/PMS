@@ -2,7 +2,7 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { PDFDocument, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
+import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 
 function buildCorsHeaders(origin: string | null) {
   return {
@@ -20,6 +20,14 @@ function isOriginAllowed(origin: string | null) {
 }
 
 type Lang = "en" | "es";
+
+function hexToRgb(hex: string) {
+  const s = hex.replace("#", "");
+  const r = parseInt(s.substring(0, 2), 16) / 255;
+  const g = parseInt(s.substring(2, 4), 16) / 255;
+  const b = parseInt(s.substring(4, 6), 16) / 255;
+  return rgb(r, g, b);
+}
 
 serve(async (req) => {
   const origin = req.headers.get("Origin");
@@ -178,39 +186,45 @@ serve(async (req) => {
 
   const t = lang === "es" ? {
     title: "Factura",
-    number: "Número",
     billedTo: "Facturado a",
     property: "Propiedad",
     issue: "Fecha de emisión",
     due: "Fecha de vencimiento",
-    currency: "Moneda",
-    status: "Estado",
     description: "Descripción",
     leaseInvoice: "Factura de contrato",
     amount: "Importe",
-    total: "Total",
+    totalToPay: "Total a pagar",
     paid: "Pagado",
+    exchange: "Tasa de Cambio",
+    method: "Método de pago",
     balance: "Saldo",
-    contractExpiry: "Vencimiento del contrato",
+    prevBalance: "Saldo previo (mismo inquilino)",
+    overallBalance: "Saldo total (incluye esta factura)",
+    monthOf: "Para el mes de",
+    receipt: "Recibo",
+    invoice: "Factura",
     emailSubject: (n: string) => `Factura ${n}`,
     emailText: (prop: string, tenant: string, amountText: string) =>
       `Estimado equipo,\n\nAdjuntamos la factura generada:\nPropiedad: ${prop}\nInquilino: ${tenant}\nImporte: ${amountText}\n\nGracias,\n${agencyName}`,
   } : {
     title: "Invoice",
-    number: "Number",
     billedTo: "Billed To",
     property: "Property",
     issue: "Issue Date",
     due: "Due Date",
-    currency: "Currency",
-    status: "Status",
     description: "Description",
     leaseInvoice: "Lease invoice",
     amount: "Amount",
-    total: "Total",
+    totalToPay: "Amount to be Paid",
     paid: "Paid",
+    exchange: "Exchange Rate",
+    method: "Payment Method",
     balance: "Balance",
-    contractExpiry: "Contract Expiry",
+    prevBalance: "Previous balance (same tenant)",
+    overallBalance: "Overall balance (includes this invoice)",
+    monthOf: "For month of",
+    receipt: "Receipt",
+    invoice: "Invoice",
     emailSubject: (n: string) => `Invoice ${n}`,
     emailText: (prop: string, tenant: string, amountText: string) =>
       `Dear team,\n\nAttached is the generated invoice:\nProperty: ${prop}\nTenant: ${tenant}\nAmount: ${amountText}\n\nRegards,\n${agencyName}`,
@@ -272,12 +286,11 @@ serve(async (req) => {
 
   const balance = amount - paidConverted;
 
-  // NEW: Compute previous and overall balances to match InvoiceDetail
+  // Previous & overall balances (match InvoiceDetail)
   const tenantIdForBalances = invMeta.tenant_id;
   let previousBalance = 0;
   let overallBalance = 0;
   if (tenantIdForBalances) {
-    // Fetch tenant invoices and payments
     const { data: tenantInvs } = await service
       .from("invoices")
       .select("id, issue_date, currency, total_amount")
@@ -336,116 +349,275 @@ serve(async (req) => {
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-    // Header: agency name + address, then logo safely below
-    const headerTop = H - M;
-    const nameY = headerTop - 14;
-    page.drawText(agencyName, { x: (W - font.widthOfTextAtSize(agencyName, 14)) / 2, y: nameY, size: 14, font: fontBold });
-    const addrParts = agencyAddress.split(",");
-    const line1 = addrParts[0]?.trim() ?? "";
-    const line2 = addrParts.slice(1).join(", ").trim();
-    page.drawText(line1, { x: (W - font.widthOfTextAtSize(line1, 10)) / 2, y: nameY - 16, size: 10, font });
-    if (line2) page.drawText(line2, { x: (W - font.widthOfTextAtSize(line2, 10)) / 2, y: nameY - 30, size: 10, font });
+    // Colors to match Tailwind UI
+    const COL_TEXT = rgb(0, 0, 0);
+    const COL_MUTED = hexToRgb("#4B5563"); // gray-600
+    const COL_BORDER = hexToRgb("#E5E7EB"); // gray-200 (tailwind border in light mode)
+    const COL_GRAY50 = hexToRgb("#F9FAFB"); // gray-50
 
-    // Logo (cap width to 120pt) positioned below header with spacing
-    let contentStartY = nameY - 60;
+    function measure(text: string, size: number, f = font) {
+      return f.widthOfTextAtSize(text, size);
+    }
+    function drawTextRight(text: string, xRight: number, y: number, size: number, f = font, color = COL_TEXT) {
+      const w = f.widthOfTextAtSize(text, size);
+      page.drawText(text, { x: xRight - w, y, size, font: f, color });
+    }
+
+    // Header: logo + agency name/address on left, titles on right
+    let yCursor = H - M;
+
+    // Left brand block
     const logoBytes = await getLogoBytes();
+    let leftBlockX = M;
+    let textX = leftBlockX;
+    let blockTop = yCursor;
+
     if (logoBytes) {
       try {
         const img = await pdf.embedPng(logoBytes);
-        const w = 120;
+        const w = 32; // small logo height like UI
         const ratio = img.height / img.width || 1;
         const h = w * ratio;
-        const x = (W - w) / 2;
-        const logoBottomY = contentStartY - h;
-        page.drawImage(img, { x, y: logoBottomY, width: w, height: h });
-        contentStartY = logoBottomY - 24; // spacing after logo
-      } catch {}
+        page.drawImage(img, { x: leftBlockX, y: blockTop - h, width: w, height: h });
+        textX = leftBlockX + w + 8;
+        // agency name
+        page.drawText(agencyName, { x: textX, y: blockTop - 12, size: 12, font: fontBold });
+        page.drawText(agencyAddress, { x: textX, y: blockTop - 26, size: 9, font, color: COL_MUTED });
+      } catch {
+        page.drawText(agencyName, { x: textX, y: blockTop - 12, size: 12, font: fontBold });
+        page.drawText(agencyAddress, { x: textX, y: blockTop - 26, size: 9, font, color: COL_MUTED });
+      }
+    } else {
+      page.drawText(agencyName, { x: textX, y: blockTop - 12, size: 12, font: fontBold });
+      page.drawText(agencyAddress, { x: textX, y: blockTop - 26, size: 9, font, color: COL_MUTED });
     }
 
-    // Titles
-    page.drawText(lang === "es" ? "Recibo" : "Receipt", { x: M, y: contentStartY, size: 22, font: fontBold });
-    page.drawText(lang === "es" ? "Factura" : "Invoice", { x: M, y: contentStartY - 18, size: 12, font });
+    // Right-aligned title block ("Recibo" top, "Factura" sub)
+    drawTextRight(lang === "es" ? "Recibo" : "Receipt", W - M, blockTop - 10, 18, fontBold);
+    drawTextRight(lang === "es" ? "Factura" : "Invoice", W - M, blockTop - 26, 10, font, COL_MUTED);
 
-    // Info grid inside margins with shared baseline
-    const leftX = M;
-    const rightX = W - M - 240;
-    let y = contentStartY - 48;
-    page.drawText(`${t.billedTo}: ${tenantName}`, { x: leftX, y, size: 12, font }); y -= 16;
-    page.drawText(`${t.property}: ${propertyName}`, { x: leftX, y, size: 12, font });
+    // Move cursor below header
+    yCursor = blockTop - 52;
 
+    // Info grid (two columns) matching screen labels
+    const leftLabelX = M;
+    const leftValueX = M + 120;
+    const rightLabelX = W / 2 + 24;
+    const rightValueX = rightLabelX + 120;
+
+    // Month text (capitalize first letter in ES to match UI)
     const monthText = (() => {
       const iso = issueDate;
       if (!iso) return "—";
       const d = new Date(iso);
-      const m = d.toLocaleString(lang === "es" ? "es-ES" : "en-US", { month: "long" });
-      const yStr = String(d.getFullYear());
-      return lang === "es" ? `${m} ${yStr.slice(-2)}` : `${m} ${yStr}`;
+      let m = d.toLocaleString(lang === "es" ? "es-ES" : "en-US", { month: "long" });
+      if (lang === "es" && m) m = m.charAt(0).toUpperCase() + m.slice(1);
+      const y = String(d.getFullYear());
+      return lang === "es" ? `${m} ${y.slice(-2)}` : `${m} ${y}`;
     })();
 
-    page.drawText(`${t.issue}: ${issueDate}`, { x: rightX, y: contentStartY - 48, size: 12, font });
-    page.drawText(`${lang === "es" ? "Para el mes de" : "For month of"}: ${monthText}`, { x: rightX, y: contentStartY - 64, size: 12, font });
+    // Left column
+    page.drawText(lang === "es" ? "Facturado a" : "Billed to", { x: leftLabelX, y: yCursor, size: 10, font, color: COL_MUTED });
+    page.drawText(tenantName, { x: leftValueX, y: yCursor, size: 11, font: fontBold });
+    yCursor -= 16;
 
-    // Summary header row
-    y = contentStartY - 98;
-    page.drawText(lang === "es" ? "Alquiler DOP" : "Rent DOP", { x: leftX, y, size: 10, font: fontBold });
-    page.drawText(lang === "es" ? "Alquiler USD" : "Rent USD", { x: leftX + 140, y, size: 10, font: fontBold });
-    page.drawText(lang === "es" ? "Importe Anterior USD" : "Overdue USD", { x: leftX + 280, y, size: 10, font: fontBold });
-    page.drawText(lang === "es" ? "Importe Anterior DOP" : "Overdue DOP", { x: leftX + 420, y, size: 10, font: fontBold });
+    page.drawText(lang === "es" ? "Para" : "For", { x: leftLabelX, y: yCursor, size: 10, font, color: COL_MUTED });
+    page.drawText(propertyName, { x: leftValueX, y: yCursor, size: 11, font });
+    yCursor -= 16;
 
+    // Right column (stays on first row baseline)
+    page.drawText(lang === "es" ? "Fecha" : "Date", { x: rightLabelX, y: blockTop - 52, size: 10, font, color: COL_MUTED });
+    page.drawText(issueDate, { x: rightValueX, y: blockTop - 52, size: 11, font });
+
+    page.drawText(t.due, { x: rightLabelX, y: blockTop - 68, size: 10, font, color: COL_MUTED });
+    page.drawText(dueDate, { x: rightValueX, y: blockTop - 68, size: 11, font });
+
+    page.drawText(t.monthOf, { x: rightLabelX, y: blockTop - 84, size: 10, font, color: COL_MUTED });
+    page.drawText(monthText, { x: rightValueX, y: blockTop - 84, size: 11, font });
+
+    // Move below info rows
+    yCursor = Math.min(yCursor, blockTop - 100) - 16;
+
+    // Summary table (5 columns) with gray header and full border
+    const tableX = M;
+    const tableW = W - M * 2;
+    const cols = 5;
+    const colW = tableW / cols;
+    const headerH = 20;
+    const rowH = 22;
+
+    // Outer border
+    page.drawRectangle({
+      x: tableX,
+      y: yCursor - headerH - rowH - 4,
+      width: tableW,
+      height: headerH + rowH + 4,
+      borderColor: COL_BORDER,
+      borderWidth: 1,
+    });
+
+    // Header background
+    page.drawRectangle({
+      x: tableX,
+      y: yCursor - headerH,
+      width: tableW,
+      height: headerH,
+      color: COL_GRAY50,
+      borderColor: COL_BORDER,
+      borderWidth: 0.5,
+    });
+
+    // Header labels
+    const headers = [
+      lang === "es" ? "Alquiler DOP" : "Rent DOP",
+      lang === "es" ? "Alquiler USD" : "Rent USD",
+      lang === "es" ? "Importe Anterior USD" : "Overdue USD",
+      lang === "es" ? "Importe Anterior DOP" : "Overdue DOP",
+      lang === "es" ? "Fin del contrato" : "Lease End Date",
+    ];
+    headers.forEach((h, i) => {
+      page.drawText(h, {
+        x: tableX + i * colW + 6,
+        y: yCursor - headerH + 6,
+        size: 9,
+        font: fontBold,
+        color: COL_MUTED,
+      });
+    });
+
+    // Row separator
+    page.drawLine({
+      start: { x: tableX, y: yCursor - headerH },
+      end: { x: tableX + tableW, y: yCursor - headerH },
+      color: COL_BORDER,
+      thickness: 1,
+    });
+
+    // Vertical lines
+    for (let i = 1; i < cols; i++) {
+      const x = tableX + i * colW;
+      page.drawLine({
+        start: { x, y: yCursor - headerH - rowH - 4 },
+        end: { x, y: yCursor + 4 },
+        color: COL_BORDER,
+        thickness: 1,
+      });
+    }
+
+    // Row values
     const rentUsd = currency === "USD" ? amount : 0;
     const rentDop = currency === "DOP" ? amount : 0;
+    const prevUsd = currency === "USD" ? Math.max(0, previousBalance) : 0;
+    const prevDop = currency === "DOP" ? Math.max(0, previousBalance) : 0;
 
-    page.drawText(rentDop ? new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency: "DOP" }).format(rentDop) : "—", { x: leftX, y: y - 18, size: 11, font });
-    page.drawText(rentUsd ? new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency: "USD" }).format(rentUsd) : "—", { x: leftX + 140, y: y - 18, size: 11, font });
+    const rowY = yCursor - headerH - 14;
+    const values = [
+      rentDop ? new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency: "DOP" }).format(rentDop) : "—",
+      rentUsd ? new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency: "USD" }).format(rentUsd) : "—",
+      prevUsd ? new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency: "USD" }).format(prevUsd) : "—",
+      prevDop ? new Intl.NumberFormat(lang === "es" ? "es-ES" : "en-US", { style: "currency", currency: "DOP" }).format(prevDop) : "—",
+      contractExpiry ?? "—",
+    ];
+    values.forEach((v, i) => {
+      page.drawText(v, { x: tableX + i * colW + 6, y: rowY, size: 10, font });
+    });
 
-    // Lease end
-    page.drawText(`${lang === "es" ? "Fin del contrato" : "Lease End Date"}: ${contractExpiry ?? "—"}`, { x: leftX, y: y - 40, size: 11, font });
+    // Move cursor below table
+    yCursor = yCursor - headerH - rowH - 24;
 
-    // Description line item
-    y = contentStartY - 160;
-    page.drawText(t.description, { x: leftX, y, size: 12, font: fontBold });
-    page.drawText(t.amount, { x: rightX + 150, y, size: 12, font: fontBold });
-    y -= 16;
-    page.drawText(t.leaseInvoice, { x: leftX, y, size: 12, font });
-    page.drawText(fmt(amount, currency), { x: rightX + 150, y, size: 12, font });
+    // Line items block with border and header row
+    const liX = M;
+    const liW = W - M * 2;
+    const liHeaderH = 24;
+    const liRowH = 22;
 
-    // Payment summary with right-aligned values
-    const valueX = W - M - 120;
-    y -= 40;
-    page.drawText(lang === "es" ? "Total a pagar" : "Amount to be Paid", { x: leftX, y, size: 12, font: fontBold });
-    page.drawText(fmt(amount, currency), { x: valueX, y, size: 12, font: fontBold });
-    y -= 16;
+    // Outer border
+    page.drawRectangle({
+      x: liX,
+      y: yCursor - liHeaderH - liRowH,
+      width: liW,
+      height: liHeaderH + liRowH,
+      borderColor: COL_BORDER,
+      borderWidth: 1,
+    });
 
-    page.drawText(t.paid, { x: leftX, y, size: 12, font });
-    page.drawText(fmt(paidConverted, currency), { x: valueX, y, size: 12, font });
-    y -= 16;
+    // Header row separator
+    page.drawLine({
+      start: { x: liX, y: yCursor - liHeaderH },
+      end: { x: liX + liW, y: yCursor - liHeaderH },
+      color: COL_BORDER,
+      thickness: 1,
+    });
 
-    page.drawText(lang === "es" ? "Tasa de Cambio" : "Exchange Rate", { x: leftX, y, size: 12, font });
-    page.drawText(exchangeRateDisplay, { x: valueX, y, size: 12, font });
-    y -= 16;
+    // Header labels
+    page.drawText(t.description, { x: liX + 8, y: yCursor - 16, size: 11, font: fontBold });
+    drawTextRight(t.amount, liX + liW - 8, yCursor - 16, 11, fontBold);
 
-    page.drawText(lang === "es" ? "Método de pago" : "Payment Method", { x: leftX, y, size: 12, font });
-    page.drawText(methodsDisplay, { x: valueX, y, size: 12, font });
-    y -= 24;
+    // Row
+    page.drawText(t.leaseInvoice, { x: liX + 8, y: yCursor - liHeaderH - 14, size: 11, font });
+    drawTextRight(fmt(amount, currency), liX + liW - 8, yCursor - liHeaderH - 14, 11, font);
 
-    // Balance
-    page.drawText(t.balance, { x: leftX, y, size: 12, font: fontBold });
-    page.drawText(fmt(balance, currency), { x: valueX, y, size: 12, font: fontBold });
-    y -= 28;
+    // Move cursor below line item
+    yCursor = yCursor - liHeaderH - liRowH - 18;
 
-    // NEW: Previous & Overall balances block (match InvoiceDetail)
-    page.drawText(lang === "es" ? "Saldo previo (mismo inquilino)" : "Previous balance (same tenant)", { x: leftX, y, size: 12, font });
-    page.drawText(fmt(previousBalance, currency), { x: valueX, y, size: 12, font });
-    y -= 16;
+    // Two cards (gray bg) side-by-side
+    const gap = 16;
+    const cardW = (W - M * 2 - gap) / 2;
+    const cardH = 132;
 
-    page.drawText(lang === "es" ? "Saldo total (incluye esta factura)" : "Overall balance (includes this invoice)", { x: leftX, y, size: 12, fontBold });
-    page.drawText(fmt(overallBalance, currency), { x: valueX, y, size: 12, fontBold });
-    y -= 24;
+    // Left card background
+    page.drawRectangle({ x: M, y: yCursor - cardH, width: cardW, height: cardH, color: COL_GRAY50, borderColor: COL_GRAY50 });
+    // Right card background
+    page.drawRectangle({ x: M + cardW + gap, y: yCursor - cardH, width: cardW, height: cardH, color: COL_GRAY50, borderColor: COL_GRAY50 });
 
-    // Reminder
-    page.drawText(lang === "es" ? "Recordatorio" : "Reminder", { x: leftX, y, size: 12, font: fontBold });
-    y -= 16;
-    page.drawText(lang === "es" ? "Por favor, pague antes del día 5 de cada mes." : "Please pay before the 5th of each month.", { x: leftX, y, size: 12, font });
+    // Left card content
+    let lx = M + 12;
+    let ly = yCursor - 18;
+    page.drawText(`${t.totalToPay} :`, { x: lx, y: ly, size: 11, font: fontBold }); ly -= 16;
+    page.drawText(fmt(amount, currency), { x: lx, y: ly, size: 13, font: fontBold }); ly -= 18;
+
+    page.drawText(`${t.paid} :`, { x: lx, y: ly, size: 11, font }); ly -= 14;
+    page.drawText(fmt(paidConverted, currency), { x: lx, y: ly, size: 11, font }); ly -= 16;
+
+    page.drawText(`${t.exchange} :`, { x: lx, y: ly, size: 11, font }); ly -= 14;
+    page.drawText(exchangeRateDisplay, { x: lx, y: ly, size: 10, font }); ly -= 16;
+
+    page.drawText(`${t.method} :`, { x: lx, y: ly, size: 11, font }); ly -= 14;
+    page.drawText(methodsDisplay, { x: lx, y: ly, size: 10, font });
+
+    // Right card content
+    let rx = M + cardW + gap + 12;
+    let ry = yCursor - 18;
+    page.drawText(`${t.balance} :`, { x: rx, y: ry, size: 11, font: fontBold });
+    drawTextRight(fmt(balance, currency), M + cardW + gap + cardW - 12, ry, 13, fontBold); ry -= 18;
+
+    // Divider (border-t)
+    page.drawLine({
+      start: { x: M + cardW + gap + 12, y: ry - 6 },
+      end: { x: M + cardW + gap + cardW - 12, y: ry - 6 },
+      color: COL_BORDER,
+      thickness: 1,
+    });
+    ry -= 16;
+
+    // Previous balance row
+    page.drawText(t.prevBalance, { x: rx, y: ry, size: 11, font, color: COL_MUTED });
+    drawTextRight(fmt(previousBalance, currency), M + cardW + gap + cardW - 12, ry, 11, font); ry -= 16;
+
+    // Overall balance row (bold)
+    page.drawText(t.overallBalance, { x: rx, y: ry, size: 11, font: fontBold });
+    drawTextRight(fmt(overallBalance, currency), M + cardW + gap + cardW - 12, ry, 11, fontBold);
+
+    // Move cursor below cards
+    yCursor = yCursor - cardH - 20;
+
+    // Reminder block
+    page.drawText(lang === "es" ? "Recordatorio" : "Reminder", { x: M, y: yCursor, size: 11, font: fontBold });
+    yCursor -= 14;
+    page.drawText(
+      lang === "es" ? "Por favor, pague antes del día 5 de cada mes." : "Please pay before the 5th of each month.",
+      { x: M, y: yCursor, size: 11, font }
+    );
 
     const pdfBytes = await pdf.save();
 
@@ -457,7 +629,7 @@ serve(async (req) => {
       await service.storage.createBucket(bucketName, { public: false });
     }
 
-    // NEW: filename invoicenumber-tenantname-mm-yyyy.pdf
+    // filename invoicenumber-tenantname-mm-yyyy.pdf
     const sanitize = (s: string) => s.replace(/\s+/g, "-").replace(/[^\p{L}\p{N}\-_.]/gu, "");
     const d = new Date(issueDate);
     const mm = String(d.getMonth() + 1).padStart(2, "0");
