@@ -50,13 +50,17 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
   const canSubmit = useMemo(() => {
     const baseOk = leaseId && tenantId && date;
     if (selectedInvoiceIds.length > 1) return baseOk; // multi-invoice flow uses full amounts per invoice
-    if (selectedInvoiceIds.length === 1 && secondEnabled) {
-      // require at least one amount > 0 when splitting on a single invoice
+    if (selectedInvoiceIds.length === 1) {
+      if (secondEnabled) {
+        const a1 = Number(amount || 0);
+        const a2 = Number(secondAmount || 0);
+        return baseOk && ((a1 > 0) || (a2 > 0));
+      }
+      // single selected invoice (no split) requires an amount
       const a1 = Number(amount || 0);
-      const a2 = Number(secondAmount || 0);
-      return baseOk && ((a1 > 0) || (a2 > 0));
+      return baseOk && a1 > 0;
     }
-    if (selectedInvoiceIds.length > 0) return baseOk; // single-invoice, non-split (will use invoice full amount in chosen currency)
+    // no invoices selected
     return baseOk && amount !== "" && Number(amount) >= 0;
   }, [leaseId, tenantId, amount, date, selectedInvoiceIds.length, secondEnabled, secondAmount]);
 
@@ -157,6 +161,39 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
         }
 
         await recomputeInvoiceStatus(inv.id);
+      } else if (selectedInvoiceIds.length === 1 && !secondEnabled) {
+        // NEW: single selected invoice (no split) — link payment to that invoice using entered amount
+        const inv = (pendingInvoices ?? []).find((i: any) => selectedInvoiceIds[0] === i.id);
+        if (!inv) throw new Error("Invoice not found");
+        const invCur = inv.currency as "USD" | "DOP";
+        const a1 = Number(amount || 0);
+        const rateNum = exchangeRate && !Number.isNaN(Number(exchangeRate)) ? Number(exchangeRate) : null;
+
+        if (a1 <= 0) {
+          toast.error("Enter a valid amount for the selected invoice.");
+          setSaving(false);
+          return;
+        }
+        // Validate exchange rate when paying in a different currency than the invoice
+        if (currency !== invCur && (!rateNum || rateNum <= 0)) {
+          toast.error("Please enter a valid exchange rate when paying in a different currency than the invoice.");
+          setSaving(false);
+          return;
+        }
+
+        await createPayment({
+          lease_id: leaseId,
+          tenant_id: tenantId,
+          amount: a1,
+          currency,
+          method,
+          received_date: date,
+          reference: reference || undefined,
+          invoice_id: inv.id,
+          exchange_rate: currency !== invCur ? (rateNum ?? undefined) : undefined,
+        });
+
+        await recomputeInvoiceStatus(inv.id);
       } else {
         // Original single/unlinked payment flow (with optional second currency when no invoice selected)
         if (secondEnabled && !invoiceId) {
@@ -191,7 +228,7 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
             });
           }
         } else {
-          // Original single row create (linked or unlinked)
+          // Original single row create (linked or unlinked via manual invoiceId)
           await createPayment({
             lease_id: leaseId,
             tenant_id: tenantId,
@@ -316,9 +353,19 @@ const PaymentForm = ({ onCreated }: { onCreated?: () => void }) => {
                 ) : null}
               </div>
               {selectedInvoiceIds.length > 0 ? (
-                <div className="text-xs text-muted-foreground">
-                  We'll record one payment per selected invoice using the invoice's full amount. Method, date, reference and exchange rate will apply to each.
-                </div>
+                selectedInvoiceIds.length > 1 ? (
+                  <div className="text-xs text-muted-foreground">
+                    We'll record one payment per selected invoice using the invoice's full amount. Method, date, reference and exchange rate will apply to each.
+                  </div>
+                ) : secondEnabled ? (
+                  <div className="text-xs text-muted-foreground">
+                    We'll split this payment across two currencies and link both parts to the selected invoice.
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    We'll link this payment to the selected invoice using the Amount and Currency fields below.
+                  </div>
+                )
               ) : (
                 <div className="text-xs text-muted-foreground">
                   Or leave invoices unchecked to record an unlinked payment (uses the Amount field).
