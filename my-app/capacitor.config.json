@@ -1,0 +1,10 @@
+{
+  "appId": "properties.lasterrenas.app",
+  "appName": "LTP Android",
+  "webDir": "dist",
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": false
+    }
+  }
+}
