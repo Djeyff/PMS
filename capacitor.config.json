@@ -1,0 +1,9 @@
+{
+  "appId": "properties.lasterrenas.app",
+  "appName": "Property Manager",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}
