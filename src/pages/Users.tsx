@@ -137,7 +137,6 @@ const Users = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>User ID</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Status</TableHead>
@@ -147,9 +146,15 @@ const Users = () => {
                 <TableBody>
                   {pendingRows.map((u) => (
                     <TableRow key={u.id}>
-                      <TableCell className="font-mono text-xs">{u.id}</TableCell>
-                      <TableCell>{[u.first_name, u.last_name].filter(Boolean).join(" ") || "—"}</TableCell>
-                      <TableCell className="font-mono text-xs">{u.email ?? "—"}</TableCell>
+                      <TableCell>
+                        <div className="font-medium">
+                          {[u.first_name, u.last_name].filter(Boolean).join(" ") || u.email || "—"}
+                        </div>
+                        <div className="text-xs text-muted-foreground font-mono">{u.id}</div>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {u.email ?? "—"}
+                      </TableCell>
                       <TableCell className="capitalize">{u.role ? u.role : "pending"}</TableCell>
                       <TableCell className="space-x-2">
                         <Select
