@@ -9,6 +9,7 @@ import { fetchMaintenanceRequests, updateMaintenanceStatus } from "@/services/ma
 import NewRequestDialog from "@/components/maintenance/NewRequestDialog";
 import LogsDialog from "@/components/maintenance/LogsDialog";
 import EditMaintenanceDialog from "@/components/maintenance/EditMaintenanceDialog";
+import ViewMaintenanceDialog from "@/components/maintenance/ViewMaintenanceDialog";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fetchAgencyById } from "@/services/agencies";
@@ -115,6 +116,7 @@ const Maintenance = () => {
                           />
                         </>
                       ) : null}
+                      <ViewMaintenanceDialog request={m} tz={tz} size="sm" />
                       <LogsDialog request={m} tz={tz} onUpdated={() => refetch()} />
                     </div>
                   </div>
@@ -158,6 +160,7 @@ const Maintenance = () => {
                             />
                           </>
                         ) : null}
+                        <ViewMaintenanceDialog request={m} tz={tz} size="sm" />
                         <LogsDialog request={m} tz={tz} onUpdated={() => refetch()} />
                       </TableCell>
                     </tr>
