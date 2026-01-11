@@ -11,8 +11,8 @@ import { fetchMaintenanceRequests } from "@/services/maintenance";
 import { parseISO, differenceInCalendarDays, format } from "date-fns";
 import { Link } from "react-router-dom";
 
-const Stat = ({ title, value, children }: { title: string; value?: string; children?: React.ReactNode }) => (
-  <Card>
+const Stat = ({ title, value, children, className }: { title: string; value?: string; children?: React.ReactNode; className?: string }) => (
+  <Card className={className}>
     <CardHeader className="pb-2">
       <CardTitle className="text-sm text-muted-foreground">{title}</CardTitle>
     </CardHeader>
@@ -112,6 +112,12 @@ const AgencyDashboard = () => {
     return { usd, dop };
   })();
 
+  // NEW: overdue maintenance count
+  const overdueMaintenanceCount = (() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return (maintenance ?? []).filter((m: any) => m.due_date && m.due_date < today && m.status !== "closed").length;
+  })();
+
   const pendingInvoices = (() => {
     const list = (invoices ?? [])
       .filter((inv: any) => inv.status === "sent" || inv.status === "partial" || inv.status === "overdue")
@@ -190,14 +196,21 @@ const AgencyDashboard = () => {
             <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(monthlyByMethod.cashDop)} DOP</span>
           </div>
         </Stat>
-        <Stat title="Overdue Invoices">
+        <Stat title="Overdue Invoices" className={(overdueAmounts.usd > 0 || overdueAmounts.dop > 0 || overdueCount > 0) ? "border-destructive/50 bg-destructive/10" : undefined}>
           <div className="flex flex-col text-base font-normal">
-            <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(overdueAmounts.usd)} USD</span>
-            <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(overdueAmounts.dop)} DOP</span>
-            <span className="text-xs text-muted-foreground mt-1">Count: {overdueCount}</span>
+            <span className={`text-lg font-semibold ${overdueAmounts.usd > 0 ? "text-destructive" : ""}`}>{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(overdueAmounts.usd)} USD</span>
+            <span className={`text-lg font-semibold ${overdueAmounts.dop > 0 ? "text-destructive" : ""}`}>{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(overdueAmounts.dop)} DOP</span>
+            <span className={`text-xs mt-1 ${overdueCount > 0 ? "text-destructive" : "text-muted-foreground"}`}>Count: {overdueCount}</span>
           </div>
         </Stat>
-        <Stat title="Open Maintenance" value={String(maintenance?.length ?? 0)} />
+        <Stat title="Open Maintenance" className={overdueMaintenanceCount > 0 ? "border-destructive/50 bg-destructive/10" : undefined}>
+          <div className="flex flex-col">
+            <span className="text-2xl font-bold">{maintenance?.length ?? 0}</span>
+            <span className="text-xs mt-1">
+              Overdue: <Link to="/maintenance?overdue=1" className="text-destructive underline">{overdueMaintenanceCount}</Link>
+            </span>
+          </div>
+        </Stat>
       </div>
       <div className="grid gap-4 grid-cols-1">
         <Card>

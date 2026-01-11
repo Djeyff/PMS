@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { fetchAgencyById } from "@/services/agencies";
 import DeleteMaintenanceRequestDialog from "@/components/maintenance/DeleteMaintenanceRequestDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Badge } from "@/components/ui/badge";
+import { useSearchParams } from "react-router-dom";
 
 const Maintenance = () => {
   const { role, profile } = useAuth();
@@ -38,6 +40,12 @@ const Maintenance = () => {
   });
 
   const isMobile = useIsMobile();
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const overdueOnly = searchParams.get("overdue") === "1";
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const isOverdue = (m: any) => !!m.due_date && m.due_date < todayStr && m.status !== "closed";
+  const visible = (data ?? []).filter((m) => (overdueOnly ? isOverdue(m) : true));
 
   const onUpdateStatus = async (id: string, status: "open" | "in_progress" | "closed") => {
     try {
@@ -67,6 +75,22 @@ const Maintenance = () => {
               </SelectContent>
             </Select>
             <Button variant="outline" onClick={() => refetch()}>Refresh</Button>
+            {overdueOnly ? (
+              <>
+                <Badge variant="destructive">Overdue filter</Badge>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const np = new URLSearchParams(searchParams);
+                    np.delete("overdue");
+                    setSearchParams(np, { replace: true });
+                  }}
+                >
+                  Clear
+                </Button>
+              </>
+            ) : null}
             {isAdmin && agencyId ? <NewRequestDialog onCreated={() => refetch()} /> : null}
           </div>
         </div>
@@ -79,15 +103,18 @@ const Maintenance = () => {
               <div className="text-sm text-red-600">Failed to load maintenance requests.</div>
             ) : isLoading ? (
               <div className="text-sm text-muted-foreground">Loading...</div>
-            ) : (data?.length ?? 0) === 0 ? (
+            ) : (visible.length ?? 0) === 0 ? (
               <div className="text-sm text-muted-foreground">No maintenance requests.</div>
             ) : isMobile ? (
               <div>
-                {(data ?? []).map((m) => (
+                {visible.map((m) => (
                   <div key={m.id} className="rounded-lg border p-3 bg-card mb-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="font-medium">{m.title}</div>
+                        <div className="font-medium">
+                          {m.title}
+                          {isOverdue(m) ? <span className="ml-2"><Badge variant="destructive">Overdue</Badge></span> : null}
+                        </div>
                         <div className="text-sm text-muted-foreground">
                           {m.property?.name ?? m.property_id.slice(0, 8)}
                         </div>
@@ -95,7 +122,7 @@ const Maintenance = () => {
                       <div className="text-right">
                         <div className="text-xs capitalize">{m.priority}</div>
                         <div className="text-xs capitalize">{m.status.replace("_", " ")}</div>
-                        <div className="text-xs">{m.due_date ?? "—"}</div>
+                        <div className={`text-xs ${isOverdue(m) ? "text-destructive font-semibold" : ""}`}>{m.due_date ?? "—"}</div>
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -135,13 +162,20 @@ const Maintenance = () => {
                   </tr>
                 </TableHeader>
                 <TableBody>
-                  {(data ?? []).map((m) => (
+                  {visible.map((m) => (
                     <tr key={m.id}>
-                      <TableCell className="font-medium">{m.title}</TableCell>
+                      <TableCell className="font-medium">
+                        {m.title}
+                        {isOverdue(m) ? <span className="ml-2"><Badge variant="destructive">Overdue</Badge></span> : null}
+                      </TableCell>
                       <TableCell>{m.property?.name ?? m.property_id.slice(0, 8)}</TableCell>
                       <TableCell className="capitalize">{m.priority}</TableCell>
                       <TableCell className="capitalize">{m.status.replace("_", " ")}</TableCell>
-                      <TableCell>{m.due_date ?? "—"}</TableCell>
+                      <TableCell>
+                        <span className={isOverdue(m) ? "text-destructive font-semibold" : ""}>
+                          {m.due_date ?? "—"}
+                        </span>
+                      </TableCell>
                       <TableCell className="space-x-2">
                         {isAdmin ? (
                           <>
