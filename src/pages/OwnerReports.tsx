@@ -116,8 +116,13 @@ const OwnerReports = () => {
       const name = [o.first_name, o.last_name].filter(Boolean).join(" ");
       if (o.id) map[o.id] = name || o.id;
     });
+    // Ensure the signed-in owner's name (or 'You') is available on owner backend
+    if (!isAdmin && user?.id) {
+      const selfName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ");
+      map[user.id] = selfName || "You";
+    }
     return map;
-  }, [owners]);
+  }, [owners, isAdmin, user?.id, profile?.first_name, profile?.last_name]);
 
   const { data: savedReports, refetch: refetchSaved } = useQuery({
     queryKey: ["owner-saved-reports", agencyId, isOwner ? user?.id : ownerId],
