@@ -22,7 +22,7 @@ const OwnerPayoutItemMobile: React.FC<Props> = ({ name, usd, dop, feeDop = 0, pa
         <div className="mt-2 text-sm space-y-1">
           <div>USD: <span className="font-medium">{fmt(usd, "USD")}</span></div>
           <div>DOP: <span className="font-medium">{fmt(dop, "DOP")}</span></div>
-          <div>Mgmt fee (DOP): <span className="font-medium">{fmt(feeDop, "DOP")}</span></div>
+          <div>Management fee (DOP): <span className="font-medium">{fmt(feeDop, "DOP")}</span></div>
           <div>Payout (DOP after fee): <span className="font-medium">{fmt(payoutAfterFee ?? Math.max(0, dop - feeDop), "DOP")}</span></div>
         </div>
       </CardContent>

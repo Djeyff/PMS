@@ -624,7 +624,7 @@ const Reports = () => {
                       <TableHead>Owner</TableHead>
                       <TableHead>USD</TableHead>
                       <TableHead>DOP</TableHead>
-                      <TableHead>Mgmt fee (DOP)</TableHead>
+                      <TableHead>Management fee (DOP)</TableHead>
                       <TableHead>Payout (DOP after fee)</TableHead>
                     </TableRow>
                   </TableHeader>
