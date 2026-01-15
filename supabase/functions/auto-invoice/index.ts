@@ -169,7 +169,7 @@ serve(async (req) => {
     .from("leases")
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, status,
-      auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute,
+      auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute, auto_invoice_due_day,
       annual_increase_enabled, annual_increase_percent,
       property:properties ( id, name, agency_id ),
       tenant:profiles ( id, first_name, last_name )
@@ -257,7 +257,9 @@ serve(async (req) => {
     }
     const currency = l.rent_currency;
 
-    const dueDay = typeof l.auto_invoice_day === "number" ? l.auto_invoice_day : 5;
+    const dueDay = typeof (l as any).auto_invoice_due_day === "number"
+      ? (l as any).auto_invoice_due_day
+      : (typeof l.auto_invoice_day === "number" ? l.auto_invoice_day : 5);
     const dueDate = dueDateForMonth(today, dueDay);
 
     const invoiceNumber = autoNumber();

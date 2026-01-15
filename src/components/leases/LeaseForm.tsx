@@ -48,6 +48,7 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
   const [autoMinute, setAutoMinute] = useState<number>(new Date().getMinutes());
   const [kdriveFolderUrl, setKdriveFolderUrl] = useState<string>("");
   const [kdriveFileUrl, setKdriveFileUrl] = useState<string>("");
+  const [autoDueDay, setAutoDueDay] = useState<number>(10);
 
   // ADDED: annual increase option
   const [annualIncreaseEnabled, setAnnualIncreaseEnabled] = useState<boolean>(false);
@@ -91,6 +92,7 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
         auto_invoice_interval_months: autoIntervalMonths,
         auto_invoice_hour: autoHour,
         auto_invoice_minute: autoMinute,
+        auto_invoice_due_day: autoDueDay,
         contract_kdrive_folder_url: kdriveFolderUrl.trim() !== "" ? kdriveFolderUrl.trim() : null,
         contract_kdrive_file_url: kdriveFileUrl.trim() !== "" ? kdriveFileUrl.trim() : null,
         // ADDED: annual increase
@@ -290,6 +292,23 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
                     }}
                     placeholder="e.g., 30"
                   />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Invoice due day (1–31)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={autoDueDay}
+                    onChange={(e) => {
+                      const v = Number(e.target.value || 1);
+                      setAutoDueDay(Math.max(1, Math.min(31, isNaN(v) ? 1 : v)));
+                    }}
+                    placeholder="e.g., 10"
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    Auto‑generated invoices will use this day of month as their due date.
+                  </div>
                 </div>
               </div>
             )}

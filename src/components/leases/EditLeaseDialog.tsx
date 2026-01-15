@@ -36,6 +36,7 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
   const [autoMinute, setAutoMinute] = useState<number>(typeof lease.auto_invoice_minute === "number" ? lease.auto_invoice_minute : 0);
   const [kdriveFolderUrl, setKdriveFolderUrl] = useState<string>(lease.contract_kdrive_folder_url ?? "");
   const [kdriveFileUrl, setKdriveFileUrl] = useState<string>(lease.contract_kdrive_file_url ?? "");
+  const [autoDueDay, setAutoDueDay] = useState<number>(typeof (lease as any).auto_invoice_due_day === "number" ? (lease as any).auto_invoice_due_day : (lease.auto_invoice_day ?? 5));
 
   const [annualIncreaseEnabled, setAnnualIncreaseEnabled] = useState<boolean>(!!lease.annual_increase_enabled);
   const [annualIncreasePercent, setAnnualIncreasePercent] = useState<string>(
@@ -60,6 +61,7 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
     setKdriveFileUrl(lease.contract_kdrive_file_url ?? "");
     setAnnualIncreaseEnabled(!!lease.annual_increase_enabled);
     setAnnualIncreasePercent(typeof lease.annual_increase_percent === "number" ? String(lease.annual_increase_percent) : "");
+    setAutoDueDay(typeof (lease as any).auto_invoice_due_day === "number" ? (lease as any).auto_invoice_due_day : (lease.auto_invoice_day ?? 5));
   };
 
   const onSave = async () => {
@@ -77,6 +79,7 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
         auto_invoice_interval_months: autoIntervalMonths,
         auto_invoice_hour: autoHour,
         auto_invoice_minute: autoMinute,
+        auto_invoice_due_day: autoDueDay,
         contract_kdrive_folder_url: kdriveFolderUrl.trim() !== "" ? kdriveFolderUrl.trim() : null,
         contract_kdrive_file_url: kdriveFileUrl.trim() !== "" ? kdriveFileUrl.trim() : null,
         annual_increase_enabled: annualIncreaseEnabled,
@@ -263,6 +266,22 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
                     setAutoMinute(Math.max(0, Math.min(59, isNaN(v) ? 0 : v)));
                   }}
                 />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Invoice due day (1–31)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={autoDueDay}
+                  onChange={(e) => {
+                    const v = Number(e.target.value || 1);
+                    setAutoDueDay(Math.max(1, Math.min(31, isNaN(v) ? 1 : v)));
+                  }}
+                />
+                <div className="text-xs text-muted-foreground">
+                  Auto‑generated invoices will use this day of month as their due date.
+                </div>
               </div>
             </div>
           )}

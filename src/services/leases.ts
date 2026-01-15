@@ -18,6 +18,7 @@ export type LeaseRow = {
   auto_invoice_interval_months?: number;
   auto_invoice_hour?: number;
   auto_invoice_minute?: number;
+  auto_invoice_due_day?: number; // NEW
   contract_kdrive_folder_url?: string | null;
   contract_kdrive_file_url?: string | null;
   annual_increase_enabled?: boolean;
@@ -48,6 +49,7 @@ function normalizeLeaseRow(row: any): LeaseWithMeta {
     auto_invoice_interval_months: typeof row.auto_invoice_interval_months === "number" ? row.auto_invoice_interval_months : 1,
     auto_invoice_hour: typeof row.auto_invoice_hour === "number" ? row.auto_invoice_hour : 9,
     auto_invoice_minute: typeof row.auto_invoice_minute === "number" ? row.auto_invoice_minute : 0,
+    auto_invoice_due_day: typeof row.auto_invoice_due_day === "number" ? row.auto_invoice_due_day : undefined, // NEW
     contract_kdrive_folder_url: row.contract_kdrive_folder_url ?? null,
     contract_kdrive_file_url: row.contract_kdrive_file_url ?? null,
     annual_increase_enabled: row.annual_increase_enabled ?? false,
@@ -65,7 +67,7 @@ export async function fetchLeases(params: { role: Role | null; userId: string | 
     .from("leases")
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
-      auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute,
+      auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute, auto_invoice_due_day,
       contract_kdrive_folder_url, contract_kdrive_file_url,
       annual_increase_enabled, annual_increase_percent,
       property:properties ( id, name ),
@@ -91,6 +93,7 @@ export async function createLease(input: {
   auto_invoice_interval_months?: number;
   auto_invoice_hour?: number;
   auto_invoice_minute?: number;
+  auto_invoice_due_day?: number; // NEW
   contract_kdrive_folder_url?: string | null;
   contract_kdrive_file_url?: string | null;
   annual_increase_enabled?: boolean;
@@ -110,6 +113,7 @@ export async function createLease(input: {
     auto_invoice_interval_months: typeof input.auto_invoice_interval_months === "number" ? input.auto_invoice_interval_months : 1,
     auto_invoice_hour: typeof input.auto_invoice_hour === "number" ? input.auto_invoice_hour : 9,
     auto_invoice_minute: typeof input.auto_invoice_minute === "number" ? input.auto_invoice_minute : 0,
+    auto_invoice_due_day: typeof input.auto_invoice_due_day === "number" ? input.auto_invoice_due_day : null, // NEW
     contract_kdrive_folder_url: input.contract_kdrive_folder_url ?? null,
     contract_kdrive_file_url: input.contract_kdrive_file_url ?? null,
     annual_increase_enabled: !!input.annual_increase_enabled,
@@ -121,7 +125,7 @@ export async function createLease(input: {
     .insert(payload)
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
-      auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute,
+      auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute, auto_invoice_due_day,
       contract_kdrive_folder_url, contract_kdrive_file_url,
       annual_increase_enabled, annual_increase_percent,
       property:properties ( id, name ),
@@ -147,6 +151,7 @@ export async function updateLease(
     auto_invoice_interval_months: number;
     auto_invoice_hour: number;
     auto_invoice_minute: number;
+    auto_invoice_due_day: number; // NEW
     contract_kdrive_folder_url: string | null;
     contract_kdrive_file_url: string | null;
     annual_increase_enabled: boolean;
@@ -167,6 +172,7 @@ export async function updateLease(
   if (typeof input.auto_invoice_interval_months !== "undefined") payload.auto_invoice_interval_months = input.auto_invoice_interval_months;
   if (typeof input.auto_invoice_hour !== "undefined") payload.auto_invoice_hour = input.auto_invoice_hour;
   if (typeof input.auto_invoice_minute !== "undefined") payload.auto_invoice_minute = input.auto_invoice_minute;
+  if (typeof input.auto_invoice_due_day !== "undefined") payload.auto_invoice_due_day = input.auto_invoice_due_day; // NEW
   if (typeof input.contract_kdrive_folder_url !== "undefined") payload.contract_kdrive_folder_url = input.contract_kdrive_folder_url;
   if (typeof input.contract_kdrive_file_url !== "undefined") payload.contract_kdrive_file_url = input.contract_kdrive_file_url;
   if (typeof input.annual_increase_enabled !== "undefined") payload.annual_increase_enabled = input.annual_increase_enabled;
@@ -180,7 +186,7 @@ export async function updateLease(
     .eq("id", id)
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
-      auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute,
+      auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute, auto_invoice_due_day,
       contract_kdrive_folder_url, contract_kdrive_file_url,
       annual_increase_enabled, annual_increase_percent,
       property:properties ( id, name ),
@@ -198,7 +204,7 @@ export async function deleteLease(id: string) {
     .from("leases")
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
-      auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute,
+      auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute, auto_invoice_due_day,
       contract_kdrive_folder_url, contract_kdrive_file_url,
       annual_increase_enabled, annual_increase_percent
     `)
