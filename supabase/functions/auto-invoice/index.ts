@@ -60,6 +60,16 @@ function yearsSinceAnniversary(startDate: string, refDate: Date) {
   return Math.max(0, years);
 }
 
+function endOfMonthDate(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+}
+function dueDateForMonth(ref: Date, day: number) {
+  const last = endOfMonthDate(ref).getDate();
+  const clamped = Math.max(1, Math.min(last, Math.floor(day || 1)));
+  const dd = new Date(ref.getFullYear(), ref.getMonth(), clamped);
+  return dd.toISOString().slice(0, 10);
+}
+
 serve(async (req) => {
   const origin = req.headers.get("Origin");
   const corsHeaders = buildCorsHeaders(origin);
@@ -172,7 +182,6 @@ serve(async (req) => {
   }
 
   const issueDate = todayStr();
-  const dueDate = plusDays(issueDate, 7);
 
   const bucketName = "invoices";
   const { data: bucketList } = await service.storage.listBuckets();
@@ -247,6 +256,9 @@ serve(async (req) => {
       }
     }
     const currency = l.rent_currency;
+
+    const dueDay = typeof l.auto_invoice_day === "number" ? l.auto_invoice_day : 5;
+    const dueDate = dueDateForMonth(today, dueDay);
 
     const invoiceNumber = autoNumber();
     const { data: inv, error: invErr } = await service

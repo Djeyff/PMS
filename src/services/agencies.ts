@@ -59,11 +59,11 @@ export async function assignSelfToAgency(agencyId: string) {
 export async function fetchAgencyById(id: string) {
   const { data, error } = await supabase
     .from("agencies")
-    .select("id, name, default_currency, timezone, address")
+    .select("id, name, default_currency, timezone, address, alerts_email")
     .eq("id", id)
     .single();
   if (error) throw error;
-  return data as { id: string; name: string; default_currency: string; timezone: string | null; address: string | null };
+  return data as { id: string; name: string; default_currency: string; timezone: string | null; address: string | null; alerts_email?: string | null };
 }
 
 // New: update agency timezone
@@ -78,10 +78,11 @@ export async function updateAgencyTimezone(id: string, timezone: string) {
   return data as { id: string };
 }
 
-export async function updateAgencyProfile(id: string, fields: { name?: string | null; address?: string | null }) {
+export async function updateAgencyProfile(id: string, fields: { name?: string | null; address?: string | null; alerts_email?: string | null }) {
   const payload: any = {};
   if (typeof fields.name !== "undefined") payload.name = fields.name ?? null;
   if (typeof fields.address !== "undefined") payload.address = fields.address ?? null;
+  if (typeof fields.alerts_email !== "undefined") payload.alerts_email = fields.alerts_email ?? null;
 
   const { data, error } = await supabase
     .from("agencies")

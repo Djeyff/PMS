@@ -55,11 +55,13 @@ const Settings = () => {
   // Branding states
   const [agencyDisplayName, setAgencyDisplayName] = useState<string>(agency?.name ?? "");
   const [address, setAddress] = useState<string>(agency?.address ?? "");
+  const [alertsEmail, setAlertsEmail] = useState<string>(agency?.alerts_email ?? "");
 
   React.useEffect(() => {
     if (agency?.name != null) setAgencyDisplayName(agency.name || "");
     if (agency?.address != null) setAddress(agency.address || "");
-  }, [agency?.name, agency?.address]);
+    if ((agency as any)?.alerts_email != null) setAlertsEmail((agency as any).alerts_email || "");
+  }, [agency?.name, agency?.address, (agency as any)?.alerts_email]);
 
   // Curated timezone list (values are IANA tz names)
   const TIMEZONES = [
@@ -166,6 +168,7 @@ const Settings = () => {
       await updateAgencyProfile(profile.agency_id, {
         name: agencyDisplayName,
         address: address,
+        alerts_email: alertsEmail.trim() !== "" ? alertsEmail.trim() : null,
       });
       toast.success("Agency info updated");
       await refetchAgency();
@@ -359,6 +362,20 @@ const Settings = () => {
                       onChange={(e) => setAddress(e.target.value)}
                       placeholder="278 calle Duarte, LTI building, Las Terrenas"
                     />
+                  </div>
+
+                  {/* Alerts Email */}
+                  <div className="space-y-2">
+                    <Label>Alerts Email</Label>
+                    <Input
+                      type="email"
+                      value={alertsEmail}
+                      onChange={(e) => setAlertsEmail(e.target.value)}
+                      placeholder="contact@lasterrenas.properties"
+                    />
+                    <div className="text-xs text-muted-foreground">
+                      Monthly unpaid invoice digests and reminders will be sent here.
+                    </div>
                   </div>
 
                   <div className="pt-2">
