@@ -77,8 +77,8 @@ serve(async (req) => {
 
   // Compute month window (current month)
   const now = new Date()
-  const from = ymd(startOfMonth(now))
-  const to = ymd(endOfMonth(now))
+  const rangeStart = ymd(startOfMonth(now))
+  const rangeEnd = ymd(endOfMonth(now))
   const today = ymd(now)
 
   // Load invoices for this agency due in current month and not fully paid
@@ -90,8 +90,8 @@ serve(async (req) => {
       tenant:profiles ( first_name, last_name ),
       payments:payments ( amount, currency, exchange_rate )
     `)
-    .gte("due_date", from)
-    .lte("due_date", to)
+    .gte("due_date", rangeStart)
+    .lte("due_date", rangeEnd)
 
   if (invErr) {
     console.error("[overdue-monthly-digest] Load invoices failed", invErr)
@@ -161,14 +161,14 @@ serve(async (req) => {
 
   // Send email if configured and there are rows
   if (alertsEmail && rowsForEmail.length > 0 && RESEND_API_KEY) {
-    const subject = `Unpaid invoices for ${from} to ${to} (${rowsForEmail.length})`
+    const subject = `Unpaid invoices for ${rangeStart} to ${rangeEnd} (${rowsForEmail.length})`
     const bodyRows = rowsForEmail
       .sort((a, b) => (a.due < b.due ? -1 : 1))
       .map(r => `<tr><td style="padding:6px 8px;">${r.prop}</td><td style="padding:6px 8px;">${r.tenant}</td><td style="padding:6px 8px; font-family:monospace;">${r.number}</td><td style="padding:6px 8px;">${r.due}</td><td style="padding:6px 8px; text-align:right;">${r.remaining}</td></tr>`)
       .join("")
     const html = `
       <div style="font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; color:#111; max-width:680px; margin:0 auto;">
-        <h2 style="font-size:18px; margin:16px 0;">Unpaid invoices (${from} to ${to})</h2>
+        <h2 style="font-size:18px; margin:16px 0;">Unpaid invoices (${rangeStart} to ${rangeEnd})</h2>
         <table style="width:100%; border-collapse:collapse;">
           <thead>
             <tr>
