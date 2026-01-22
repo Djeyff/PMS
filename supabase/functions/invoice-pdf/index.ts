@@ -694,7 +694,8 @@ serve(async (req) => {
     ry -= 16;
 
     // Final Balance row (saldo) shown last
-    page.drawText(`${t.balance} :`, { x: rx, y: ry, size: 11, font: fontBold });
+    const finalBalanceLabel = lang === "es" ? "Saldo Actual" : "Current Balance";
+    page.drawText(`${finalBalanceLabel} :`, { x: rx, y: ry, size: 11, font: fontBold });
     drawTextRight(fmt(balance, currency), valueRightX, ry, 13, fontBold);
 
     // Move cursor below cards

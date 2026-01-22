@@ -440,7 +440,7 @@ const InvoiceDetail = () => {
           <div className="mt-3 border-t" />
           {/* Último: Saldo */}
           <div className="flex justify-between items-baseline pt-3">
-            <div className="font-medium">{lang === "es" ? "Saldo :" : "Balance :"}</div>
+            <div className="font-medium">{lang === "es" ? "Saldo Actual :" : "Current Balance :"}</div>
             <div className="text-lg font-semibold">{fmt(balance, inv.currency)}</div>
           </div>
         </div>
