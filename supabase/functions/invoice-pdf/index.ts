@@ -687,11 +687,11 @@ serve(async (req) => {
     // Divider (border-t) before final Balance
     page.drawLine({
       start: { x: M + cardW + gap + 12, y: ry - 6 },
-      end: { x: M + cardW + gap + cardW - 12, y: ry - 6 },
+      end:   { x: M + cardW + gap + cardW - 12, y: ry - 6 },
       color: COL_BORDER,
       thickness: 1,
     });
-    ry -= 16;
+    ry -= 24;
 
     // Final Balance row (saldo) shown last
     const finalBalanceLabel = lang === "es" ? "Saldo Actual" : "Current Balance";
