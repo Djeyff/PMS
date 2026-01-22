@@ -645,18 +645,6 @@ serve(async (req) => {
     let rx = M + cardW + gap + 12;
     let ry = yCursor - 18;
     const valueRightX = M + cardW + gap + cardW - 12;
-    page.drawText(`${t.balance} :`, { x: rx, y: ry, size: 11, font: fontBold });
-    drawTextRight(fmt(balance, currency), valueRightX, ry, 13, fontBold);
-    ry -= 18;
-
-    // Divider (border-t)
-    page.drawLine({
-      start: { x: M + cardW + gap + 12, y: ry - 6 },
-      end: { x: M + cardW + gap + cardW - 12, y: ry - 6 },
-      color: COL_BORDER,
-      thickness: 1,
-    });
-    ry -= 16;
 
     // Previous balance row (wrapped label)
     {
@@ -682,7 +670,7 @@ serve(async (req) => {
       const overallValText = fmt(overallBalance, currency);
       const overallValW = fontBold.widthOfTextAtSize(overallValText, 11);
       const labelMaxW = Math.max(60, valueRightX - overallValW - 8 - rx);
-      drawWrappedText({
+      const overallUsedH = drawWrappedText({
         text: t.overallBalance,
         x: rx,
         y: ry,
@@ -693,8 +681,21 @@ serve(async (req) => {
         lineGap: 2,
       });
       drawTextRight(overallValText, valueRightX, ry, 11, fontBold);
-      // This is the last row in the card; no further vertical shift needed
+      ry -= Math.max(16, overallUsedH + 2);
     }
+
+    // Divider (border-t) before final Balance
+    page.drawLine({
+      start: { x: M + cardW + gap + 12, y: ry - 6 },
+      end: { x: M + cardW + gap + cardW - 12, y: ry - 6 },
+      color: COL_BORDER,
+      thickness: 1,
+    });
+    ry -= 16;
+
+    // Final Balance row (saldo) shown last
+    page.drawText(`${t.balance} :`, { x: rx, y: ry, size: 11, font: fontBold });
+    drawTextRight(fmt(balance, currency), valueRightX, ry, 13, fontBold);
 
     // Move cursor below cards
     yCursor = yCursor - cardH - 20;
