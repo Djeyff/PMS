@@ -427,18 +427,21 @@ const InvoiceDetail = () => {
         </div>
 
         <div className="space-y-2 bg-gray-50 rounded p-3">
-          <div className="font-medium">{lang === "es" ? "Saldo" : "Balance"} :</div>
-          <div className="text-lg font-semibold">{fmt(balance, inv.currency)}</div>
-
-          <div className="mt-4 pt-3 border-t space-y-2">
-            <div className="flex justify-between text-gray-600">
-              <div>{t.prevBalance}</div>
-              <div>{fmt(previousBalance, inv.currency)}</div>
-            </div>
-            <div className="grid grid-cols-[1fr,auto] items-start gap-4">
-              <div className="leading-snug">{t.overallBalance}</div>
-              <div className="font-semibold text-right min-w-[110px]">{fmt(overallBalance, inv.currency)}</div>
-            </div>
+          {/* Primero: Saldo previo y Saldo total */}
+          <div className="flex justify-between text-gray-600">
+            <div>{t.prevBalance}</div>
+            <div>{fmt(previousBalance, inv.currency)}</div>
+          </div>
+          <div className="grid grid-cols-[1fr,auto] items-start gap-4">
+            <div className="leading-snug font-medium">{t.overallBalance}</div>
+            <div className="font-semibold text-right min-w-[110px]">{fmt(overallBalance, inv.currency)}</div>
+          </div>
+          {/* Línea gris por encima de Saldo */}
+          <div className="mt-3 border-t" />
+          {/* Último: Saldo */}
+          <div className="flex justify-between items-baseline pt-3">
+            <div className="font-medium">{lang === "es" ? "Saldo :" : "Balance :"}</div>
+            <div className="text-lg font-semibold">{fmt(balance, inv.currency)}</div>
           </div>
         </div>
       </div>

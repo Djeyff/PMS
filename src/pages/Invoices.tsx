@@ -68,7 +68,15 @@ const Invoices = () => {
         const uniqSorted = Array.from(new Set(raw)).sort();
         return uniqSorted.length ? uniqSorted.join(", ") : "—";
       })();
-      return { ...inv, paid: paidConverted, balance, displayStatus, paymentDatesText };
+      // Última fecha de pago para ordenar facturas pagadas
+      const latestPaymentDate = (() => {
+        const raw = (inv.payments ?? [])
+          .map((p: any) => p.received_date)
+          .filter((d: any) => typeof d === "string");
+        if (raw.length === 0) return null;
+        return raw.reduce((max: string, d: string) => (d > max ? d : max), raw[0]);
+      })();
+      return { ...inv, paid: paidConverted, balance, displayStatus, paymentDatesText, latestPaymentDate };
     });
   }, [data]);
 
@@ -76,8 +84,20 @@ const Invoices = () => {
   const sortedRows = useMemo(() => {
     const copy = [...rows];
     copy.sort((a: any, b: any) => {
-      const cmp = a.issue_date.localeCompare(b.issue_date);
-      return sortOrder === "desc" ? -cmp : cmp;
+      const aPaid = String(a.displayStatus).toLowerCase() === "paid";
+      const bPaid = String(b.displayStatus).toLowerCase() === "paid";
+      // Primero agrupar: pagadas arriba
+      if (aPaid && !bPaid) return -1;
+      if (!aPaid && bPaid) return 1;
+      // Si ambas son pagadas, ordenar por última fecha de pago (más reciente primero)
+      if (aPaid && bPaid) {
+        const aLast = a.latestPaymentDate ?? "";
+        const bLast = b.latestPaymentDate ?? "";
+        return bLast.localeCompare(aLast);
+      }
+      // Resto: ordenar por issue_date según selector
+      const cmpIssue = a.issue_date.localeCompare(b.issue_date);
+      return sortOrder === "desc" ? -cmpIssue : cmpIssue;
     });
     return copy;
   }, [rows, sortOrder]);
