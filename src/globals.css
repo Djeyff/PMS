@@ -110,42 +110,47 @@
     margin: 0.5in;
   }
 
-  /* Constrain invoice container and add inner padding for breathing room */
+  /* Ensure dialog content flows and matches the view layout when printing */
   .invoice-print {
-    width: auto;
-    max-width: none;
-    padding: 0.35in; /* previously 0; add inner margin so text isn't tight */
-    background: #ffffff !important;
-    color: #000000 !important;
+    position: static !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
   }
 
-  /* Ensure readable table spacing when printing */
-  .invoice-print table {
-    border-collapse: collapse;
-    width: 100%;
+  /* Repeat table headers and footers across pages */
+  .invoice-print table thead {
+    display: table-header-group;
   }
-  .invoice-print th,
-  .invoice-print td {
-    padding: 10pt !important;
+  .invoice-print table tfoot {
+    display: table-footer-group;
   }
 
-  /* Remove backgrounds that may waste ink */
-  .invoice-print .bg-gray-50 {
-    background-color: transparent !important;
-  }
-
-  /* Hide interactive elements globally */
-  .print\\:hidden {
-    display: none !important;
-  }
-
-  /* Avoid splitting key blocks across pages */
+  /* Avoid breaking within important blocks/rows */
   .invoice-print .border,
   .invoice-print .rounded,
-  .invoice-print .grid,
-  .invoice-print .flex {
-    break-inside: avoid;
+  .invoice-print .rounded-md,
+  .invoice-print .card {
+    break-inside: avoid-page;
+  }
+  .invoice-print table {
+    page-break-inside: auto;
+    width: 100%;
+  }
+  .invoice-print tr {
     page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  .invoice-print td,
+  .invoice-print th {
+    break-inside: avoid-page;
+  }
+
+  /* Hide interactive-only UI when printing (redundant with Tailwind print:hidden but safe) */
+  .print\\:hidden {
+    display: none !important;
   }
 }
 
