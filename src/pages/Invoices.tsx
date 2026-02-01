@@ -19,13 +19,8 @@ import { runAutoInvoice } from "@/services/auto-invoice";
 import { useIsMobile } from "@/hooks/use-mobile";
 import InvoiceListItemMobile from "@/components/invoices/InvoiceListItemMobile";
 import { sharePdfToWhatsApp } from "@/utils/whatsapp";
-import { downloadFileFromUrl, buildPdfFileName, buildInvoicePdfFileName } from "@/utils/download";
+import { downloadFileFromUrl, buildInvoicePdfFileName } from "@/utils/download";
 import { getTenantNamesForInvoices } from "@/services/tenant-names";
-
-const data = [
-  { number: "INV-1001", tenant: "Maria Gomez", due: "2024-08-05", total: 1200, currency: "USD" as const, status: "paid" as const },
-  { number: "INV-1002", tenant: "John Smith", due: "2024-08-10", total: 950, currency: "USD" as const, status: "overdue" as const },
-];
 
 const Invoices = () => {
   const { role } = useAuth();
@@ -68,15 +63,7 @@ const Invoices = () => {
         const uniqSorted = Array.from(new Set(raw)).sort();
         return uniqSorted.length ? uniqSorted.join(", ") : "—";
       })();
-      // Última fecha de pago para ordenar facturas pagadas
-      const latestPaymentDate = (() => {
-        const raw = (inv.payments ?? [])
-          .map((p: any) => p.received_date)
-          .filter((d: any) => typeof d === "string");
-        if (raw.length === 0) return null;
-        return raw.reduce((max: string, d: string) => (d > max ? d : max), raw[0]);
-      })();
-      return { ...inv, paid: paidConverted, balance, displayStatus, paymentDatesText, latestPaymentDate };
+      return { ...inv, paid: paidConverted, balance, displayStatus, paymentDatesText };
     });
   }, [data]);
 
@@ -84,20 +71,9 @@ const Invoices = () => {
   const sortedRows = useMemo(() => {
     const copy = [...rows];
     copy.sort((a: any, b: any) => {
-      const aPaid = String(a.displayStatus).toLowerCase() === "paid";
-      const bPaid = String(b.displayStatus).toLowerCase() === "paid";
-      // Primero agrupar: pagadas arriba
-      if (aPaid && !bPaid) return -1;
-      if (!aPaid && bPaid) return 1;
-      // Si ambas son pagadas, ordenar por última fecha de pago (más reciente primero)
-      if (aPaid && bPaid) {
-        const aLast = a.latestPaymentDate ?? "";
-        const bLast = b.latestPaymentDate ?? "";
-        return bLast.localeCompare(aLast);
-      }
-      // Resto: ordenar por issue_date según selector
-      const cmpIssue = a.issue_date.localeCompare(b.issue_date);
-      return sortOrder === "desc" ? -cmpIssue : cmpIssue;
+      const aIssue = String(a.issue_date ?? "");
+      const bIssue = String(b.issue_date ?? "");
+      return sortOrder === "desc" ? bIssue.localeCompare(aIssue) : aIssue.localeCompare(bIssue);
     });
     return copy;
   }, [rows, sortOrder]);
@@ -182,7 +158,7 @@ const Invoices = () => {
                       <TableHead>Payment date</TableHead>
                       <TableHead>Balance</TableHead>
                       <TableHead>Status</TableHead>
-                      {isAdmin && <TableHead>Actions</TableHead>}
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -210,95 +186,98 @@ const Invoices = () => {
                               return <span className={`${s.cls} font-medium`}>{s.label}</span>;
                             })()}
                           </TableCell>
-                          {isAdmin && (
-                            <TableCell>
-                              <div className="flex gap-2">
-                                <Button asChild size="sm" variant="outline"><Link to={`/invoices/${inv.id}`}>View</Link></Button>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button size="sm" variant="outline">Generate in</Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent>
-                                    <DropdownMenuItem
-                                      onClick={async () => {
-                                        try {
-                                          await generateInvoicePDF(inv.id, "en", { sendEmail: false, sendWhatsApp: false });
-                                          toast.success("Invoice PDF generated in English");
-                                          refetch();
-                                        } catch (e: any) {
-                                          toast.error(e.message || "Failed to generate PDF");
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button asChild size="sm" variant="outline"><Link to={`/invoices/${inv.id}`}>View</Link></Button>
+
+                              {isAdmin ? (
+                                <>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button size="sm" variant="outline">Generate in</Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent>
+                                      <DropdownMenuItem
+                                        onClick={async () => {
+                                          try {
+                                            await generateInvoicePDF(inv.id, "en", { sendEmail: false, sendWhatsApp: false });
+                                            toast.success("Invoice PDF generated in English");
+                                            refetch();
+                                          } catch (e: any) {
+                                            toast.error(e.message || "Failed to generate PDF");
+                                          }
+                                        }}
+                                      >
+                                        English
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={async () => {
+                                          try {
+                                            await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
+                                            toast.success("Factura generada en Español");
+                                            refetch();
+                                          } catch (e: any) {
+                                            toast.error(e.message || "Failed to generate PDF");
+                                          }
+                                        }}
+                                      >
+                                        Spanish
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={async () => {
+                                      try {
+                                        // Default to Spanish for WhatsApp
+                                        const out = await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
+                                        const url = out.url;
+                                        if (!url) {
+                                          toast.info("Factura generada pero sin URL");
+                                          return;
                                         }
-                                      }}
-                                    >
-                                      English
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={async () => {
-                                        try {
-                                          await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
-                                          toast.success("Factura generada en Español");
-                                          refetch();
-                                        } catch (e: any) {
-                                          toast.error(e.message || "Failed to generate PDF");
+                                        const tenantLabel = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Cliente";
+                                        const fmtAmt = new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(Number(inv.total_amount));
+                                        const text = `Hola ${tenantLabel}, aquí está su factura ${inv.number ?? inv.id} por ${fmtAmt}, con vencimiento el ${inv.due_date}.`;
+                                        const filename = buildInvoicePdfFileName(inv.number ?? inv.id, tenantLabel, inv.issue_date);
+                                        await sharePdfToWhatsApp(url, filename, text);
+                                      } catch (e: any) {
+                                        toast.error(e?.message ?? "Error al compartir por WhatsApp");
+                                      }
+                                    }}
+                                  >
+                                    QuickShare
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={async () => {
+                                      try {
+                                        const out = await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
+                                        const url = out.url;
+                                        if (!url) {
+                                          toast.info("Factura generada pero sin URL");
+                                          return;
                                         }
-                                      }}
-                                    >
-                                      Spanish
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  onClick={async () => {
-                                    try {
-                                      // Default to Spanish for WhatsApp
-                                      const out = await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
-                                      const url = out.url;
-                                      if (!url) {
-                                        toast.info("Factura generada pero sin URL");
-                                        return;
+                                        const invoiceNumber = inv.number ?? inv.id;
+                                        const tenantLabel = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Cliente";
+                                        const filename = buildInvoicePdfFileName(invoiceNumber, tenantLabel, inv.issue_date);
+                                        await downloadFileFromUrl(url, filename);
+                                        toast.success("PDF downloaded");
+                                      } catch (e: any) {
+                                        toast.error(e?.message ?? "Failed to download PDF");
                                       }
-                                      const tenantLabel = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Cliente";
-                                      const fmtAmt = new Intl.NumberFormat(undefined, { style: "currency", currency: inv.currency }).format(Number(inv.total_amount));
-                                      const text = `Hola ${tenantLabel}, aquí está su factura ${inv.number ?? inv.id} por ${fmtAmt}, con vencimiento el ${inv.due_date}.`;
-                                      const filename = buildInvoicePdfFileName(inv.number ?? inv.id, tenantLabel, inv.issue_date);
-                                      await sharePdfToWhatsApp(url, filename, text);
-                                    } catch (e: any) {
-                                      toast.error(e?.message ?? "Error al compartir por WhatsApp");
-                                    }
-                                  }}
-                                >
-                                  QuickShare
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={async () => {
-                                    try {
-                                      const out = await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
-                                      const url = out.url;
-                                      if (!url) {
-                                        toast.info("Factura generada pero sin URL");
-                                        return;
-                                      }
-                                      const invoiceNumber = inv.number ?? inv.id;
-                                      const tenantName = [inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "Cliente";
-                                      const filename = buildInvoicePdfFileName(invoiceNumber, tenantName, inv.issue_date);
-                                      await downloadFileFromUrl(url, filename);
-                                      toast.success("PDF descargado");
-                                    } catch (e: any) {
-                                      toast.error(e?.message ?? "No se pudo descargar el PDF");
-                                    }
-                                  }}
-                                >
-                                  Download PDF
-                                </Button>
-                                <EditInvoiceDialog invoice={inv} onUpdated={() => refetch()} />
-                                <DeleteInvoiceDialog id={inv.id} onDeleted={() => refetch()} />
-                              </div>
-                            </TableCell>
-                          )}
+                                    }}
+                                  >
+                                    Download PDF
+                                  </Button>
+                                  <EditInvoiceDialog invoice={inv} onUpdated={() => refetch()} />
+                                  <DeleteInvoiceDialog id={inv.id} onDeleted={() => refetch()} />
+                                </>
+                              ) : null}
+                            </div>
+                          </TableCell>
                         </TableRow>
                       );
                     })}

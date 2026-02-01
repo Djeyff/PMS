@@ -113,6 +113,12 @@ const InvoiceDetail = () => {
         prevBalance: "Saldo previo",
         currentInvoice: "Factura actual",
         overallBalance: "Saldo total (incluye esta factura)",
+        paymentBreakdown: "Detalle de pagos",
+        payDate: "Fecha",
+        payMethod: "Método",
+        payAmount: "Importe",
+        payRate: "Tasa",
+        payApprox: "≈ en moneda de la factura",
       }
     : {
         title: "Invoice",
@@ -135,6 +141,12 @@ const InvoiceDetail = () => {
         prevBalance: "Previous balance",
         currentInvoice: "Current invoice",
         overallBalance: "Overall balance (includes this invoice)",
+        paymentBreakdown: "Payment breakdown",
+        payDate: "Date",
+        payMethod: "Method",
+        payAmount: "Amount",
+        payRate: "Rate",
+        payApprox: "≈ in invoice currency",
       };
 
   const fmtLocale = lang === "es" ? "es-ES" : "en-US";
@@ -152,61 +164,7 @@ const InvoiceDetail = () => {
     return sum;
   }, 0);
 
-  // Prepare original-currency paid display with exchange rate
-  const dopPayments = payments.filter((p: any) => p.currency === "DOP");
-  const usdPayments = payments.filter((p: any) => p.currency === "USD");
-  const dopTotal = dopPayments.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-  const usdTotal = usdPayments.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-
-  const dopRates = Array.from(new Set(dopPayments.map((p: any) => (typeof p.exchange_rate === "number" ? p.exchange_rate : null)).filter((r) => r)));
-  const usdRates = Array.from(new Set(usdPayments.map((p: any) => (typeof p.exchange_rate === "number" ? p.exchange_rate : null)).filter((r) => r)));
-
-  const dopConvertedToUSD = dopPayments.reduce((s: number, p: any) => {
-    const amt = Number(p.amount || 0);
-    const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : null;
-    if (!rate || rate <= 0) return s;
-    return s + amt / rate;
-  }, 0);
-
-  const usdConvertedToDOP = usdPayments.reduce((s: number, p: any) => {
-    const amt = Number(p.amount || 0);
-    const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : null;
-    if (!rate || rate <= 0) return s;
-    return s + amt * rate;
-  }, 0);
-
-  const paidDisplayText = (() => {
-    if (inv.currency === "USD") {
-      if (usdTotal > 0 && dopTotal > 0) {
-        const rateLabel = dopRates.length === 1 ? String(dopRates[0]) : dopRates.length > 1 ? dopRates.join(", ") : "—";
-        const totalUsdEquiv = usdTotal + dopConvertedToUSD;
-        return `${fmt(usdTotal, "USD")} + ${fmt(dopTotal, "DOP")} @ ${rateLabel} ≈ ${fmt(totalUsdEquiv, "USD")}`;
-      }
-      if (dopTotal > 0) {
-        const rateLabel = dopRates.length === 1 ? String(dopRates[0]) : dopRates.length > 1 ? dopRates.join(", ") : "—";
-        return `${fmt(dopTotal, "DOP")} @ ${rateLabel} ≈ ${fmt(dopConvertedToUSD, "USD")}`;
-      }
-      return fmt(paidConverted, inv.currency);
-    }
-    // DOP invoice
-    if (usdTotal > 0 && dopTotal > 0) {
-      const rateLabel = usdRates.length === 1 ? String(usdRates[0]) : usdRates.length > 1 ? usdRates.join(", ") : "—";
-      const totalDopEquiv = dopTotal + usdConvertedToDOP;
-      return `${fmt(dopTotal, "DOP")} + ${fmt(usdTotal, "USD")} @ ${rateLabel} ≈ ${fmt(totalDopEquiv, "DOP")}`;
-    }
-    if (usdTotal > 0) {
-      const rateLabel = usdRates.length === 1 ? String(usdRates[0]) : usdRates.length > 1 ? usdRates.join(", ") : "—";
-      return `${fmt(usdTotal, "USD")} @ ${rateLabel} ≈ ${fmt(usdConvertedToDOP, "DOP")}`;
-    }
-    return fmt(paidConverted, inv.currency);
-  })();
-
   const balance = Number(inv.total_amount) - paidConverted;
-  const today = new Date().toISOString().slice(0, 10);
-  let displayStatus: string = inv.status;
-  if (balance <= 0) displayStatus = "paid";
-  else if (inv.due_date < today && inv.status !== "void") displayStatus = "overdue";
-  else if (paidConverted > 0) displayStatus = "partial";
 
   // Helper to convert any payment to the invoice currency
   const convertToInvoiceCurrency = (amt: number, cur: "USD" | "DOP", rate: number | null, invCur: "USD" | "DOP") => {
@@ -241,8 +199,7 @@ const InvoiceDetail = () => {
 
   const previousBalance = prevPaymentsConverted - prevTotals;
 
-  // IMPORTANT: overall balance should reflect payments that happened AFTER the invoice was issued too.
-  // Otherwise, invoices paid later (e.g. paid in DOP days after issue) will still show as unpaid here.
+  // overall balance should reflect payments that happened AFTER the invoice was issued too.
   const asOfDate = new Date().toISOString().slice(0, 10);
 
   const allTotalsToDate = (tenantInvoices ?? [])
@@ -293,27 +250,29 @@ const InvoiceDetail = () => {
       .join(" ") || "—";
   };
 
-  const methodsDisplay = (() => {
-    const list = (inv.payments ?? []).map((p: any) => methodLabel(p.method)).filter(Boolean);
-    if (list.length === 0) return "—";
-    const uniq = Array.from(new Set(list));
-    return uniq.join(", ");
-  })();
+  const paymentLines = React.useMemo(() => {
+    const list = (payments ?? []).map((p: any, idx: number) => {
+      const amt = Number(p.amount || 0);
+      const cur = (p.currency as "USD" | "DOP") ?? inv.currency;
+      const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : p.exchange_rate == null ? null : Number(p.exchange_rate);
+      const converted = convertToInvoiceCurrency(amt, cur, rate, inv.currency);
+      return {
+        key: `${p.id ?? idx}`,
+        date: String(p.received_date ?? "").slice(0, 10) || "—",
+        method: methodLabel(p.method),
+        amountText: fmt(amt, cur),
+        rateText: cur === inv.currency ? "—" : rate ? String(rate) : "—",
+        approxText: cur === inv.currency ? "—" : fmt(converted, inv.currency),
+      };
+    });
+    // Sort by date asc for readability
+    list.sort((a, b) => a.date.localeCompare(b.date));
+    return list;
+  }, [payments, inv.currency, fmt, methodLabel]);
 
-  const exchangeRateDisplay = (() => {
-    const diffPay = (inv.payments ?? []).find((p: any) => p.exchange_rate && p.currency !== inv.currency);
-    if (!diffPay?.exchange_rate) return "—";
-    return String(diffPay.exchange_rate);
-  })();
-
-  const paymentDatesText = (() => {
-    const raw = (payments ?? [])
-      .map((p: any) => p.received_date)
-      .filter((d: any) => typeof d === "string");
-    const uniqSorted = Array.from(new Set(raw)).sort();
-    if (uniqSorted.length === 0) return "—";
-    return uniqSorted.join(", ");
-  })();
+  const exchangeRateHint = (paymentLines.some((p) => p.rateText !== "—"))
+    ? (lang === "es" ? "(DOP por 1 USD)" : "(DOP per 1 USD)")
+    : "";
 
   return (
     <div className="invoice-print p-6 max-w-3xl mx-auto bg-white text-black">
@@ -342,7 +301,7 @@ const InvoiceDetail = () => {
                   onClick={async () => {
                     if (!inv?.id) return;
                     try {
-                      const out = await generateInvoicePDF(inv.id, "en", { sendEmail: false, sendWhatsApp: false });
+                      await generateInvoicePDF(inv.id, "en", { sendEmail: false, sendWhatsApp: false });
                       toast.success("Invoice PDF generated in English");
                       await refetch();
                       const url = await getInvoiceSignedUrlByInvoiceId(inv.id);
@@ -358,7 +317,7 @@ const InvoiceDetail = () => {
                   onClick={async () => {
                     if (!inv?.id) return;
                     try {
-                      const out = await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
+                      await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
                       toast.success("Factura generada en Español");
                       await refetch();
                       const url = await getInvoiceSignedUrlByInvoiceId(inv.id);
@@ -449,16 +408,41 @@ const InvoiceDetail = () => {
           <div className="text-lg font-semibold">{fmt(Number(inv.total_amount), inv.currency)}</div>
 
           <div className="font-medium mt-2">{lang === "es" ? "Pagado" : "Paid"} :</div>
-          <div>{paidDisplayText}</div>
-          <div className="text-sm text-gray-700">
-            {lang === "es" ? "Fecha de pago" : "Payment date"} : {paymentDatesText}
+          <div className="font-semibold">{fmt(paidConverted, inv.currency)}</div>
+
+          <div className="mt-3">
+            <div className="font-medium">{t.paymentBreakdown}</div>
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full text-sm border rounded bg-white">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="text-left p-2 border-b">{t.payDate}</th>
+                    <th className="text-left p-2 border-b">{t.payMethod}</th>
+                    <th className="text-right p-2 border-b">{t.payAmount}</th>
+                    <th className="text-right p-2 border-b">{t.payRate} {exchangeRateHint}</th>
+                    <th className="text-right p-2 border-b">{t.payApprox}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paymentLines.length === 0 ? (
+                    <tr>
+                      <td className="p-2 text-gray-600" colSpan={5}>—</td>
+                    </tr>
+                  ) : (
+                    paymentLines.map((p) => (
+                      <tr key={p.key}>
+                        <td className="p-2 border-b whitespace-nowrap">{p.date}</td>
+                        <td className="p-2 border-b">{p.method}</td>
+                        <td className="p-2 border-b text-right whitespace-nowrap">{p.amountText}</td>
+                        <td className="p-2 border-b text-right whitespace-nowrap">{p.rateText}</td>
+                        <td className="p-2 border-b text-right whitespace-nowrap">{p.approxText}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-
-          <div className="font-medium mt-2">{lang === "es" ? "Tasa de Cambio" : "Exchange Rate"} :</div>
-          <div className="text-sm">{exchangeRateDisplay}</div>
-
-          <div className="font-medium mt-2">{lang === "es" ? "Método de pago" : "Payment Method"} :</div>
-          <div className="text-sm">{methodsDisplay}</div>
         </div>
 
         <div className="space-y-2 bg-gray-50 rounded p-3">
