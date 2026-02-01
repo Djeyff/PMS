@@ -149,6 +149,19 @@ const OwnerReports = () => {
     }
   }, [monthValue, months]);
 
+  // Identify saved owner report matching the selected period (used to gate the fee card)
+  const currentOwnerSaved = useMemo(() => {
+    if (!savedReports || !currentMonth) return null;
+    const sStr = String(startDate).slice(0, 10);
+    const eStr = String(endDate).slice(0, 10);
+    const match = (savedReports as OwnerReportRow[]).find((r) =>
+      String(r.month) === String(currentMonth.value) &&
+      String(r.start_date).slice(0, 10) === sStr &&
+      String(r.end_date).slice(0, 10) === eStr
+    );
+    return match ?? null;
+  }, [savedReports, currentMonth, startDate, endDate]);
+
   useEffect(() => {
     const loadRate = async () => {
       if (!startDate || !endDate) return;
@@ -425,42 +438,41 @@ const OwnerReports = () => {
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Your Management Fee</CardTitle></CardHeader>
               <CardContent>
-                {(() => {
-                  const usdComponent = feeBase.paid.usd + feeBase.issued.usd;
-                  const needsRate = usdComponent > 0 && !(Number.isFinite(effectiveRate) && effectiveRate > 0);
-                  if (needsRate) {
+                {!currentOwnerSaved ? (
+                  <div className="text-sm text-muted-foreground">
+                    Waiting for report to be generated to have exchange rate value.
+                  </div>
+                ) : (
+                  (() => {
+                    const feePercent = 5;
+                    const usdTotal = Number(currentOwnerSaved.usd_total || 0);
+                    const dopCash = Number(currentOwnerSaved.dop_cash_total || 0);
+                    const dopTransfer = Number(currentOwnerSaved.dop_transfer_total || 0);
+                    const dopTotal = dopCash + dopTransfer;
+                    const avgRate = currentOwnerSaved.avg_rate != null ? Number(currentOwnerSaved.avg_rate) : NaN;
+
+                    const feeOwedDop = ((Number.isNaN(avgRate) ? 0 : usdTotal * avgRate) + dopTotal) * (feePercent / 100);
+                    const feeDeducted = Math.min(feeOwedDop, dopCash);
+                    const feeBalanceDue = Math.max(0, feeOwedDop - feeDeducted);
+                    const dopAfterFee = Math.max(0, dopCash - feeDeducted);
+
                     return (
-                      <div className="text-sm text-muted-foreground">
-                        Waiting for report to be generated to have exchange rate value.
+                      <div className="space-y-2 text-sm">
+                        <div>Fee percent: <span className="font-medium">{feePercent}%</span></div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="text-muted-foreground">Fee total (owed)</div>
+                          <div className="text-right font-medium">{fmt(feeOwedDop, "DOP")}</div>
+                          <div className="text-muted-foreground">Deducted from DOP cash</div>
+                          <div className="text-right font-medium">{fmt(feeDeducted, "DOP")}</div>
+                          <div className="text-muted-foreground">Balance due to agency</div>
+                          <div className={`text-right font-semibold ${feeBalanceDue > 0 ? "text-red-600" : ""}`}>{fmt(feeBalanceDue, "DOP")}</div>
+                          <div className="text-muted-foreground">Cash after fee (DOP)</div>
+                          <div className="text-right font-semibold">{fmt(dopAfterFee, "DOP")}</div>
+                        </div>
                       </div>
                     );
-                  }
-                  return (
-                    <div className="space-y-2 text-sm">
-                      <div>Fee percent: <span className="font-medium">{feePercent}%</span></div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="text-muted-foreground">Fee total (owed)</div>
-                        <div className="text-right font-medium">{fmt(feeTotalOwedDop, "DOP")}</div>
-                        <div className="text-muted-foreground">Deducted from DOP cash</div>
-                        <div className="text-right font-medium">{fmt(ownerFeeDeducted, "DOP")}</div>
-                        <div className="text-muted-foreground">Balance due to agency</div>
-                        <div className={`text-right font-semibold ${ownerFeeBalanceDue > 0 ? "text-red-600" : ""}`}>{fmt(ownerFeeBalanceDue, "DOP")}</div>
-                        <div className="text-muted-foreground">Cash after fee (DOP)</div>
-                        <div className="text-right font-semibold">{fmt(ownerDopAfterFee, "DOP")}</div>
-                      </div>
-                      {hasIssuedComponent ? (
-                        <div className="text-xs text-muted-foreground">
-                          Includes invoices issued for some leases: {fmt(feeBase.issued.usd, "USD")} USD and {fmt(feeBase.issued.dop, "DOP")} DOP.
-                        </div>
-                      ) : null}
-                      {ownerFeeBalanceDue > 0 ? (
-                        <div className="text-xs text-muted-foreground">
-                          This balance can be paid by transfer or will be deducted from the next available DOP cash payout.
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })()}
+                  })()
+                )}
               </CardContent>
             </Card>
           )}
@@ -568,7 +580,7 @@ const OwnerReports = () => {
                       <TableHead>USD total</TableHead>
                       <TableHead>DOP total</TableHead>
                       <TableHead>Avg rate</TableHead>
-                      <TableHead>Fee share (DOP)</TableHead>
+                      <TableHead>Management fee share</TableHead>
                       <TableHead>DOP after fee</TableHead>
                       <TableHead className="print:hidden">Actions</TableHead>
                     </TableRow>
@@ -682,7 +694,7 @@ function SavedReportRow({
       <TableCell>{fmt(Number(report.usd_total || 0), "USD")}</TableCell>
       <TableCell>{fmt(Number(report.dop_total || 0), "DOP")}</TableCell>
       <TableCell>{avgRate && Number.isFinite(avgRate) ? avgRate.toFixed(6) : "—"}</TableCell>
-      <TableCell>{fmt(ownerFeeDeducted, "DOP")}</TableCell>
+      <TableCell>{fmt(ownerFeeShareDop, "DOP")}</TableCell>
       <TableCell>{fmt(ownerDopAfterFee, "DOP")}</TableCell>
       <TableCell className="print:hidden">
         <div className="flex gap-2">
