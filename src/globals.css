@@ -104,6 +104,11 @@
 
 /* Print rules */
 @media print {
+  @page {
+    /* Provide sane print margins so content isn't stuck to the edge */
+    margin: 12mm;
+  }
+
   /* Default printable blocks (invoices and reports) */
   .invoice-print {
     position: static !important;
@@ -122,6 +127,26 @@
   body.print-report .report-print-area * {
     visibility: visible !important;
   }
+
+  /* IMPORTANT: printing from inside a Radix Dialog can otherwise inherit the dialog's
+     fixed centering + transforms, which causes clipped / off-page print output. */
+  body.print-report .invoice-print {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    translate: none !important;
+    max-width: none !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
   body.print-report .report-print-area {
     position: absolute !important;
     left: 0 !important;
@@ -130,6 +155,8 @@
     max-height: none !important;
     overflow: visible !important;
     transform: none !important;
+    box-sizing: border-box !important;
+    padding: 12mm !important;
   }
 
   /* Multi-page tables: repeat headers; allow page breaks */
