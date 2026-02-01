@@ -170,6 +170,15 @@ const OwnerReports = () => {
     });
   }, [payments, startDate, endDate]);
 
+  // NEW: average exchange rate derived from this period's payments (e.g., (50 + 52) / 2 = 51)
+  const rateFromPayments = useMemo(() => {
+    const rs = (filteredPayments ?? [])
+      .map((p: any) => Number(p.exchange_rate))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (rs.length === 0) return 0;
+    return rs.reduce((s, n) => s + n, 0) / rs.length;
+  }, [filteredPayments]);
+
   const filteredInvoices = useMemo(() => {
     if (!startDate || !endDate) return (invoices ?? []).filter((inv: any) => String(inv.status) !== "void");
     return (invoices ?? []).filter((inv: any) => {
@@ -246,9 +255,11 @@ const OwnerReports = () => {
   }, [rows]);
 
   const effectiveRate = useMemo(() => {
+    // Prefer real payment-derived average to match Manager's flow; fall back to suggested monthly rate
+    if (rateFromPayments > 0) return rateFromPayments;
     const fromInput = avgRateInput && Number(avgRateInput) > 0 ? Number(avgRateInput) : null;
     return fromInput ?? (suggestedRate != null ? Number(suggestedRate) : 0);
-  }, [avgRateInput, suggestedRate]);
+  }, [rateFromPayments, avgRateInput, suggestedRate]);
 
   const feePercent = useMemo(() => {
     if (isAdmin && mgrReports && mgrReports.length > 0) {
@@ -404,7 +415,9 @@ const OwnerReports = () => {
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Average USD/DOP rate</CardTitle></CardHeader>
             <CardContent className="text-2xl font-bold">
-              {avgRateInput ? avgRateInput : suggestedRate != null ? suggestedRate.toFixed(6) : "—"}
+              {rateFromPayments > 0
+                ? rateFromPayments.toFixed(6)
+                : (avgRateInput ? avgRateInput : suggestedRate != null ? suggestedRate.toFixed(6) : "—")}
             </CardContent>
           </Card>
 
@@ -412,29 +425,42 @@ const OwnerReports = () => {
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Your Management Fee</CardTitle></CardHeader>
               <CardContent>
-                <div className="space-y-2 text-sm">
-                  <div>Fee percent: <span className="font-medium">{feePercent}%</span></div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="text-muted-foreground">Fee total (owed)</div>
-                    <div className="text-right font-medium">{fmt(feeTotalOwedDop, "DOP")}</div>
-                    <div className="text-muted-foreground">Deducted from DOP cash</div>
-                    <div className="text-right font-medium">{fmt(ownerFeeDeducted, "DOP")}</div>
-                    <div className="text-muted-foreground">Balance due to agency</div>
-                    <div className={`text-right font-semibold ${ownerFeeBalanceDue > 0 ? "text-red-600" : ""}`}>{fmt(ownerFeeBalanceDue, "DOP")}</div>
-                    <div className="text-muted-foreground">Cash after fee (DOP)</div>
-                    <div className="text-right font-semibold">{fmt(ownerDopAfterFee, "DOP")}</div>
-                  </div>
-                  {hasIssuedComponent ? (
-                    <div className="text-xs text-muted-foreground">
-                      Includes invoices issued for some leases: {fmt(feeBase.issued.usd, "USD")} USD and {fmt(feeBase.issued.dop, "DOP")} DOP.
+                {(() => {
+                  const usdComponent = feeBase.paid.usd + feeBase.issued.usd;
+                  const needsRate = usdComponent > 0 && !(Number.isFinite(effectiveRate) && effectiveRate > 0);
+                  if (needsRate) {
+                    return (
+                      <div className="text-sm text-muted-foreground">
+                        Waiting for report to be generated to have exchange rate value.
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="space-y-2 text-sm">
+                      <div>Fee percent: <span className="font-medium">{feePercent}%</span></div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="text-muted-foreground">Fee total (owed)</div>
+                        <div className="text-right font-medium">{fmt(feeTotalOwedDop, "DOP")}</div>
+                        <div className="text-muted-foreground">Deducted from DOP cash</div>
+                        <div className="text-right font-medium">{fmt(ownerFeeDeducted, "DOP")}</div>
+                        <div className="text-muted-foreground">Balance due to agency</div>
+                        <div className={`text-right font-semibold ${ownerFeeBalanceDue > 0 ? "text-red-600" : ""}`}>{fmt(ownerFeeBalanceDue, "DOP")}</div>
+                        <div className="text-muted-foreground">Cash after fee (DOP)</div>
+                        <div className="text-right font-semibold">{fmt(ownerDopAfterFee, "DOP")}</div>
+                      </div>
+                      {hasIssuedComponent ? (
+                        <div className="text-xs text-muted-foreground">
+                          Includes invoices issued for some leases: {fmt(feeBase.issued.usd, "USD")} USD and {fmt(feeBase.issued.dop, "DOP")} DOP.
+                        </div>
+                      ) : null}
+                      {ownerFeeBalanceDue > 0 ? (
+                        <div className="text-xs text-muted-foreground">
+                          This balance can be paid by transfer or will be deducted from the next available DOP cash payout.
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                  {ownerFeeBalanceDue > 0 ? (
-                    <div className="text-xs text-muted-foreground">
-                      This balance can be paid by transfer or will be deducted from the next available DOP cash payout.
-                    </div>
-                  ) : null}
-                </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           )}
