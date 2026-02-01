@@ -312,8 +312,8 @@ const OwnerDashboard = () => {
         </Stat>
         <Stat title="Incomes (Owner share)">
           <div className="flex flex-col text-base font-normal">
-            <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(monthly.transferUsd)} USD</span>
-            <span className="text-muted-foreground text-sm">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(monthly.transferDop)} DOP</span>
+            <span className="text-lg font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(monthly.usd)} USD</span>
+            <span className="text-muted-foreground text-sm">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(monthly.dop)} DOP</span>
           </div>
         </Stat>
       </div>
