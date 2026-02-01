@@ -220,22 +220,48 @@ const InvoiceDetail = () => {
   // Compute previous and overall tenant balances in the invoice currency (convert cross-currency payments)
   const invCurrency = inv.currency;
   const invIssue = inv.issue_date;
-  const prevInvoices = (tenantInvoices ?? []).filter((i: any) => i.currency === invCurrency && i.issue_date < invIssue && i.id !== inv.id);
+  const prevInvoices = (tenantInvoices ?? []).filter(
+    (i: any) => i.currency === invCurrency && i.status !== "void" && i.issue_date < invIssue && i.id !== inv.id
+  );
   const prevTotals = prevInvoices.reduce((s: number, i: any) => s + Number(i.total_amount || 0), 0);
 
   const prevPaymentsConverted = (tenantPayments ?? [])
     .filter((p: any) => p.received_date < invIssue)
-    .reduce((s: number, p: any) => s + convertToInvoiceCurrency(Number(p.amount || 0), p.currency, typeof p.exchange_rate === "number" ? p.exchange_rate : null, invCurrency), 0);
+    .reduce(
+      (s: number, p: any) =>
+        s +
+        convertToInvoiceCurrency(
+          Number(p.amount || 0),
+          p.currency,
+          typeof p.exchange_rate === "number" ? p.exchange_rate : null,
+          invCurrency
+        ),
+      0
+    );
 
   const previousBalance = prevPaymentsConverted - prevTotals;
 
+  // IMPORTANT: overall balance should reflect payments that happened AFTER the invoice was issued too.
+  // Otherwise, invoices paid later (e.g. paid in DOP days after issue) will still show as unpaid here.
+  const asOfDate = new Date().toISOString().slice(0, 10);
+
   const allTotalsToDate = (tenantInvoices ?? [])
-    .filter((i: any) => i.currency === invCurrency && i.issue_date <= invIssue)
+    .filter((i: any) => i.currency === invCurrency && i.status !== "void" && i.issue_date <= asOfDate)
     .reduce((s: number, i: any) => s + Number(i.total_amount || 0), 0);
 
   const allPaymentsToDateConverted = (tenantPayments ?? [])
-    .filter((p: any) => p.received_date <= invIssue)
-    .reduce((s: number, p: any) => s + convertToInvoiceCurrency(Number(p.amount || 0), p.currency, typeof p.exchange_rate === "number" ? p.exchange_rate : null, invCurrency), 0);
+    .filter((p: any) => p.received_date <= asOfDate)
+    .reduce(
+      (s: number, p: any) =>
+        s +
+        convertToInvoiceCurrency(
+          Number(p.amount || 0),
+          p.currency,
+          typeof p.exchange_rate === "number" ? p.exchange_rate : null,
+          invCurrency
+        ),
+      0
+    );
 
   const overallBalance = allPaymentsToDateConverted - allTotalsToDate;
 
