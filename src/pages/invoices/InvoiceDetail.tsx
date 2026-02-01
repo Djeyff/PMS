@@ -121,10 +121,8 @@ const InvoiceDetail = () => {
       const cur = (p.currency as "USD" | "DOP") ?? invCur;
       const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : p.exchange_rate == null ? null : Number(p.exchange_rate);
 
-      const usdEq =
-        cur === "USD" ? amt :
-        rate && rate > 0 ? amt / rate :
-        null;
+      // Only compute USD equivalent for non-USD payments
+      const usdEq = cur === "USD" ? null : rate && rate > 0 ? amt / rate : null;
 
       return {
         key: `${p.id ?? idx}`,
@@ -132,7 +130,7 @@ const InvoiceDetail = () => {
         method: methodLabel(p.method),
         amountText: fmtMoney(amt, cur),
         rateText: cur === "USD" ? "—" : rate ? String(rate) : "—",
-        usdText: usdEq != null ? fmtMoney(usdEq, "USD") : "—",
+        usdText: usdEq != null ? fmtMoney(usdEq, "USD") : "",
       };
     });
 
@@ -435,7 +433,9 @@ const InvoiceDetail = () => {
                       </div>
                       <div className="text-right">
                         <div className="font-medium">{p.amountText}</div>
-                        <div className="text-xs text-gray-500">≈ USD: {p.usdText}</div>
+                        {p.usdText ? (
+                          <div className="text-xs text-gray-500">≈ USD: {p.usdText}</div>
+                        ) : null}
                       </div>
                     </div>
                   ))}
