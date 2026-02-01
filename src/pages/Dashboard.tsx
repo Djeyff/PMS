@@ -7,7 +7,7 @@ import AgencyDashboard from "./dashboards/AgencyDashboard";
 import OwnerDashboard from "./dashboards/OwnerDashboard";
 import TenantDashboard from "./dashboards/TenantDashboard";
 
-const MASTER_ADMIN_EMAIL = "djeyff06@gmail.com";
+const MASTER_ADMIN_EMAILS = new Set(["djeyff06@gmail.com", "jeffrey.hubert.01@gmail.com"]);
 
 const Dashboard = () => {
   const { loading, session, role, user } = useAuth();
@@ -22,22 +22,20 @@ const Dashboard = () => {
   useEffect(() => {
     if (!loading && session) {
       const email = (user?.email ?? "").toLowerCase();
-      // Avoid redirecting while the session/user object is still stabilizing.
-      if (!email) return;
-
-      if (!role && email !== MASTER_ADMIN_EMAIL) {
+      if (!role && !MASTER_ADMIN_EMAILS.has(email)) {
         navigate("/pending", { replace: true });
       }
     }
-  }, [loading, session, role, user?.email, navigate]);
+  }, [loading, session, role, user, navigate]);
 
   if (loading || !session) {
     return <Loader />;
   }
 
   const email = (user?.email ?? "").toLowerCase();
+  const isMasterAdmin = MASTER_ADMIN_EMAILS.has(email);
 
-  if (!role && email !== MASTER_ADMIN_EMAIL) {
+  if (!role && !isMasterAdmin) {
     return null;
   }
 
@@ -46,8 +44,7 @@ const Dashboard = () => {
       {role === "agency_admin" && <AgencyDashboard />}
       {role === "owner" && <OwnerDashboard />}
       {role === "tenant" && <TenantDashboard />}
-      {/* For the master admin fallback, show admin dashboard even if role hasn't persisted yet */}
-      {!role && email === MASTER_ADMIN_EMAIL && <AgencyDashboard />}
+      {!role && isMasterAdmin && <AgencyDashboard />}
     </AppShell>
   );
 };

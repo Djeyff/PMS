@@ -8,10 +8,13 @@ type Props = {
   children: React.ReactNode;
 };
 
+const MASTER_ADMIN_EMAILS = new Set(["djeyff06@gmail.com", "jeffrey.hubert.01@gmail.com"]);
+
 const RoleGate = ({ allow, children }: Props) => {
   const { loading, role, session, user } = useAuth();
 
-  const MASTER_ADMIN_EMAIL = "djeyff06@gmail.com";
+  const email = (user?.email ?? "").toLowerCase();
+  const isMasterAdmin = MASTER_ADMIN_EMAILS.has(email);
 
   // Show loader only while auth is initializing
   if (loading) return <Loader />;
@@ -32,10 +35,8 @@ const RoleGate = ({ allow, children }: Props) => {
     );
   }
 
-  // Fallback: allow master admin to access admin pages even if role hasn't persisted yet
+  // Fallback: allow master admins to access admin pages even if role hasn't persisted yet
   if (!role) {
-    const email = (user?.email ?? "").toLowerCase();
-    const isMasterAdmin = email === MASTER_ADMIN_EMAIL;
     if (isMasterAdmin && allow.includes("agency_admin")) {
       return <>{children}</>;
     }
@@ -53,8 +54,11 @@ const RoleGate = ({ allow, children }: Props) => {
     );
   }
 
-  // Normal role gating
+  // Normal role gating; still let master admins pass agency_admin gates
   if (!allow.includes(role)) {
+    if (isMasterAdmin && allow.includes("agency_admin")) {
+      return <>{children}</>;
+    }
     return (
       <div className="mx-auto max-w-2xl">
         <Card>

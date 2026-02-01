@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthedClient } from "@/integrations/supabase/client";
 
 export type Role = "agency_admin" | "owner" | "tenant";
 export type Profile = {
@@ -26,51 +27,19 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const MASTER_ADMIN_EMAIL = "djeyff06@gmail.com";
-
-const normalizeEmail = (email: string | null | undefined) => (email ?? "").trim().toLowerCase();
-
 const fetchProfile = async (userId: string): Promise<Profile | null> => {
-  const { data, error } = await supabase
+  const { data: sess } = await supabase.auth.getSession();
+  const db = getAuthedClient(sess.session?.access_token);
+  const { data, error } = await db
     .from("profiles")
     .select("id, role, agency_id, first_name, last_name, avatar_url")
     .eq("id", userId)
     .single();
-
   if (error) {
-    // "No rows" from PostgREST
     if ((error as any).code === "PGRST116") return null;
     throw error;
   }
-
   return data as Profile;
-};
-
-const applyMasterAdminFallback = (params: {
-  user: User | null;
-  profile: Profile | null;
-}): Profile | null => {
-  const email = normalizeEmail(params.user?.email);
-  if (email !== MASTER_ADMIN_EMAIL) return params.profile;
-
-  // Ensure master admin never ends up in the "pending" role-less state due to
-  // transient profile fetch issues.
-  if (!params.profile) {
-    return {
-      id: params.user?.id ?? "master-admin",
-      role: "agency_admin",
-      agency_id: null,
-      first_name: null,
-      last_name: null,
-      avatar_url: null,
-    };
-  }
-
-  if (!params.profile.role) {
-    return { ...params.profile, role: "agency_admin" };
-  }
-
-  return params.profile;
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -86,66 +55,48 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     let mounted = true;
+    setLoading(true);
 
-    const load = async () => {
-      setLoading(true);
-
+    const loadSessionAndProfile = async () => {
       const { data } = await supabase.auth.getSession();
       const sess = data.session ?? null;
-      const nextUser = sess?.user ?? null;
-
-      if (!mounted) return;
-
       setSession(sess);
-      setUser(nextUser);
+      setUser(sess?.user ?? null);
       setProviderToken((sess as any)?.provider_token ?? null);
-
-      if (!nextUser?.id) {
-        setProfile(null);
-        setLoading(false);
-        return;
-      }
-
-      const p = await fetchProfile(nextUser.id).catch(() => null);
-      if (!mounted) return;
-      setProfile(applyMasterAdminFallback({ user: nextUser, profile: p }));
-      setLoading(false);
     };
 
-    load().catch(() => {
-      if (!mounted) return;
-      setLoading(false);
+    loadSessionAndProfile().finally(() => {
+      if (mounted) setLoading(false);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-      if (!mounted) return;
-
-      setLoading(true);
-
-      const nextSession = sess ?? null;
-      const nextUser = nextSession?.user ?? null;
-
-      setSession(nextSession);
-      setUser(nextUser);
-      setProviderToken((nextSession as any)?.provider_token ?? null);
-
-      if (!nextUser?.id) {
-        setProfile(null);
-        setLoading(false);
-        return;
-      }
-
-      const p = await fetchProfile(nextUser.id).catch(() => null);
-      if (!mounted) return;
-      setProfile(applyMasterAdminFallback({ user: nextUser, profile: p }));
-      setLoading(false);
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+      setSession(sess ?? null);
+      setUser(sess?.user ?? null);
+      setProviderToken((sess as any)?.provider_token ?? null);
     });
+
+    const loadingFallback = setTimeout(() => {
+      if (mounted) setLoading(false);
+    }, 4000);
 
     return () => {
       mounted = false;
+      clearTimeout(loadingFallback);
       sub?.subscription?.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    const run = async () => {
+      if (!user?.id) {
+        setProfile(null);
+        return;
+      }
+      const p = await fetchProfile(user.id).catch(() => null);
+      setProfile(p);
+    };
+    run().catch(() => {});
+  }, [user?.id]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -156,7 +107,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const refreshProfile = async () => {
     if (!user?.id) return;
     const p = await fetchProfile(user.id).catch(() => null);
-    setProfile(applyMasterAdminFallback({ user, profile: p }));
+    setProfile(p);
   };
 
   const value: AuthContextValue = {
