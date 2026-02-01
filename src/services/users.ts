@@ -20,6 +20,17 @@ export async function fetchUsersForAdmin() {
   return (data ?? []) as UserRow[];
 }
 
+export async function fetchPendingUsersForAdmin() {
+  // Users that are missing role or agency assignment
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, role, agency_id, first_name, last_name, avatar_url, email, updated_at")
+    .or("role.is.null,agency_id.is.null")
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as UserRow[];
+}
+
 export async function fetchTenantProfilesInAgency(agencyId: string) {
   const { data, error } = await supabase
     .from("profiles")
@@ -137,5 +148,28 @@ export async function assignUserByEmail(params: { email: string; role: "owner" |
     const err = await res.json().catch(() => ({}));
     throw new Error(err?.error || `Failed to assign user (${res.status})`);
   }
+  return await res.json();
+}
+
+export async function setUserRoleServer(params: {
+  userId: string;
+  role: "agency_admin" | "owner" | "tenant";
+}) {
+  const { data: sess } = await supabase.auth.getSession();
+  const token = sess.session?.access_token;
+  if (!token) throw new Error("Not authenticated");
+
+  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/set-user-role";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ userId: params.userId, role: params.role }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `Failed to set role (${res.status})`);
+  }
+
   return await res.json();
 }

@@ -8,6 +8,7 @@ import { fetchPayments } from "@/services/payments";
 import { fetchInvoices } from "@/services/invoices";
 import { fetchProperties } from "@/services/properties";
 import { fetchMaintenanceRequests } from "@/services/maintenance";
+import { fetchPendingUsersForAdmin } from "@/services/users";
 import { parseISO, differenceInCalendarDays, format } from "date-fns";
 import { Link } from "react-router-dom";
 
@@ -22,6 +23,16 @@ const Stat = ({ title, value, children, className }: { title: string; value?: st
 
 const AgencyDashboard = () => {
   const { role, user, profile } = useAuth();
+
+  const { data: pendingUsers, isLoading: pendingLoading } = useQuery({
+    queryKey: ["dashboard-pending-users"],
+    queryFn: fetchPendingUsersForAdmin,
+    enabled: role === "agency_admin",
+  });
+
+  const pendingList = (pendingUsers ?? [])
+    .filter((u) => !u.role || !u.agency_id)
+    .slice(0, 6);
 
   const { data: properties } = useQuery({
     queryKey: ["dashboard-properties", role, user?.id, profile?.agency_id],
@@ -182,6 +193,48 @@ const AgencyDashboard = () => {
 
   return (
     <div className="space-y-6">
+      {/* Pending approvals section */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <div>
+            <CardTitle>Pending approvals</CardTitle>
+            <div className="text-sm text-muted-foreground">
+              Users waiting for role/agency assignment.
+            </div>
+          </div>
+          <Link
+            to="/users"
+            className="text-sm underline underline-offset-4"
+          >
+            Manage users
+          </Link>
+        </CardHeader>
+        <CardContent>
+          {pendingLoading ? (
+            <div className="text-sm text-muted-foreground">Loading...</div>
+          ) : pendingList.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No pending users.</div>
+          ) : (
+            <div className="space-y-2">
+              {pendingList.map((u: any) => (
+                <div key={u.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">
+                      {[u.first_name, u.last_name].filter(Boolean).join(" ") || u.email || "—"}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">{u.email ?? "—"}</div>
+                  </div>
+                  <div className="text-xs text-muted-foreground capitalize">
+                    {u.role ?? "pending"}
+                    {u.agency_id ? "" : " • unassigned"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <Stat title="Occupancy" value={`${occupancyPercent}%`} />
         <Stat title="Bank Transfer">
