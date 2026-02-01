@@ -91,14 +91,26 @@ const ManagerReport = () => {
   const isAdmin = role === "agency_admin";
   const agencyId = profile?.agency_id ?? null;
   const reportPrintRef = React.useRef<HTMLDivElement | null>(null);
+  const printAreaRef = React.useRef<HTMLDivElement | null>(null);
 
   const handlePrint = () => {
+    // Ensure we only print this page's report area (avoid overlaps with any open dialogs)
+    document.querySelectorAll('.report-print-area[data-print-scope="active"]').forEach((el) => {
+      el.removeAttribute("data-print-scope");
+    });
+    printAreaRef.current?.setAttribute("data-print-scope", "active");
+
     document.body.classList.add("print-report");
     window.requestAnimationFrame(() => window.print());
   };
 
   useEffect(() => {
-    const onAfterPrint = () => document.body.classList.remove("print-report");
+    const onAfterPrint = () => {
+      document.body.classList.remove("print-report");
+      document.querySelectorAll('.report-print-area[data-print-scope="active"]').forEach((el) => {
+        el.removeAttribute("data-print-scope");
+      });
+    };
     window.addEventListener("afterprint", onAfterPrint);
     return () => window.removeEventListener("afterprint", onAfterPrint);
   }, []);
@@ -378,25 +390,29 @@ const ManagerReport = () => {
     <AppShell>
       <div className="space-y-6">
         <div ref={reportPrintRef}>
-          <div className="report-print-area">
-            <ManagerReportFilters
-              months={months}
-              monthValue={monthValue}
-              onMonthChange={setMonthValue}
-              startDate={startDate}
-              endDate={endDate}
-              onStartDateChange={setStartDate}
-              onEndDateChange={setEndDate}
-              avgRateInput={avgRateInput}
-              onAvgRateChange={setAvgRateInput}
-              suggestedRate={suggestedRate}
-              onApplySuggested={applySuggestedRate}
-              generated={generated}
-              onGenerate={handleGenerate}
-              onReset={() => setGenerated(false)}
-              onSave={handleSaveReport}
-            />
+          <div className="flex items-center justify-between gap-3">
+            <div className="print:hidden">
+              <ManagerReportFilters
+                months={months}
+                monthValue={monthValue}
+                onMonthChange={setMonthValue}
+                startDate={startDate}
+                endDate={endDate}
+                onStartDateChange={setStartDate}
+                onEndDateChange={setEndDate}
+                avgRateInput={avgRateInput}
+                onAvgRateChange={setAvgRateInput}
+                suggestedRate={suggestedRate}
+                onApplySuggested={applySuggestedRate}
+                generated={generated}
+                onGenerate={handleGenerate}
+                onReset={() => setGenerated(false)}
+                onSave={handleSaveReport}
+              />
+            </div>
+          </div>
 
+          <div ref={printAreaRef} className="report-print-area">
             {/* Warning if rate missing but USD exists */}
             {/* Show warnings only once generated */}
             {generated && (usdTotal > 0 && Number.isNaN(rateNum)) && (
@@ -479,6 +495,9 @@ const ManagerReport = () => {
                         }}
                       >
                         Export CSV
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={handlePrint}>
+                        Print
                       </Button>
                       <Button size="sm" onClick={handlePrint}>
                         Download PDF

@@ -119,12 +119,13 @@
     color: black !important;
   }
 
-  /* Scoped report printing: hide everything except the report area */
+  /* Scoped report printing: hide everything except the ACTIVE report area */
   body.print-report * {
     visibility: hidden !important;
   }
-  body.print-report .report-print-area,
-  body.print-report .report-print-area * {
+
+  body.print-report .report-print-area[data-print-scope="active"],
+  body.print-report .report-print-area[data-print-scope="active"] * {
     visibility: visible !important;
   }
 
@@ -147,7 +148,7 @@
     box-shadow: none !important;
   }
 
-  body.print-report .report-print-area {
+  body.print-report .report-print-area[data-print-scope="active"] {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
@@ -157,6 +158,11 @@
     transform: none !important;
     box-sizing: border-box !important;
     padding: 12mm !important;
+  }
+
+  /* If a report used horizontal scroll on-screen, remove it for printing */
+  body.print-report .report-print-area[data-print-scope="active"] .overflow-x-auto {
+    overflow: visible !important;
   }
 
   /* Multi-page tables: repeat headers; allow page breaks */

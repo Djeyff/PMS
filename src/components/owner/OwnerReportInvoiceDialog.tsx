@@ -30,6 +30,7 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
   const { role, user, profile } = useAuth();
   const agencyId = profile?.agency_id ?? null;
   const isAdmin = role === "agency_admin";
+  const printAreaRef = React.useRef<HTMLDivElement | null>(null);
 
   const { data: agency } = useQuery({
     queryKey: ["owner-invoice-agency", agencyId],
@@ -222,13 +223,23 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
   }, [report]);
 
   const handlePrint = () => {
-    // Scope printing to the report content only (avoid Radix dialog/portal print issues)
+    // Scope printing to this statement only (avoid other report areas overlapping)
+    document.querySelectorAll('.report-print-area[data-print-scope="active"]').forEach((el) => {
+      el.removeAttribute("data-print-scope");
+    });
+    printAreaRef.current?.setAttribute("data-print-scope", "active");
+
     document.body.classList.add("print-report");
     window.requestAnimationFrame(() => window.print());
   };
 
   React.useEffect(() => {
-    const onAfterPrint = () => document.body.classList.remove("print-report");
+    const onAfterPrint = () => {
+      document.body.classList.remove("print-report");
+      document.querySelectorAll('.report-print-area[data-print-scope="active"]').forEach((el) => {
+        el.removeAttribute("data-print-scope");
+      });
+    };
     window.addEventListener("afterprint", onAfterPrint);
     return () => window.removeEventListener("afterprint", onAfterPrint);
   }, []);
@@ -236,7 +247,7 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto invoice-print bg-white text-black p-6 rounded-md">
-        <div className="report-print-area">
+        <div ref={printAreaRef} className="report-print-area">
           {!report ? (
             <div className="text-sm text-muted-foreground">Loading report…</div>
           ) : (

@@ -36,6 +36,7 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
   const { role, user, profile } = useAuth();
   const agencyId = profile?.agency_id ?? null;
   const isAdmin = role === "agency_admin";
+  const printAreaRef = React.useRef<HTMLDivElement | null>(null);
 
   const { data: agency } = useQuery({
     queryKey: ["mgr-invoice-agency", agencyId],
@@ -186,12 +187,23 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
   }, [report.month, report.start_date, report.end_date]);
 
   const handlePrint = () => {
+    // Ensure we only print THIS dialog (avoid overlap with the ManagerReport page below)
+    document.querySelectorAll('.report-print-area[data-print-scope="active"]').forEach((el) => {
+      el.removeAttribute("data-print-scope");
+    });
+    printAreaRef.current?.setAttribute("data-print-scope", "active");
+
     document.body.classList.add("print-report");
     window.requestAnimationFrame(() => window.print());
   };
 
   React.useEffect(() => {
-    const onAfterPrint = () => document.body.classList.remove("print-report");
+    const onAfterPrint = () => {
+      document.body.classList.remove("print-report");
+      document.querySelectorAll('.report-print-area[data-print-scope="active"]').forEach((el) => {
+        el.removeAttribute("data-print-scope");
+      });
+    };
     window.addEventListener("afterprint", onAfterPrint);
     return () => window.removeEventListener("afterprint", onAfterPrint);
   }, []);
@@ -199,7 +211,7 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto overflow-x-hidden invoice-print bg-white text-black p-6 rounded-md">
-        <div className="report-print-area">
+        <div ref={printAreaRef} className="report-print-area">
           <DialogHeader>
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3">
@@ -285,9 +297,18 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
         </div>
 
         <div className="mt-3 flex items-center justify-end print:hidden">
-          <Button variant="default" className="bg-neutral-800 text-white hover:bg-neutral-900" onClick={handlePrint}>
-            Download PDF
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="bg-white text-black border-gray-300 hover:bg-gray-100"
+              onClick={handlePrint}
+            >
+              Print
+            </Button>
+            <Button variant="default" className="bg-neutral-800 text-white hover:bg-neutral-900" onClick={handlePrint}>
+              Download PDF
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
