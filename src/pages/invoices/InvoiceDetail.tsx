@@ -111,31 +111,28 @@ const InvoiceDetail = () => {
   };
 
   const paymentLines = React.useMemo(() => {
-    if (!inv) return [] as Array<{ key: string; date: string; method: string; amountText: string; rateText: string }>;
+    if (!inv) return [] as Array<{ key: string; date: string; method: string; amountText: string; rateText: string; usdText: string }>;
 
     const invCur = inv.currency as "USD" | "DOP";
     const payments = inv.payments ?? [];
-
-    const convertToInvoiceCurrency = (amt: number, cur: "USD" | "DOP", rate: number | null) => {
-      if (cur === invCur) return amt;
-      if (!rate || rate <= 0) return 0;
-      if (invCur === "USD" && cur === "DOP") return amt / rate;
-      if (invCur === "DOP" && cur === "USD") return amt * rate;
-      return 0;
-    };
 
     const list = payments.map((p: any, idx: number) => {
       const amt = Number(p.amount || 0);
       const cur = (p.currency as "USD" | "DOP") ?? invCur;
       const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : p.exchange_rate == null ? null : Number(p.exchange_rate);
-      // Keep convert for paid calculation parity, but we won't display approx column now
-      void convertToInvoiceCurrency(amt, cur, rate);
+
+      const usdEq =
+        cur === "USD" ? amt :
+        rate && rate > 0 ? amt / rate :
+        null;
+
       return {
         key: `${p.id ?? idx}`,
         date: String(p.received_date ?? "").slice(0, 10) || "—",
         method: methodLabel(p.method),
         amountText: fmtMoney(amt, cur),
-        rateText: cur === invCur ? "—" : rate ? String(rate) : "—",
+        rateText: cur === "USD" ? "—" : rate ? String(rate) : "—",
+        usdText: usdEq != null ? fmtMoney(usdEq, "USD") : "—",
       };
     });
 
@@ -425,32 +422,25 @@ const InvoiceDetail = () => {
           <div className="mt-3">
             <div className="font-medium">{t.paymentBreakdown}</div>
             <div className="mt-2">
-              <table className="w-full text-[13px] border rounded bg-white">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="text-left px-2 py-1 border-b">{t.payDate}</th>
-                    <th className="text-left px-2 py-1 border-b">{t.payMethod}</th>
-                    <th className="text-right px-2 py-1 border-b">{t.payAmount}</th>
-                    <th className="text-right px-2 py-1 border-b">{t.payRate} {exchangeRateHint}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paymentLines.length === 0 ? (
-                    <tr>
-                      <td className="px-2 py-1 text-gray-600" colSpan={4}>—</td>
-                    </tr>
-                  ) : (
-                    paymentLines.map((p) => (
-                      <tr key={p.key}>
-                        <td className="px-2 py-1 border-b whitespace-nowrap">{p.date}</td>
-                        <td className="px-2 py-1 border-b">{p.method}</td>
-                        <td className="px-2 py-1 border-b text-right whitespace-nowrap">{p.amountText}</td>
-                        <td className="px-2 py-1 border-b text-right whitespace-nowrap">{p.rateText}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+              {paymentLines.length === 0 ? (
+                <div className="text-sm text-gray-600">—</div>
+              ) : (
+                <div className="divide-y rounded border bg-white">
+                  {paymentLines.map((p) => (
+                    <div key={p.key} className="flex items-start justify-between px-2 py-2 text-[13px]">
+                      <div className="pr-3">
+                        <div className="font-medium">{p.date}</div>
+                        <div className="text-xs text-gray-700">{p.method}</div>
+                        <div className="text-xs text-gray-500">{t.payRate}: {p.rateText} {exchangeRateHint}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium">{p.amountText}</div>
+                        <div className="text-xs text-gray-500">≈ USD: {p.usdText}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
