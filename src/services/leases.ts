@@ -2,6 +2,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Role } from "@/contexts/AuthProvider";
 import { logAction } from "@/services/activity-logs";
 
+export type ManagementFeeBasis = "paid" | "issued";
+
 export type LeaseRow = {
   id: string;
   property_id: string;
@@ -24,6 +26,7 @@ export type LeaseRow = {
   annual_increase_enabled?: boolean;
   annual_increase_percent?: number | null;
   annual_increase_enabled_at?: string | null; // YYYY-MM-DD (date)
+  management_fee_basis?: ManagementFeeBasis; // 'paid' (default) or 'issued'
 };
 
 export type LeaseWithMeta = LeaseRow & {
@@ -34,6 +37,7 @@ export type LeaseWithMeta = LeaseRow & {
 function normalizeLeaseRow(row: any): LeaseWithMeta {
   const property = Array.isArray(row?.property) ? row.property[0] : row?.property ?? null;
   const tenant = Array.isArray(row?.tenant) ? row.tenant[0] : row?.tenant ?? null;
+  const basis = row.management_fee_basis === "issued" ? "issued" : "paid";
   return {
     id: row.id,
     property_id: row.property_id,
@@ -56,6 +60,7 @@ function normalizeLeaseRow(row: any): LeaseWithMeta {
     annual_increase_enabled: row.annual_increase_enabled ?? false,
     annual_increase_percent: typeof row.annual_increase_percent === "number" ? row.annual_increase_percent : null,
     annual_increase_enabled_at: row.annual_increase_enabled_at ?? null,
+    management_fee_basis: basis,
     property: property ? { id: property.id, name: property.name } : null,
     tenant: tenant ? { id: tenant.id, first_name: tenant.first_name ?? null, last_name: tenant.last_name ?? null } : null,
   };
@@ -72,6 +77,7 @@ export async function fetchLeases(params: { role: Role | null; userId: string | 
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute, auto_invoice_due_day,
       contract_kdrive_folder_url, contract_kdrive_file_url,
       annual_increase_enabled, annual_increase_percent, annual_increase_enabled_at,
+      management_fee_basis,
       property:properties ( id, name ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -100,6 +106,7 @@ export async function createLease(input: {
   contract_kdrive_file_url?: string | null;
   annual_increase_enabled?: boolean;
   annual_increase_percent?: number;
+  management_fee_basis?: ManagementFeeBasis;
 }) {
   const annualEnabled = !!input.annual_increase_enabled;
   const payload = {
@@ -123,6 +130,7 @@ export async function createLease(input: {
     annual_increase_percent: typeof input.annual_increase_percent === "number" ? input.annual_increase_percent : null,
     // If enabled at creation, start counting from lease start date (so first increase is on first anniversary)
     annual_increase_enabled_at: annualEnabled ? input.start_date : null,
+    management_fee_basis: input.management_fee_basis === "issued" ? "issued" : "paid",
   };
 
   const { data, error } = await supabase
@@ -133,6 +141,7 @@ export async function createLease(input: {
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute, auto_invoice_due_day,
       contract_kdrive_folder_url, contract_kdrive_file_url,
       annual_increase_enabled, annual_increase_percent, annual_increase_enabled_at,
+      management_fee_basis,
       property:properties ( id, name ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -161,6 +170,7 @@ export async function updateLease(
     contract_kdrive_file_url: string | null;
     annual_increase_enabled: boolean;
     annual_increase_percent: number | null;
+    management_fee_basis: ManagementFeeBasis;
     // ADDED: allow assigning tenant
     tenant_id: string | null;
   }>
@@ -181,6 +191,7 @@ export async function updateLease(
   if (typeof input.contract_kdrive_folder_url !== "undefined") payload.contract_kdrive_folder_url = input.contract_kdrive_folder_url;
   if (typeof input.contract_kdrive_file_url !== "undefined") payload.contract_kdrive_file_url = input.contract_kdrive_file_url;
   if (typeof input.annual_increase_percent !== "undefined") payload.annual_increase_percent = input.annual_increase_percent;
+  if (typeof input.management_fee_basis !== "undefined") payload.management_fee_basis = input.management_fee_basis === "issued" ? "issued" : "paid";
   // ADDED: map tenant assignment
   if (typeof input.tenant_id !== "undefined") payload.tenant_id = input.tenant_id;
 
@@ -217,6 +228,7 @@ export async function updateLease(
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute, auto_invoice_due_day,
       contract_kdrive_folder_url, contract_kdrive_file_url,
       annual_increase_enabled, annual_increase_percent, annual_increase_enabled_at,
+      management_fee_basis,
       property:properties ( id, name ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -234,7 +246,8 @@ export async function deleteLease(id: string) {
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute, auto_invoice_due_day,
       contract_kdrive_folder_url, contract_kdrive_file_url,
-      annual_increase_enabled, annual_increase_percent, annual_increase_enabled_at
+      annual_increase_enabled, annual_increase_percent, annual_increase_enabled_at,
+      management_fee_basis
     `)
     .eq("id", id)
     .single();

@@ -21,6 +21,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/components/ui/use-toast";
 import { listManagerReports } from "@/services/manager-reports";
 import { fetchMyOwnerships } from "@/services/property-owners";
+import { fetchLeases, type LeaseWithMeta } from "@/services/leases";
+import { fetchInvoices } from "@/services/invoices";
 
 function fmt(amount: number, currency: "USD" | "DOP") {
   return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
@@ -45,7 +47,6 @@ function monthList(limit = 12) {
   return opts;
 }
 
-// Suggested monthly average USD/DOP rate from Supabase exchange_rates table
 async function fetchMonthlyAvgRate(startDate: string, endDate: string) {
   const { data, error } = await supabase
     .from("exchange_rates")
@@ -85,6 +86,18 @@ const OwnerReports = () => {
     queryFn: () => fetchPayments({ role, userId: user?.id ?? null, agencyId }),
   });
 
+  const { data: leases } = useQuery({
+    queryKey: ["owner-report-leases", role, user?.id, agencyId],
+    enabled: !!role && !!agencyId,
+    queryFn: () => fetchLeases({ role, userId: user?.id ?? null, agencyId }),
+  });
+
+  const { data: invoices } = useQuery({
+    queryKey: ["owner-report-invoices", role, user?.id, agencyId],
+    enabled: !!role && !!agencyId,
+    queryFn: fetchInvoices,
+  });
+
   const { data: ownerships } = useQuery({
     queryKey: ["owner-ownerships", agencyId],
     enabled: !!agencyId && isAdmin,
@@ -109,14 +122,12 @@ const OwnerReports = () => {
     queryFn: () => listManagerReports(agencyId!),
   });
 
-  // Build a map of ownerId -> "First Last"
   const ownerNameMap = useMemo(() => {
     const map: Record<string, string> = {};
     (owners ?? []).forEach((o: any) => {
       const name = [o.first_name, o.last_name].filter(Boolean).join(" ");
       if (o.id) map[o.id] = name || o.id;
     });
-    // Ensure the signed-in owner's name (or 'You') is available on owner backend
     if (!isAdmin && user?.id) {
       const selfName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ");
       map[user.id] = selfName || "You";
@@ -131,7 +142,6 @@ const OwnerReports = () => {
   });
 
   useEffect(() => {
-    // Sync dates when a real month is selected; keep manual dates when 'custom'
     const m = months.find((mm) => mm.value === monthValue);
     if (m) {
       setStartDate(m.start);
@@ -160,16 +170,23 @@ const OwnerReports = () => {
     });
   }, [payments, startDate, endDate]);
 
+  const filteredInvoices = useMemo(() => {
+    if (!startDate || !endDate) return (invoices ?? []).filter((inv: any) => String(inv.status) !== "void");
+    return (invoices ?? []).filter((inv: any) => {
+      if (String(inv.status) === "void") return false;
+      const d = String(inv.issue_date ?? "").slice(0, 10);
+      return d >= startDate && d <= endDate;
+    });
+  }, [invoices, startDate, endDate]);
+
   const ownerProps = useMemo(() => {
     if (isAdmin) {
       if (!ownerId) return [];
       return (ownerships ?? []).filter((o) => o.owner_id === ownerId);
     }
-    // Owner: use my ownerships directly
     return (myOwnerships ?? []);
   }, [ownerships, ownerId, myOwnerships, isAdmin]);
 
-  // Normalized list so we can safely map regardless of array or Map form
   const ownerPropItems = useMemo(() => {
     if (Array.isArray(ownerProps)) {
       return ownerProps.map((o: any) => ({
@@ -186,21 +203,20 @@ const OwnerReports = () => {
     return [];
   }, [ownerProps]);
 
-  const ownedPropIds = useMemo(
-    () => new Set(ownerPropItems.map((o) => o.property_id)),
+  const ownedPropIds = useMemo(() => new Set(ownerPropItems.map((o) => o.property_id)), [ownerPropItems]);
+
+  const percentByProp = useMemo(
+    () => new Map<string, number>(ownerPropItems.map((o) => [o.property_id, o.ownership_percent == null ? 100 : Number(o.ownership_percent)])),
     [ownerPropItems]
   );
 
-  const percentByProp = useMemo(
-    () =>
-      new Map<string, number>(
-        ownerPropItems.map((o) => [
-          o.property_id,
-          o.ownership_percent == null ? 100 : Number(o.ownership_percent),
-        ])
-      ),
-    [ownerPropItems]
-  );
+  const leaseFeeBasisById = useMemo(() => {
+    const map = new Map<string, "paid" | "issued">();
+    (leases as LeaseWithMeta[] | undefined)?.forEach((l) => {
+      map.set(l.id, l.management_fee_basis === "issued" ? "issued" : "paid");
+    });
+    return map;
+  }, [leases]);
 
   const rows = useMemo(() => {
     const list: Array<{ property: string; date: string; method: string; assigned: boolean; usd: number; dop: number; rate: number | null }> = [];
@@ -229,7 +245,6 @@ const OwnerReports = () => {
     return { usdCash, dopCash, usdTransfer, dopTransfer };
   }, [rows]);
 
-  // Effective rate to use in fee calculations
   const effectiveRate = useMemo(() => {
     const fromInput = avgRateInput && Number(avgRateInput) > 0 ? Number(avgRateInput) : null;
     return fromInput ?? (suggestedRate != null ? Number(suggestedRate) : 0);
@@ -243,29 +258,59 @@ const OwnerReports = () => {
     return 5;
   }, [isAdmin, mgrReports]);
 
-  const ownerUsdTotal = useMemo(() => totals.usdCash + totals.usdTransfer, [totals]);
-  const ownerDopCash = useMemo(() => totals.dopCash, [totals]);
-  const ownerDopTransfer = useMemo(() => totals.dopTransfer, [totals]);
-  const ownerDopTotal = useMemo(() => ownerDopCash + ownerDopTransfer, [ownerDopCash, ownerDopTransfer]);
-  const ownerFeeShareDop = useMemo(() => ((ownerUsdTotal * effectiveRate) + ownerDopTotal) * (feePercent / 100), [ownerUsdTotal, effectiveRate, ownerDopTotal, feePercent]);
-  const ownerFeeDeducted = useMemo(() => Math.min(ownerFeeShareDop, ownerDopCash), [ownerFeeShareDop, ownerDopCash]);
-  const ownerDopAfterFee = useMemo(() => Math.max(0, ownerDopCash - ownerFeeDeducted), [ownerDopCash, ownerFeeDeducted]);
+  const feeBase = useMemo(() => {
+    const paid = { usd: 0, dop: 0 };
+    const issued = { usd: 0, dop: 0 };
 
-  const applySuggestedRate = () => {
-    if (suggestedRate == null) {
-      toast({ title: "No suggested rate", description: "No exchange rates found for this month.", variant: "default" });
-      return;
-    }
-    setAvgRateInput(String(Number(suggestedRate.toFixed(6))));
-    toast({ title: "Applied", description: "Suggested average USD/DOP rate applied." });
-  };
+    (filteredPayments ?? []).forEach((p: any) => {
+      const propId = p.lease?.property?.id || p.lease?.property_id || null;
+      const assigned = ownerId ? (propId ? ownedPropIds.has(propId) : false) : false;
+      if (ownerId && !assigned) return;
+
+      const percent = propId ? (percentByProp.get(propId) ?? 0) : 0;
+      const shareAmt = Number(p.amount || 0) * (percent / 100);
+
+      const basis = leaseFeeBasisById.get(String(p.lease_id ?? "")) ?? "paid";
+      if (basis !== "paid") return;
+
+      if (p.currency === "USD") paid.usd += shareAmt;
+      else paid.dop += shareAmt;
+    });
+
+    (filteredInvoices ?? []).forEach((inv: any) => {
+      const propId = inv.lease?.property?.id ?? null;
+      const assigned = ownerId ? (propId ? ownedPropIds.has(propId) : false) : false;
+      if (ownerId && !assigned) return;
+
+      const percent = propId ? (percentByProp.get(propId) ?? 0) : 0;
+      const shareAmt = Number(inv.total_amount || 0) * (percent / 100);
+
+      const basis = leaseFeeBasisById.get(String(inv.lease_id ?? "")) ?? "paid";
+      if (basis !== "issued") return;
+
+      if (inv.currency === "USD") issued.usd += shareAmt;
+      else issued.dop += shareAmt;
+    });
+
+    return { paid, issued };
+  }, [filteredPayments, filteredInvoices, leaseFeeBasisById, percentByProp, ownedPropIds, ownerId]);
+
+  const feeTotalOwedDop = useMemo(() => {
+    const usd = feeBase.paid.usd + feeBase.issued.usd;
+    const dop = feeBase.paid.dop + feeBase.issued.dop;
+    return ((usd * effectiveRate) + dop) * (feePercent / 100);
+  }, [feeBase, effectiveRate, feePercent]);
+
+  const ownerFeeDeducted = useMemo(() => Math.min(feeTotalOwedDop, totals.dopCash), [feeTotalOwedDop, totals.dopCash]);
+  const ownerFeeBalanceDue = useMemo(() => Math.max(0, feeTotalOwedDop - ownerFeeDeducted), [feeTotalOwedDop, ownerFeeDeducted]);
+  const ownerDopAfterFee = useMemo(() => Math.max(0, totals.dopCash - ownerFeeDeducted), [totals.dopCash, ownerFeeDeducted]);
 
   const handleSaveReport = async () => {
     if (!agencyId || !ownerId || !currentMonth) {
       toast({ title: "Missing selection", description: "Choose an owner and a month.", variant: "destructive" });
       return;
     }
-    const saved = await createOwnerReport({
+    await createOwnerReport({
       agency_id: agencyId!,
       owner_id: ownerId!,
       month: currentMonth.value,
@@ -284,6 +329,8 @@ const OwnerReports = () => {
   };
 
   const isMobile = useIsMobile();
+
+  const hasIssuedComponent = (feeBase.issued.usd + feeBase.issued.dop) > 0;
 
   return (
     <AppShell>
@@ -360,14 +407,33 @@ const OwnerReports = () => {
               {avgRateInput ? avgRateInput : suggestedRate != null ? suggestedRate.toFixed(6) : "—"}
             </CardContent>
           </Card>
+
           {isOwner && (
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Your Management Fee</CardTitle></CardHeader>
               <CardContent>
-                <div className="text-sm">
+                <div className="space-y-2 text-sm">
                   <div>Fee percent: <span className="font-medium">{feePercent}%</span></div>
-                  <div>Fee (DOP): <span className="font-medium">{fmt(ownerFeeDeducted, "DOP")}</span></div>
-                  <div>Cash after fee (DOP): <span className="font-medium">{fmt(ownerDopAfterFee, "DOP")}</span></div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="text-muted-foreground">Fee total (owed)</div>
+                    <div className="text-right font-medium">{fmt(feeTotalOwedDop, "DOP")}</div>
+                    <div className="text-muted-foreground">Deducted from DOP cash</div>
+                    <div className="text-right font-medium">{fmt(ownerFeeDeducted, "DOP")}</div>
+                    <div className="text-muted-foreground">Balance due to agency</div>
+                    <div className={`text-right font-semibold ${ownerFeeBalanceDue > 0 ? "text-red-600" : ""}`}>{fmt(ownerFeeBalanceDue, "DOP")}</div>
+                    <div className="text-muted-foreground">Cash after fee (DOP)</div>
+                    <div className="text-right font-semibold">{fmt(ownerDopAfterFee, "DOP")}</div>
+                  </div>
+                  {hasIssuedComponent ? (
+                    <div className="text-xs text-muted-foreground">
+                      Includes invoices issued for some leases: {fmt(feeBase.issued.usd, "USD")} USD and {fmt(feeBase.issued.dop, "DOP")} DOP.
+                    </div>
+                  ) : null}
+                  {ownerFeeBalanceDue > 0 ? (
+                    <div className="text-xs text-muted-foreground">
+                      This balance can be paid by transfer or will be deducted from the next available DOP cash payout.
+                    </div>
+                  ) : null}
                 </div>
               </CardContent>
             </Card>
@@ -438,7 +504,6 @@ const OwnerReports = () => {
           </CardContent>
         </Card>
 
-        {/* Saved Reports list (owners: read-only with View; admins: edit/delete/view) */}
         <Card>
           <CardHeader className="flex items-center justify-between">
             <CardTitle>Saved Owner Reports</CardTitle>
@@ -504,7 +569,6 @@ const OwnerReports = () => {
   );
 };
 
-// Helper row component inside this file for saved entries
 function SavedReportRow({
   report,
   onEdited,
@@ -563,7 +627,6 @@ function SavedReportRow({
     return (isFirstDay && isSameMonth && isLastDay) ? formatMonthLabel(report.month) : `${sStr} to ${eStr}`;
   }, [report.month, report.start_date, report.end_date]);
 
-  // Match Manager Report for the same period
   const managerForPeriod = useMemo(() => {
     if (!mgrReports || mgrReports.length === 0) return null;
     const m = (mgrReports as any[]).find((mr) =>

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import type { LeaseWithMeta } from "@/services/leases";
+import type { LeaseWithMeta, ManagementFeeBasis } from "@/services/leases";
 import { updateLease } from "@/services/leases";
 import { toast } from "sonner";
 import KDriveUploader from "@/components/leases/KDriveUploader";
@@ -43,6 +43,10 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
     typeof lease.annual_increase_percent === "number" ? String(lease.annual_increase_percent) : ""
   );
 
+  const [managementFeeBasis, setManagementFeeBasis] = useState<ManagementFeeBasis>(
+    (lease.management_fee_basis === "issued" ? "issued" : "paid")
+  );
+
   const { user, role, profile, providerToken } = useAuth();
 
   const reset = () => {
@@ -62,6 +66,7 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
     setAnnualIncreaseEnabled(!!lease.annual_increase_enabled);
     setAnnualIncreasePercent(typeof lease.annual_increase_percent === "number" ? String(lease.annual_increase_percent) : "");
     setAutoDueDay(typeof (lease as any).auto_invoice_due_day === "number" ? (lease as any).auto_invoice_due_day : (lease.auto_invoice_day ?? 5));
+    setManagementFeeBasis(lease.management_fee_basis === "issued" ? "issued" : "paid");
   };
 
   const onSave = async () => {
@@ -86,6 +91,7 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
         annual_increase_percent: annualIncreaseEnabled
           ? (annualIncreasePercent === "" ? null : Number(annualIncreasePercent))
           : null,
+        management_fee_basis: managementFeeBasis,
       });
       toast.success("Lease updated");
       setOpen(false);
@@ -189,6 +195,22 @@ const EditLeaseDialog = ({ lease, onUpdated }: Props) => {
                 <SelectItem value="terminated">Terminated</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2 border rounded-md p-3">
+            <Label>Management fee basis</Label>
+            <Select value={managementFeeBasis} onValueChange={(v) => setManagementFeeBasis(v as ManagementFeeBasis)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="paid">On payments received</SelectItem>
+                <SelectItem value="issued">On invoices issued (fee owed even if unpaid)</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="text-xs text-muted-foreground">
+              If set to "invoices issued", the owner statement will show a fee balance due even when the invoice is unpaid.
+            </div>
           </div>
 
           <div className="space-y-3 border rounded-md p-3">

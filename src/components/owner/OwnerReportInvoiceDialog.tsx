@@ -15,6 +15,8 @@ import { fetchAgencyById } from "@/services/agencies";
 import { getLogoPublicUrl } from "@/services/branding";
 import { listManagerReports } from "@/services/manager-reports";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { fetchLeases, type LeaseWithMeta } from "@/services/leases";
+import { fetchInvoices } from "@/services/invoices";
 
 type Props = {
   report: OwnerReportRow | null;
@@ -70,6 +72,18 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
     queryFn: () => fetchPayments({ role, userId: user?.id ?? null, agencyId }),
   });
 
+  const { data: leases } = useQuery({
+    queryKey: ["owner-invoice-leases", role, user?.id, agencyId],
+    enabled: open && !!role && !!agencyId,
+    queryFn: () => fetchLeases({ role, userId: user?.id ?? null, agencyId }),
+  });
+
+  const { data: invoices } = useQuery({
+    queryKey: ["owner-invoice-invoices", role, user?.id, agencyId],
+    enabled: open && !!role && !!agencyId,
+    queryFn: fetchInvoices,
+  });
+
   const { data: ownerships } = useQuery({
     queryKey: ["owner-invoice-ownerships", agencyId],
     enabled: open && !!agencyId && isAdmin,
@@ -116,30 +130,48 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
     });
   }, [payments, report]);
 
+  const filteredInvoices = useMemo(() => {
+    if (!report) return [];
+    const s = String(report.start_date).slice(0, 10);
+    const e = String(report.end_date).slice(0, 10);
+    return (invoices ?? []).filter((inv: any) => {
+      if (String(inv.status) === "void") return false;
+      const d = String(inv.issue_date ?? "").slice(0, 10);
+      return d >= s && d <= e;
+    });
+  }, [invoices, report]);
+
+  const ownershipCtx = useMemo(() => {
+    if (!report) {
+      return {
+        ownedPropIds: new Set<string>(),
+        percentByProp: new Map<string, number>(),
+      };
+    }
+
+    if (isAdmin) {
+      const ownerProps = (ownerships ?? []).filter((o) => o.owner_id === report.owner_id);
+      const ownedPropIds = new Set(ownerProps.map((o) => o.property_id));
+      const percentByProp = new Map(ownerProps.map((o) => [o.property_id, o.ownership_percent == null ? 100 : Number(o.ownership_percent)]));
+      return { ownedPropIds, percentByProp };
+    }
+
+    const entries = Array.from((myOwnerships ?? new Map<string, number>()).entries());
+    const ownedPropIds = new Set(entries.map(([pid]) => pid));
+    const percentByProp = new Map(entries.map(([pid, percent]) => [pid, percent == null ? 100 : Number(percent)]));
+    return { ownedPropIds, percentByProp };
+  }, [isAdmin, ownerships, myOwnerships, report]);
+
   const ownerRows: PaymentRow[] = useMemo(() => {
     if (!report) return [];
 
     const map = new Map<string, PaymentRow>();
 
-    // Build owned set and percents depending on role
-    let ownedPropIds = new Set<string>();
-    let percentByProp = new Map<string, number>();
-
-    if (isAdmin) {
-      const ownerProps = (ownerships ?? []).filter((o) => o.owner_id === report.owner_id);
-      ownedPropIds = new Set(ownerProps.map((o) => o.property_id));
-      percentByProp = new Map(ownerProps.map((o) => [o.property_id, o.ownership_percent == null ? 100 : Number(o.ownership_percent)]));
-    } else {
-      const entries = Array.from((myOwnerships ?? new Map<string, number>()).entries());
-      ownedPropIds = new Set(entries.map(([pid]) => pid));
-      percentByProp = new Map(entries.map(([pid, percent]) => [pid, percent == null ? 100 : Number(percent)]));
-    }
-
     (filteredPayments ?? []).forEach((p: any) => {
       const propId = p.lease?.property?.id || p.lease?.property_id || null;
       const propName = p.lease?.property?.name ?? "—";
-      const percent = propId ? (percentByProp.get(propId) ?? 0) : 0;
-      const assigned = propId ? ownedPropIds.has(propId) : false;
+      const percent = propId ? (ownershipCtx.percentByProp.get(propId) ?? 0) : 0;
+      const assigned = propId ? ownershipCtx.ownedPropIds.has(propId) : false;
       const shareAmt = assigned ? (Number(p.amount || 0) * percent) / 100 : 0;
 
       const key = `${p.id}`;
@@ -160,7 +192,7 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
     });
 
     return Array.from(map.values());
-  }, [filteredPayments, ownerships, myOwnerships, report, isAdmin]);
+  }, [filteredPayments, ownershipCtx, report]);
 
   const totals = useMemo(() => {
     const usdCash = ownerRows.filter((r) => r.method === "Cash").reduce((s, r) => s + r.usd, 0);
@@ -182,21 +214,68 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
     return m ?? null;
   }, [mgrReports, report]);
 
-  // Agency-level totals and fee percent (used for fee% and optional avg rate only)
   const feePercent = managerForPeriod ? Number(managerForPeriod.fee_percent || 5) : 5;
   const avgRate = managerForPeriod && managerForPeriod.avg_rate != null ? Number(managerForPeriod.avg_rate) : (report?.avg_rate != null ? Number(report.avg_rate) : NaN);
 
-  // Owner-specific fee components
-  const ownerUsdTotal = totals.usdCash + totals.usdTransfer;
-  const ownerDopTotal = totals.dopCash + totals.dopTransfer;
-  const ownerDopCash = totals.dopCash;
+  const leaseFeeBasisById = useMemo(() => {
+    const map = new Map<string, "paid" | "issued">();
+    (leases as LeaseWithMeta[] | undefined)?.forEach((l) => {
+      map.set(l.id, l.management_fee_basis === "issued" ? "issued" : "paid");
+    });
+    return map;
+  }, [leases]);
 
-  // Fee is always calculated on the full owner share (USD converted + DOP), regardless of payment method.
-  // Deduction is only applied against DOP CASH. If there is no DOP cash, the remaining fee is still owed.
-  const ownerFeeTotalDop = ((Number.isNaN(avgRate) ? 0 : ownerUsdTotal * avgRate) + ownerDopTotal) * (feePercent / 100);
-  const ownerFeeDeductedDop = Math.min(ownerFeeTotalDop, ownerDopCash);
-  const ownerFeeBalanceDueDop = Math.max(0, ownerFeeTotalDop - ownerFeeDeductedDop);
-  const ownerDopAfterFee = Math.max(0, ownerDopCash - ownerFeeDeductedDop);
+  // Fee base: payments for leases set to 'paid' + invoices issued for leases set to 'issued'
+  const feeBase = useMemo(() => {
+    const paid = { usd: 0, dop: 0 };
+    const issued = { usd: 0, dop: 0 };
+
+    (filteredPayments ?? []).forEach((p: any) => {
+      const propId = p.lease?.property?.id || p.lease?.property_id || null;
+      const assigned = propId ? ownershipCtx.ownedPropIds.has(propId) : false;
+      if (!assigned) return;
+
+      const percent = propId ? (ownershipCtx.percentByProp.get(propId) ?? 0) : 0;
+      const shareAmt = (Number(p.amount || 0) * percent) / 100;
+
+      const basis = leaseFeeBasisById.get(String(p.lease_id ?? "")) ?? "paid";
+      if (basis !== "paid") return;
+
+      if (p.currency === "USD") paid.usd += shareAmt;
+      else paid.dop += shareAmt;
+    });
+
+    (filteredInvoices ?? []).forEach((inv: any) => {
+      const propId = inv.lease?.property?.id ?? null;
+      const assigned = propId ? ownershipCtx.ownedPropIds.has(propId) : false;
+      if (!assigned) return;
+
+      const percent = propId ? (ownershipCtx.percentByProp.get(propId) ?? 0) : 0;
+      const shareAmt = (Number(inv.total_amount || 0) * percent) / 100;
+
+      const basis = leaseFeeBasisById.get(String(inv.lease_id ?? "")) ?? "paid";
+      if (basis !== "issued") return;
+
+      if (inv.currency === "USD") issued.usd += shareAmt;
+      else issued.dop += shareAmt;
+    });
+
+    return { paid, issued };
+  }, [filteredPayments, filteredInvoices, leaseFeeBasisById, ownershipCtx]);
+
+  const feeTotalOwedDop = useMemo(() => {
+    const usd = feeBase.paid.usd + feeBase.issued.usd;
+    const dop = feeBase.paid.dop + feeBase.issued.dop;
+    const rate = Number.isFinite(avgRate) && avgRate > 0 ? avgRate : 0;
+    return ((usd * rate) + dop) * (feePercent / 100);
+  }, [feeBase, avgRate, feePercent]);
+
+  // Deduct only from DOP CASH (actual cash payments)
+  const ownerFeeDeductedDop = Math.min(feeTotalOwedDop, totals.dopCash);
+  const ownerFeeBalanceDueDop = Math.max(0, feeTotalOwedDop - ownerFeeDeductedDop);
+  const ownerDopAfterFee = Math.max(0, totals.dopCash - ownerFeeDeductedDop);
+
+  const hasIssuedComponent = (feeBase.issued.usd + feeBase.issued.dop) > 0;
 
   const formatMonthLabel = (ym?: string) => {
     const parts = String(ym ?? "").split("-");
@@ -344,10 +423,15 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
                 <div className="p-3">
                   <div className="text-xs font-medium mb-1">Management fee</div>
                   <div className="space-y-2 text-sm">
-                    <div className="font-semibold">Fee total (owed): {fmt(ownerFeeTotalDop, "DOP")} ({feePercent.toFixed(2)}%)</div>
+                    <div className="font-semibold">Fee total (owed): {fmt(feeTotalOwedDop, "DOP")} ({feePercent.toFixed(2)}%)</div>
                     <div className="text-xs text-muted-foreground">
-                      The fee is calculated on the full income (cash + transfers). Deductions are applied only against DOP cash.
+                      Deductions are applied only against DOP cash. If there is no DOP cash, the remaining fee is still owed.
                     </div>
+                    {hasIssuedComponent ? (
+                      <div className="text-xs text-muted-foreground">
+                        Includes invoices issued (fee owed even if unpaid): {fmt(feeBase.issued.usd, "USD")} USD and {fmt(feeBase.issued.dop, "DOP")} DOP.
+                      </div>
+                    ) : null}
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="text-muted-foreground">Deducted from DOP cash</div>
                       <div className="text-right font-medium">{fmt(ownerFeeDeductedDop, "DOP")}</div>

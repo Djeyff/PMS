@@ -9,7 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchProperties } from "@/services/properties";
 import { fetchTenantProfilesInAgency } from "@/services/users";
 import { useAuth } from "@/contexts/AuthProvider";
-import { createLease } from "@/services/leases";
+import { createLease, type ManagementFeeBasis } from "@/services/leases";
 import { toast } from "sonner";
 import AddTenantDialog from "@/components/tenants/AddTenantDialog";
 
@@ -54,6 +54,9 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
   const [annualIncreaseEnabled, setAnnualIncreaseEnabled] = useState<boolean>(false);
   const [annualIncreasePercent, setAnnualIncreasePercent] = useState<string>("");
 
+  // NEW: management fee basis
+  const [managementFeeBasis, setManagementFeeBasis] = useState<ManagementFeeBasis>("paid");
+
   useEffect(() => {
     if (open && propPropertyId) {
       setPropertyId(propPropertyId);
@@ -95,9 +98,11 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
         auto_invoice_due_day: autoDueDay,
         contract_kdrive_folder_url: kdriveFolderUrl.trim() !== "" ? kdriveFolderUrl.trim() : null,
         contract_kdrive_file_url: kdriveFileUrl.trim() !== "" ? kdriveFileUrl.trim() : null,
-        // ADDED: annual increase
+        // annual increase
         annual_increase_enabled: annualIncreaseEnabled,
         annual_increase_percent: annualIncreaseEnabled ? Number(annualIncreasePercent) : undefined,
+        // management fee basis
+        management_fee_basis: managementFeeBasis,
       });
       toast.success("Lease created");
       setOpen(false);
@@ -118,6 +123,7 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
       // RESET: annual increase
       setAnnualIncreaseEnabled(false);
       setAnnualIncreasePercent("");
+      setManagementFeeBasis("paid");
       onCreated?.();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to create lease");
@@ -210,7 +216,24 @@ const LeaseForm = ({ onCreated, propertyId: propPropertyId, triggerLabel }: Prop
             <Input type="number" min={0} value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="e.g., 1200" />
           </div>
 
-          {/* ADDED: Annual increase controls */}
+          {/* NEW: Management fee basis */}
+          <div className="space-y-2 border rounded-md p-3">
+            <Label>Management fee basis</Label>
+            <Select value={managementFeeBasis} onValueChange={(v) => setManagementFeeBasis(v as ManagementFeeBasis)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="paid">On payments received</SelectItem>
+                <SelectItem value="issued">On invoices issued (fee owed even if unpaid)</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="text-xs text-muted-foreground">
+              This controls how the management fee is calculated for this lease.
+            </div>
+          </div>
+
+          {/* Annual increase controls */}
           <div className="space-y-3 border rounded-md p-3">
             <div className="flex items-center justify-between py-1">
               <Label className="flex-1">Annual increase on contract anniversary</Label>

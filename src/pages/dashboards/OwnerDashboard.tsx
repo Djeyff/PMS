@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
 import { fetchProperties } from "@/services/properties";
-import { fetchLeases } from "@/services/leases";
+import { fetchLeases, type LeaseWithMeta } from "@/services/leases";
 import { fetchPayments } from "@/services/payments";
 import { fetchMyOwnerships } from "@/services/property-owners";
 import { fetchMaintenanceRequests } from "@/services/maintenance";
@@ -12,6 +12,7 @@ import { fetchInvoices } from "@/services/invoices";
 import { listOwnerReports, type OwnerReportRow } from "@/services/owner-reports";
 import OwnerReportInvoiceDialog from "@/components/owner/OwnerReportInvoiceDialog";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 const Stat = ({ title, value, children }: { title: string; value?: string; children?: React.ReactNode }) => (
   <Card>
@@ -49,21 +50,21 @@ const OwnerDashboard = () => {
     enabled: role === "owner" && !!user,
   });
 
-  // NEW: Owner maintenance requests (open/in_progress) for the agency; RLS limits to owner's properties
+  // Owner maintenance requests (open/in_progress) for the agency; RLS limits to owner's properties
   const { data: maintenance } = useQuery({
     queryKey: ["owner-maintenance", role, user?.id, profile?.agency_id],
     queryFn: () => fetchMaintenanceRequests({ agencyId: profile!.agency_id!, status: ["open", "in_progress"] }),
     enabled: role === "owner" && !!user && !!profile?.agency_id,
   });
 
-  // NEW: Owner invoices (RLS restricts to owned properties)
+  // Owner invoices (RLS restricts to owned properties)
   const { data: invoices } = useQuery({
     queryKey: ["owner-invoices", role, user?.id],
     queryFn: fetchInvoices,
     enabled: role === "owner" && !!user,
   });
 
-  // NEW: Saved Owner Reports for this owner
+  // Saved Owner Reports for this owner
   const { data: savedReports } = useQuery({
     queryKey: ["owner-saved-reports-dashboard", profile?.agency_id, user?.id],
     enabled: role === "owner" && !!user?.id && !!profile?.agency_id,
@@ -85,7 +86,6 @@ const OwnerDashboard = () => {
     return label.charAt(0).toUpperCase() + label.slice(1);
   };
 
-  // NEW: default fee percent used in Saved Owner Reports section
   const feePercentSaved = 5;
 
   const hasNoProps = (props?.length ?? 0) === 0;
@@ -93,7 +93,6 @@ const OwnerDashboard = () => {
   const occupancy = (() => {
     const totalProps = props?.length ?? 0;
     if (totalProps === 0) return "0%";
-    // properties list for owner
     const propIds = new Set<string>((props ?? []).map((p: any) => p.id));
     const occupied = new Set<string>();
     (leases ?? []).forEach((l: any) => {
@@ -105,29 +104,41 @@ const OwnerDashboard = () => {
   })();
 
   const ym = new Date().toISOString().slice(0, 7);
+
+  const normalizeMethod = (m: any) => String(m ?? "").trim().toLowerCase();
+
+  const monthPayments = React.useMemo(() => {
+    return (payments ?? []).filter((p: any) => String(p.received_date ?? "").startsWith(ym));
+  }, [payments, ym]);
+
+  const monthInvoices = React.useMemo(() => {
+    return (invoices ?? []).filter((inv: any) => String(inv.issue_date ?? "").startsWith(ym) && String(inv.status) !== "void");
+  }, [invoices, ym]);
+
+  const shareMap = myShares ?? new Map<string, number>();
+  const getPropId = (p: any) => p.lease?.property?.id ?? p.lease?.property_id ?? null;
+  const shareFactorForProp = (propId: string | null) => {
+    const percent = propId ? (shareMap.get(propId) ?? 100) : 100;
+    return Math.max(0, Math.min(100, Number(percent))) / 100;
+  };
+
   const monthly = (() => {
-    const shareMap = myShares ?? new Map<string, number>();
-    const list = (payments ?? []).filter((p: any) => (p.received_date ?? "").startsWith(ym));
-    const getPropId = (p: any) => p.lease?.property?.id ?? p.lease?.property_id ?? null;
     const totalBy = (cur: "USD" | "DOP") =>
-      list
+      monthPayments
         .filter((p: any) => p.currency === cur)
         .reduce((sum: number, p: any) => {
           const propId = getPropId(p);
-          const percent = propId ? (shareMap.get(propId) ?? 100) : 100;
-          const factor = Math.max(0, Math.min(100, Number(percent))) / 100;
-          return sum + Number(p.amount || 0) * factor;
+          return sum + Number(p.amount || 0) * shareFactorForProp(propId);
         }, 0);
-    // Also split by method for dashboard cards
-    const sumBy = (method: string, cur: "USD" | "DOP") =>
-      list
-        .filter((p: any) => String(p.method) === method && p.currency === cur)
+
+    const sumBy = (methodKey: "cash" | "bank_transfer", cur: "USD" | "DOP") =>
+      monthPayments
+        .filter((p: any) => normalizeMethod(p.method) === methodKey && p.currency === cur)
         .reduce((s: number, p: any) => {
           const propId = getPropId(p);
-          const percent = propId ? (shareMap.get(propId) ?? 100) : 100;
-          const factor = Math.max(0, Math.min(100, Number(percent))) / 100;
-          return s + Number(p.amount || 0) * factor;
+          return s + Number(p.amount || 0) * shareFactorForProp(propId);
         }, 0);
+
     return {
       usd: totalBy("USD"),
       dop: totalBy("DOP"),
@@ -138,24 +149,104 @@ const OwnerDashboard = () => {
     };
   })();
 
-  // NEW: Average exchange rate from this month's payments (fallback to 0 if unknown)
-  const avgRate = (() => {
-    const list = (payments ?? []).filter((p: any) => (p.received_date ?? "").startsWith(ym));
-    const rates = list.map((p: any) => Number(p.exchange_rate)).filter((r) => Number.isFinite(r) && r > 0);
+  // Average exchange rate from this month's payments; fallback to exchange_rates if needed
+  const rateFromPayments = React.useMemo(() => {
+    const rates = monthPayments
+      .map((p: any) => Number(p.exchange_rate))
+      .filter((r) => Number.isFinite(r) && r > 0);
     if (rates.length === 0) return 0;
-    return rates.reduce((s, r) => s + r, 0) / rates.length;
-  })();
+    return rates.reduce((s: number, r: number) => s + r, 0) / rates.length;
+  }, [monthPayments]);
 
-  // Management fee should be understandable even if it can't be deducted from DOP cash.
-  // Fee is calculated on total income (USD converted + DOP), but deductions only apply against DOP CASH.
+  const [rateFromRates, setRateFromRates] = React.useState<number>(0);
+  React.useEffect(() => {
+    const run = async () => {
+      // Only needed if we have USD to convert but no payment-derived rate
+      if (rateFromPayments > 0) {
+        setRateFromRates(0);
+        return;
+      }
+      const hasUsd = monthPayments.some((p: any) => p.currency === "USD") || monthInvoices.some((inv: any) => inv.currency === "USD");
+      if (!hasUsd) {
+        setRateFromRates(0);
+        return;
+      }
+
+      const y = Number(ym.slice(0, 4));
+      const m = Number(ym.slice(5, 7));
+      if (!y || !m) return;
+      const startDate = `${ym}-01`;
+      const endDate = new Date(y, m, 0).toISOString().slice(0, 10);
+
+      const { data, error } = await supabase
+        .from("exchange_rates")
+        .select("rate")
+        .gte("date", startDate)
+        .lte("date", endDate)
+        .eq("base_currency", "USD")
+        .eq("target_currency", "DOP");
+      if (error) {
+        setRateFromRates(0);
+        return;
+      }
+      const rates = (data ?? []).map((r: any) => Number(r.rate)).filter((n) => Number.isFinite(n) && n > 0);
+      if (!rates.length) {
+        setRateFromRates(0);
+        return;
+      }
+      setRateFromRates(rates.reduce((s, n) => s + n, 0) / rates.length);
+    };
+    run();
+  }, [rateFromPayments, monthPayments, monthInvoices, ym]);
+
+  const avgRate = rateFromPayments > 0 ? rateFromPayments : rateFromRates;
+
+  const leaseFeeBasisById = React.useMemo(() => {
+    const map = new Map<string, "paid" | "issued">();
+    (leases as LeaseWithMeta[] | undefined)?.forEach((l) => {
+      map.set(l.id, l.management_fee_basis === "issued" ? "issued" : "paid");
+    });
+    return map;
+  }, [leases]);
+
+  // Management fee base: payments for leases set to 'paid' + invoices issued for leases set to 'issued'
+  const feeBase = React.useMemo(() => {
+    const paid = { usd: 0, dop: 0 };
+    const issued = { usd: 0, dop: 0 };
+
+    monthPayments.forEach((p: any) => {
+      const leaseId = String(p.lease_id ?? "");
+      const basis = leaseFeeBasisById.get(leaseId) ?? "paid";
+      if (basis !== "paid") return;
+      const propId = getPropId(p);
+      const share = Number(p.amount || 0) * shareFactorForProp(propId);
+      if (p.currency === "USD") paid.usd += share;
+      else paid.dop += share;
+    });
+
+    monthInvoices.forEach((inv: any) => {
+      const leaseId = String(inv.lease_id ?? "");
+      const basis = leaseFeeBasisById.get(leaseId) ?? "paid";
+      if (basis !== "issued") return;
+
+      const propId = inv.lease?.property?.id ?? null;
+      const share = Number(inv.total_amount || 0) * shareFactorForProp(propId);
+      if (inv.currency === "USD") issued.usd += share;
+      else issued.dop += share;
+    });
+
+    return { paid, issued };
+  }, [monthPayments, monthInvoices, leaseFeeBasisById, myShares]);
+
   const feePercent = 5;
-  const baseDop = monthly.dop + monthly.usd * avgRate;
-  const feeTotalDop = baseDop * (feePercent / 100);
+  const feeBaseDop = (feeBase.paid.dop + feeBase.issued.dop) + (feeBase.paid.usd + feeBase.issued.usd) * avgRate;
+  const feeTotalDop = feeBaseDop * (feePercent / 100);
   const feeDeductedDop = Math.min(feeTotalDop, monthly.cashDop);
   const feeBalanceDueDop = Math.max(0, feeTotalDop - feeDeductedDop);
   const cashDopAfterFee = Math.max(0, monthly.cashDop - feeDeductedDop);
 
-  // NEW: Partial invoices list and helper to compute remaining and last partial date
+  const hasIssuedFeePart = (feeBase.issued.usd + feeBase.issued.dop) > 0;
+
   const partialInvoices = (invoices ?? []).filter((inv: any) => String(inv.status) === "partial");
 
   const computeRemaining = (inv: any) => {
@@ -222,6 +313,11 @@ const OwnerDashboard = () => {
             <div className="text-muted-foreground">Balance due to agency</div>
             <div className={`text-right font-semibold ${feeBalanceDueDop > 0 ? "text-red-600" : ""}`}>{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(feeBalanceDueDop)}</div>
           </div>
+          {hasIssuedFeePart ? (
+            <div className="mt-2 text-xs text-muted-foreground">
+              Includes invoices issued for some leases: {new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(feeBase.issued.usd)} USD and {new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(feeBase.issued.dop)} DOP.
+            </div>
+          ) : null}
           {feeBalanceDueDop > 0 ? (
             <div className="mt-2 text-xs text-muted-foreground">
               If there is not enough DOP cash this month, the remaining fee can be paid by transfer or will be deducted from the next cash payout.
@@ -230,7 +326,7 @@ const OwnerDashboard = () => {
         </CardContent>
       </Card>
 
-      {/* NEW: Partial Invoices (ALL) */}
+      {/* Partial Invoices */}
       <Card>
         <CardHeader>
           <CardTitle className="text-orange-600">Partial Invoices</CardTitle>
@@ -262,7 +358,7 @@ const OwnerDashboard = () => {
         </CardContent>
       </Card>
 
-      {/* Saved Owner Reports (read-only for owners) */}
+      {/* Saved Owner Reports (read-only) */}
       <Card>
         <CardHeader>
           <CardTitle>Saved Owner Reports</CardTitle>
