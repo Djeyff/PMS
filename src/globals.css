@@ -149,15 +149,19 @@
   }
 
   body.print-report .report-print-area[data-print-scope="active"] {
-    position: absolute !important;
+    /* Use fixed to ensure the active print area is positioned at the page origin on mobile */
+    position: fixed !important;
     left: 0 !important;
     top: 0 !important;
+    right: 0 !important;
     width: 100% !important;
     max-height: none !important;
     overflow: visible !important;
     transform: none !important;
     box-sizing: border-box !important;
     padding: 12mm !important;
+    background: white !important;
+    z-index: 2147483647 !important;
   }
 
   /* If a report used horizontal scroll on-screen, remove it for printing */
@@ -189,6 +193,19 @@
   /* Hide interactive-only UI */
   .print\\:hidden {
     display: none !important;
+  }
+
+  /* iOS Safari print workaround:
+     The global visibility scoping can result in blank pages on some mobile engines.
+     For iOS, keep everything visible and explicitly hide the fullscreen overlay instead. */
+  @supports (-webkit-touch-callout: none) {
+    body.print-report * {
+      visibility: visible !important;
+    }
+    /* Hide typical Radix/overlay backdrops so they don't cover content when everything is visible */
+    body.print-report [data-state="open"][class*="inset-0"] {
+      display: none !important;
+    }
   }
 }
 
