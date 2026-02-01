@@ -258,9 +258,9 @@ const InvoiceDetail = () => {
   // overall balance should reflect payments that happened AFTER the invoice was issued too.
   const asOfDate = new Date().toISOString().slice(0, 10);
 
-  const allTotalsToDate = (tenantInvoices ?? [])
-    .filter((i: any) => i.currency === invCurrency && i.status !== "void" && i.issue_date <= asOfDate)
-    .reduce((s: number, i: any) => s + Number(i.total_amount || 0), 0);
+  // REPLACED: allTotalsToDate previously summed invoices up to today, which could exclude this invoice.
+  // Now we always include the current invoice total along with previous totals.
+  const allTotalsToDate = prevTotals + Number(inv.total_amount || 0);
 
   const allPaymentsToDateConverted = (tenantPayments ?? [])
     .filter((p: any) => p.received_date <= asOfDate)
