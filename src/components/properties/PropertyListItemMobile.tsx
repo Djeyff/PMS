@@ -42,7 +42,6 @@ const PropertyListItemMobile: React.FC<Props> = ({ property, occupied, canCreate
 
         <div className="mt-3 space-y-2">
           <LabelRow label="Type" value={<span className="capitalize">{property.type}</span>} />
-          <LabelRow label="Bedrooms" value={property.bedrooms ?? "-"} />
           <LabelRow label="City" value={property.city ?? "-"} />
           {property.location_group ? <LabelRow label="Folder" value={property.location_group} /> : null}
         </div>

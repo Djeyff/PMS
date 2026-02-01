@@ -186,8 +186,9 @@ const Properties = () => {
                             <TableHead className="whitespace-nowrap">Name</TableHead>
                             <TableHead className="whitespace-nowrap">Type</TableHead>
                             <TableHead className="whitespace-nowrap">Status</TableHead>
-                            <TableHead className="whitespace-nowrap">My Share</TableHead>
-                            <TableHead className="whitespace-nowrap">Bedrooms</TableHead>
+                            {role === "owner" ? (
+                              <TableHead className="whitespace-nowrap">My Share</TableHead>
+                            ) : null}
                             <TableHead className="whitespace-nowrap">City</TableHead>
                             {canCreate && <TableHead>Actions</TableHead>}
                           </TableRow>
@@ -206,14 +207,11 @@ const Properties = () => {
                                     <span className="text-red-600 font-medium">Vacant</span>
                                   )}
                                 </TableCell>
-                                <TableCell className="whitespace-nowrap">
-                                  {role === "owner" ? (
-                                    sharePercent != null ? `${Math.round(sharePercent)}%` : "—"
-                                  ) : (
-                                    "—"
-                                  )}
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap">{p.bedrooms ?? "-"}</TableCell>
+                                {role === "owner" ? (
+                                  <TableCell className="whitespace-nowrap">
+                                    {sharePercent != null ? `${Math.round(sharePercent)}%` : "—"}
+                                  </TableCell>
+                                ) : null}
                                 <TableCell className="whitespace-nowrap">{p.city ?? "-"}</TableCell>
                                 {canCreate && (
                                   <TableCell>
