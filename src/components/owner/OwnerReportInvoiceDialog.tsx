@@ -14,11 +14,21 @@ import { fetchOwnerProfilesInAgency } from "@/services/users";
 import { fetchAgencyById } from "@/services/agencies";
 import { getLogoPublicUrl } from "@/services/branding";
 import { listManagerReports } from "@/services/manager-reports";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type Props = {
   report: OwnerReportRow | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
+};
+
+type PaymentRow = {
+  date: string;
+  property: string;
+  method: string;
+  usd: number;
+  dop: number;
+  rate: number | null;
 };
 
 function fmt(amount: number, currency: "USD" | "DOP") {
@@ -30,6 +40,7 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
   const { role, user, profile } = useAuth();
   const agencyId = profile?.agency_id ?? null;
   const isAdmin = role === "agency_admin";
+  const isMobile = useIsMobile();
   const printAreaRef = React.useRef<HTMLDivElement | null>(null);
 
   const { data: agency } = useQuery({
@@ -105,13 +116,10 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
     });
   }, [payments, report]);
 
-  const ownerRows = useMemo(() => {
+  const ownerRows: PaymentRow[] = useMemo(() => {
     if (!report) return [];
 
-    const map = new Map<
-      string,
-      { date: string; property: string; method: string; usd: number; dop: number; rate: number | null; assigned: boolean }
-    >();
+    const map = new Map<string, PaymentRow>();
 
     // Build owned set and percents depending on role
     let ownedPropIds = new Set<string>();
@@ -148,7 +156,6 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
         usd,
         dop,
         rate,
-        assigned,
       });
     });
 
@@ -244,24 +251,61 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
     return () => window.removeEventListener("afterprint", onAfterPrint);
   }, []);
 
+  const paymentsTable = (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Property</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead>Method</TableHead>
+            <TableHead>USD</TableHead>
+            <TableHead>DOP</TableHead>
+            <TableHead>Rate</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {ownerRows.map((r, idx) => (
+            <TableRow key={idx}>
+              <TableCell className="font-medium">{r.property}</TableCell>
+              <TableCell>{r.date}</TableCell>
+              <TableCell>{r.method}</TableCell>
+              <TableCell>{fmt(r.usd, "USD")}</TableCell>
+              <TableCell>{fmt(r.dop, "DOP")}</TableCell>
+              <TableCell>{r.rate ? String(r.rate) : "—"}</TableCell>
+            </TableRow>
+          ))}
+          <TableRow>
+            <TableCell className="font-semibold">Totals</TableCell>
+            <TableCell />
+            <TableCell />
+            <TableCell className="font-semibold">{fmt(totals.usdCash + totals.usdTransfer, "USD")}</TableCell>
+            <TableCell className="font-semibold">{fmt(totals.dopCash + totals.dopTransfer, "DOP")}</TableCell>
+            <TableCell />
+          </TableRow>
+        </TableBody>
+      </Table>
+    </div>
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto invoice-print bg-white text-black p-6 rounded-md">
+      <DialogContent className="w-[95vw] sm:max-w-3xl max-h-[85vh] overflow-y-auto invoice-print bg-white text-black p-3 sm:p-6 rounded-md">
         <div ref={printAreaRef} className="report-print-area">
           {!report ? (
             <div className="text-sm text-muted-foreground">Loading report…</div>
           ) : (
             <>
               <DialogHeader>
-                <div className="flex items-start justify-between">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex items-start gap-3">
-                    {logoUrl ? <img src={logoUrl} alt="Agency logo" className="h-12 w-auto rounded" /> : null}
+                    {logoUrl ? <img src={logoUrl} alt="Agency logo" className="h-10 w-auto rounded" /> : null}
                     <div>
                       <div className="font-semibold">{agency?.name ?? "Las Terrenas Properties"}</div>
                       <div className="text-xs text-gray-600">{agency?.address ?? "278 calle Duarte, LTI building, Las Terrenas"}</div>
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="sm:text-right">
                     <DialogTitle className="text-base font-semibold">Owner Statement • {periodLabel}</DialogTitle>
                     <div className="text-xs text-gray-600">
                       {String(report.start_date).slice(0, 10)} to {String(report.end_date).slice(0, 10)}
@@ -313,72 +357,96 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
 
               {/* Per-payment rows */}
               <div className="border rounded-md mt-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Property</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Method</TableHead>
-                      <TableHead>USD</TableHead>
-                      <TableHead>DOP</TableHead>
-                      <TableHead>Rate</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ownerRows.map((r, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium">{r.property}</TableCell>
-                        <TableCell>{r.date}</TableCell>
-                        <TableCell>{r.method}</TableCell>
-                        <TableCell>{fmt(r.usd, "USD")}</TableCell>
-                        <TableCell>{fmt(r.dop, "DOP")}</TableCell>
-                        <TableCell>{r.rate ? String(r.rate) : "—"}</TableCell>
-                      </TableRow>
-                    ))}
-                    <TableRow>
-                      <TableCell className="font-semibold">Totals</TableCell>
-                      <TableCell />
-                      <TableCell />
-                      <TableCell className="font-semibold">{fmt(totals.usdCash + totals.usdTransfer, "USD")}</TableCell>
-                      <TableCell className="font-semibold">{fmt(totals.dopCash + totals.dopTransfer, "DOP")}</TableCell>
-                      <TableCell />
-                    </TableRow>
-                  </TableBody>
-                </Table>
+                {isMobile ? (
+                  <>
+                    <div className="space-y-2 p-3 print:hidden">
+                      {ownerRows.map((r, idx) => (
+                        <div key={idx} className="rounded-md border p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="font-semibold">{r.property}</div>
+                            <div className="text-right text-xs text-muted-foreground">{r.date}</div>
+                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">{r.method}</div>
+                          <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                            <div className="text-muted-foreground">USD</div>
+                            <div className="text-right">{fmt(r.usd, "USD")}</div>
+                            <div className="text-muted-foreground">DOP</div>
+                            <div className="text-right">{fmt(r.dop, "DOP")}</div>
+                            <div className="text-muted-foreground">Rate</div>
+                            <div className="text-right">{r.rate ? String(r.rate) : "—"}</div>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="rounded-md border p-3">
+                        <div className="font-semibold">Totals</div>
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                          <div className="text-muted-foreground">Total USD</div>
+                          <div className="text-right">{fmt(totals.usdCash + totals.usdTransfer, "USD")}</div>
+                          <div className="text-muted-foreground">Total DOP</div>
+                          <div className="text-right">{fmt(totals.dopCash + totals.dopTransfer, "DOP")}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="hidden print:block">{paymentsTable}</div>
+                  </>
+                ) : (
+                  paymentsTable
+                )}
               </div>
 
+              {/* Summary */}
               <div className="border rounded-md mt-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Cash DOP (after manager fee)</TableHead>
-                      <TableHead>Cash USD</TableHead>
-                      <TableHead>Transfer DOP</TableHead>
-                      <TableHead>Transfer USD</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell className="font-semibold">{fmt(ownerDopAfterFee, "DOP")}</TableCell>
-                      <TableCell className="font-semibold">{fmt(totals.usdCash, "USD")}</TableCell>
-                      <TableCell className="font-semibold">{fmt(totals.dopTransfer, "DOP")}</TableCell>
-                      <TableCell className="font-semibold">{fmt(totals.usdTransfer, "USD")}</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
+                {isMobile ? (
+                  <div className="p-3 print:hidden">
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="text-muted-foreground">Cash DOP (after fee)</div>
+                      <div className="text-right font-semibold">{fmt(ownerDopAfterFee, "DOP")}</div>
+                      <div className="text-muted-foreground">Cash USD</div>
+                      <div className="text-right font-semibold">{fmt(totals.usdCash, "USD")}</div>
+                      <div className="text-muted-foreground">Transfer DOP</div>
+                      <div className="text-right font-semibold">{fmt(totals.dopTransfer, "DOP")}</div>
+                      <div className="text-muted-foreground">Transfer USD</div>
+                      <div className="text-right font-semibold">{fmt(totals.usdTransfer, "USD")}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Cash DOP (after manager fee)</TableHead>
+                        <TableHead>Cash USD</TableHead>
+                        <TableHead>Transfer DOP</TableHead>
+                        <TableHead>Transfer USD</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell className="font-semibold">{fmt(ownerDopAfterFee, "DOP")}</TableCell>
+                        <TableCell className="font-semibold">{fmt(totals.usdCash, "USD")}</TableCell>
+                        <TableCell className="font-semibold">{fmt(totals.dopTransfer, "DOP")}</TableCell>
+                        <TableCell className="font-semibold">{fmt(totals.usdTransfer, "USD")}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                )}
               </div>
             </>
           )}
         </div>
 
         <div className="mt-3 flex items-center justify-end print:hidden">
-          <div className="flex items-center gap-2">
-            <Button variant="default" className="bg-neutral-800 text-white hover:bg-neutral-900" onClick={handlePrint}>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <Button
+              variant="default"
+              className="w-full bg-neutral-800 text-white hover:bg-neutral-900 sm:w-auto"
+              onClick={handlePrint}
+            >
               Download PDF
             </Button>
             <Button
               variant="outline"
-              className="bg-white text-black border-gray-300 hover:bg-gray-100"
+              className="w-full bg-white text-black border-gray-300 hover:bg-gray-100 sm:w-auto"
               onClick={handlePrint}
             >
               Print

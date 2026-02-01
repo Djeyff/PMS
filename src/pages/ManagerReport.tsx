@@ -709,7 +709,7 @@ function SavedReportRow({ report, onEdited }: { report: any; onEdited: () => voi
       <TableCell className="print:hidden">
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setOpen(true)}>Edit</Button>
-          <Button size="sm" onClick={() => setOpenInvoice(true)}>Invoice-style</Button>
+          <Button size="sm" onClick={() => setOpenInvoice(true)}>View</Button>
           <Button variant="destructive" size="sm" onClick={() => setOpenDelete(true)}>Delete</Button>
         </div>
         <EditManagerReportDialog

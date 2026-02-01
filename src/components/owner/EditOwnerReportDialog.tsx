@@ -67,7 +67,7 @@ const EditOwnerReportDialog: React.FC<Props> = ({ report, open, onOpenChange, on
             />
           </div>
           <div className="text-xs text-muted-foreground">
-            This rate is used for reference in the invoice-style view; saved totals remain in original currencies.
+            This rate is used for reference in the view; saved totals remain in original currencies.
           </div>
         </div>
         <DialogFooter>

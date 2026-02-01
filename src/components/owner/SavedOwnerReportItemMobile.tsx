@@ -47,7 +47,7 @@ const SavedOwnerReportItemMobile: React.FC<Props> = ({ report, ownerName, onEdit
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => setOpenEdit(true)}>Edit</Button>
-          <Button size="sm" onClick={() => setOpenInvoice(true)}>Invoice-style</Button>
+          <Button size="sm" onClick={() => setOpenInvoice(true)}>View</Button>
           <Button variant="destructive" size="sm" onClick={() => setOpenDelete(true)}>Delete</Button>
         </div>
         <EditOwnerReportDialog
