@@ -51,7 +51,7 @@ function monthsBetween(startDate: string, refDate: Date) {
   return (refDate.getFullYear() - s.getFullYear()) * 12 + (refDate.getMonth() - s.getMonth());
 }
 
-// ADDED: years since last anniversary (birthday)
+// years since last anniversary (birthday)
 function yearsSinceAnniversary(startDate: string, refDate: Date) {
   const s = new Date(startDate);
   let years = refDate.getFullYear() - s.getFullYear();
@@ -170,7 +170,7 @@ serve(async (req) => {
     .select(`
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, status,
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute, auto_invoice_due_day,
-      annual_increase_enabled, annual_increase_percent,
+      annual_increase_enabled, annual_increase_percent, annual_increase_enabled_at,
       property:properties ( id, name, agency_id ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -245,16 +245,24 @@ serve(async (req) => {
     const tenantName = [l.tenant?.first_name ?? "", l.tenant?.last_name ?? ""].filter(Boolean).join(" ") || "—";
     const propertyName = l.property?.name ?? (l.property_id?.slice(0, 8) || "Propiedad");
 
-    // ADDED: compute amount with annual increase after anniversary
+    // Annual increase: apply ONLY for anniversaries that happen after the feature was enabled.
+    // This prevents retroactive increases when you toggle the feature on mid-lease.
     let amount = Number(l.rent_amount || 0);
     const percent = typeof l.annual_increase_percent === "number" ? Number(l.annual_increase_percent) : 0;
     if (l.annual_increase_enabled && percent > 0) {
-      const years = yearsSinceAnniversary(l.start_date, today);
-      if (years > 0) {
-        const factor = Math.pow(1 + percent / 100, years);
+      const enabledAtStr = (l as any).annual_increase_enabled_at as string | null | undefined;
+      const enabledAt = enabledAtStr ? new Date(enabledAtStr) : today;
+
+      const yearsNow = yearsSinceAnniversary(l.start_date, today);
+      const yearsAtEnable = yearsSinceAnniversary(l.start_date, enabledAt);
+      const yearsToApply = Math.max(0, yearsNow - yearsAtEnable);
+
+      if (yearsToApply > 0) {
+        const factor = Math.pow(1 + percent / 100, yearsToApply);
         amount = Math.round((amount * factor + Number.EPSILON) * 100) / 100; // round to 2 decimals
       }
     }
+
     const currency = l.rent_currency;
 
     const dueDay = typeof (l as any).auto_invoice_due_day === "number"

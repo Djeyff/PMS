@@ -23,6 +23,7 @@ export type LeaseRow = {
   contract_kdrive_file_url?: string | null;
   annual_increase_enabled?: boolean;
   annual_increase_percent?: number | null;
+  annual_increase_enabled_at?: string | null; // YYYY-MM-DD (date)
 };
 
 export type LeaseWithMeta = LeaseRow & {
@@ -54,6 +55,7 @@ function normalizeLeaseRow(row: any): LeaseWithMeta {
     contract_kdrive_file_url: row.contract_kdrive_file_url ?? null,
     annual_increase_enabled: row.annual_increase_enabled ?? false,
     annual_increase_percent: typeof row.annual_increase_percent === "number" ? row.annual_increase_percent : null,
+    annual_increase_enabled_at: row.annual_increase_enabled_at ?? null,
     property: property ? { id: property.id, name: property.name } : null,
     tenant: tenant ? { id: tenant.id, first_name: tenant.first_name ?? null, last_name: tenant.last_name ?? null } : null,
   };
@@ -69,7 +71,7 @@ export async function fetchLeases(params: { role: Role | null; userId: string | 
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute, auto_invoice_due_day,
       contract_kdrive_folder_url, contract_kdrive_file_url,
-      annual_increase_enabled, annual_increase_percent,
+      annual_increase_enabled, annual_increase_percent, annual_increase_enabled_at,
       property:properties ( id, name ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -99,6 +101,7 @@ export async function createLease(input: {
   annual_increase_enabled?: boolean;
   annual_increase_percent?: number;
 }) {
+  const annualEnabled = !!input.annual_increase_enabled;
   const payload = {
     property_id: input.property_id,
     tenant_id: input.tenant_id,
@@ -116,8 +119,10 @@ export async function createLease(input: {
     auto_invoice_due_day: typeof input.auto_invoice_due_day === "number" ? input.auto_invoice_due_day : null, // NEW
     contract_kdrive_folder_url: input.contract_kdrive_folder_url ?? null,
     contract_kdrive_file_url: input.contract_kdrive_file_url ?? null,
-    annual_increase_enabled: !!input.annual_increase_enabled,
+    annual_increase_enabled: annualEnabled,
     annual_increase_percent: typeof input.annual_increase_percent === "number" ? input.annual_increase_percent : null,
+    // If enabled at creation, start counting from lease start date (so first increase is on first anniversary)
+    annual_increase_enabled_at: annualEnabled ? input.start_date : null,
   };
 
   const { data, error } = await supabase
@@ -127,7 +132,7 @@ export async function createLease(input: {
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute, auto_invoice_due_day,
       contract_kdrive_folder_url, contract_kdrive_file_url,
-      annual_increase_enabled, annual_increase_percent,
+      annual_increase_enabled, annual_increase_percent, annual_increase_enabled_at,
       property:properties ( id, name ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -175,10 +180,33 @@ export async function updateLease(
   if (typeof input.auto_invoice_due_day !== "undefined") payload.auto_invoice_due_day = input.auto_invoice_due_day; // NEW
   if (typeof input.contract_kdrive_folder_url !== "undefined") payload.contract_kdrive_folder_url = input.contract_kdrive_folder_url;
   if (typeof input.contract_kdrive_file_url !== "undefined") payload.contract_kdrive_file_url = input.contract_kdrive_file_url;
-  if (typeof input.annual_increase_enabled !== "undefined") payload.annual_increase_enabled = input.annual_increase_enabled;
   if (typeof input.annual_increase_percent !== "undefined") payload.annual_increase_percent = input.annual_increase_percent;
   // ADDED: map tenant assignment
   if (typeof input.tenant_id !== "undefined") payload.tenant_id = input.tenant_id;
+
+  // Handle annual increase enabled_at automatically to prevent retroactive increases
+  if (typeof input.annual_increase_enabled !== "undefined") {
+    const { data: current, error: curErr } = await supabase
+      .from("leases")
+      .select("annual_increase_enabled, annual_increase_enabled_at")
+      .eq("id", id)
+      .single();
+    if (curErr) throw curErr;
+
+    const prevEnabled = !!current?.annual_increase_enabled;
+    const nextEnabled = !!input.annual_increase_enabled;
+
+    payload.annual_increase_enabled = nextEnabled;
+
+    if (nextEnabled && !prevEnabled) {
+      // turning ON: start counting from today so the first increase applies on the next anniversary
+      payload.annual_increase_enabled_at = new Date().toISOString().slice(0, 10);
+    }
+    if (!nextEnabled && prevEnabled) {
+      // turning OFF: clear
+      payload.annual_increase_enabled_at = null;
+    }
+  }
 
   const { data, error } = await supabase
     .from("leases")
@@ -188,7 +216,7 @@ export async function updateLease(
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute, auto_invoice_due_day,
       contract_kdrive_folder_url, contract_kdrive_file_url,
-      annual_increase_enabled, annual_increase_percent,
+      annual_increase_enabled, annual_increase_percent, annual_increase_enabled_at,
       property:properties ( id, name ),
       tenant:profiles ( id, first_name, last_name )
     `)
@@ -206,7 +234,7 @@ export async function deleteLease(id: string) {
       id, property_id, tenant_id, start_date, end_date, rent_amount, rent_currency, deposit_amount, status, created_at,
       auto_invoice_enabled, auto_invoice_day, auto_invoice_interval_months, auto_invoice_hour, auto_invoice_minute, auto_invoice_due_day,
       contract_kdrive_folder_url, contract_kdrive_file_url,
-      annual_increase_enabled, annual_increase_percent
+      annual_increase_enabled, annual_increase_percent, annual_increase_enabled_at
     `)
     .eq("id", id)
     .single();
