@@ -131,8 +131,9 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
     return Number.isFinite(n) && n > 0 ? n : NaN;
   }, [report.avg_rate]);
 
-  const usdTotal = totals.usdCash + totals.usdTransfer;
-  const dopTotal = totals.dopCash + totals.dopTransfer;
+  // Use saved report totals as fee base (already honors fee basis)
+  const usdTotal = Number(report.usd_total || 0);
+  const dopTotal = Number(report.dop_total || 0);
   const feeBaseDop = (Number.isNaN(rateNum) ? 0 : usdTotal * rateNum) + dopTotal;
   const feePct = Number(report.fee_percent ?? 5);
   const managerFeeDop = feeBaseDop * (feePct / 100);

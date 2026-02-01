@@ -21,6 +21,8 @@ import OwnerBreakdownItemMobile from "@/components/manager/OwnerBreakdownItemMob
 import SavedManagerReportItemMobile from "@/components/manager/SavedManagerReportItemMobile";
 import ManagerReportFilters from "@/components/manager/ManagerReportFilters";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { fetchInvoices } from "@/services/invoices";
+import { fetchLeases, type LeaseWithMeta } from "@/services/leases";
 
 type OwnerRow = {
   ownerId: string;
@@ -144,6 +146,19 @@ const ManagerReport = () => {
     queryFn: () => fetchPayments({ role, userId: user?.id ?? null, agencyId }),
   });
 
+  // NEW: invoices and leases for fee basis
+  const { data: invoices } = useQuery({
+    queryKey: ["mgr-invoices", role, user?.id, agencyId],
+    enabled: !!role && !!agencyId,
+    queryFn: fetchInvoices,
+  });
+
+  const { data: leases } = useQuery({
+    queryKey: ["mgr-leases", role, user?.id, agencyId],
+    enabled: !!role && !!agencyId,
+    queryFn: () => fetchLeases({ role, userId: user?.id ?? null, agencyId }),
+  });
+
   // NEW: Saved reports list
   const { data: savedReports, refetch: refetchSaved } = useQuery({
     queryKey: ["mgr-saved-reports", agencyId],
@@ -166,6 +181,25 @@ const ManagerReport = () => {
       return d >= startDate && d <= endDate;
     });
   }, [payments, startDate, endDate]);
+
+  // NEW: filter invoices in period (exclude void)
+  const filteredInvoices = useMemo(() => {
+    const rows = invoices ?? [];
+    if (!startDate || !endDate) return rows.filter((inv: any) => String(inv.status) !== "void");
+    return rows.filter((inv: any) => {
+      const d = String(inv.issue_date ?? "").slice(0, 10);
+      return d >= startDate && d <= endDate && String(inv.status) !== "void";
+    });
+  }, [invoices, startDate, endDate]);
+
+  // NEW: map lease id -> fee basis
+  const leaseFeeBasisById = useMemo(() => {
+    const map = new Map<string, "paid" | "issued">();
+    (leases as LeaseWithMeta[] | undefined)?.forEach((l) => {
+      map.set(l.id, l.management_fee_basis === "issued" ? "issued" : "paid");
+    });
+    return map;
+  }, [leases]);
 
   useEffect(() => {
     const loadRate = async () => {
@@ -262,14 +296,43 @@ const ManagerReport = () => {
     return { usdCash, dopCash, usdTransfer, dopTransfer };
   }, [filteredPayments]);
 
-  // Compute manager fee (5% of ALL transactions, USD converted to DOP with avg rate)
+  // NEW: Fee base honoring fee basis by lease
+  const feeBasePaidFromPayments = useMemo(() => {
+    const out = { usd: 0, dop: 0 };
+    filteredPayments.forEach((p: any) => {
+      const basis = leaseFeeBasisById.get(String(p.lease_id ?? "")) ?? "paid";
+      if (basis !== "paid") return;
+      const amt = Number(p.amount || 0);
+      if (p.currency === "USD") out.usd += amt;
+      else out.dop += amt;
+    });
+    return out;
+  }, [filteredPayments, leaseFeeBasisById]);
+
+  const feeBaseIssuedFromInvoices = useMemo(() => {
+    const out = { usd: 0, dop: 0 };
+    filteredInvoices.forEach((inv: any) => {
+      const basis = leaseFeeBasisById.get(String(inv.lease_id ?? "")) ?? "paid";
+      if (basis !== "issued") return;
+      const amt = Number(inv.total_amount || 0);
+      if (inv.currency === "USD") out.usd += amt;
+      else out.dop += amt;
+    });
+    return out;
+  }, [filteredInvoices, leaseFeeBasisById]);
+
+  const feeBaseUsdTotal = feeBasePaidFromPayments.usd + feeBaseIssuedFromInvoices.usd;
+  const feeBaseDopTotal = feeBasePaidFromPayments.dop + feeBaseIssuedFromInvoices.dop;
+  const hasIssuedFeePart = (feeBaseIssuedFromInvoices.usd + feeBaseIssuedFromInvoices.dop) > 0;
+
+  // Compute manager fee using FEE BASIS (USD from paid + issued, DOP from paid + issued)
   const rateNum = useMemo(() => {
     const n = Number(avgRateInput);
     return Number.isFinite(n) && n > 0 ? n : NaN;
   }, [avgRateInput]);
 
-  const usdTotal = totals.usdCash + totals.usdTransfer;
-  const dopTotal = totals.dopCash + totals.dopTransfer;
+  const usdTotal = feeBaseUsdTotal;
+  const dopTotal = feeBaseDopTotal;
   const feeBaseDop = (Number.isNaN(rateNum) ? 0 : usdTotal * rateNum) + dopTotal;
   const managerFeeDop = feeBaseDop * 0.05;
 
@@ -338,6 +401,7 @@ const ManagerReport = () => {
       dop_cash_total: totals.dopCash,
       usd_transfer_total: totals.usdTransfer,
       dop_transfer_total: totals.dopTransfer,
+      // IMPORTANT: store fee-basis-aware totals (payments for 'paid' + invoices for 'issued')
       usd_total: usdTotal,
       dop_total: dopTotal,
       fee_base_dop,
@@ -458,12 +522,17 @@ const ManagerReport = () => {
                     </CardContent>
                   </Card>
                   <Card>
-                    <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Manager fee (5% of all transactions)</CardTitle></CardHeader>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Manager fee (5% fee base)</CardTitle></CardHeader>
                     <CardContent>
                       <div className="text-xs text-muted-foreground mb-1">
                         Fee base: {fmt(dopTotal, "DOP")} DOP + {usdTotal.toFixed(2)} USD × {Number.isNaN(rateNum) ? "rate ?" : rateNum} = {fmt(feeBaseDop, "DOP")}
                       </div>
                       <div className="text-2xl font-bold">{fmt(managerFeeDop, "DOP")}</div>
+                      {hasIssuedFeePart ? (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          Includes invoices issued for leases set to "On Invoice Issued".
+                        </div>
+                      ) : null}
                     </CardContent>
                   </Card>
                 </div>
