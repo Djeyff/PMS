@@ -344,7 +344,14 @@ const InvoiceDetail = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button size="sm" onClick={() => window.print()}>{t.print}</Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="bg-white text-black border-gray-300 hover:bg-gray-100"
+              onClick={() => window.print()}
+            >
+              {t.print}
+            </Button>
           </div>
         </div>
       </div>
