@@ -14,6 +14,7 @@ import { fetchOwnerProfilesInAgency } from "@/services/users";
 import { fetchAgencyById } from "@/services/agencies";
 import { getLogoPublicUrl } from "@/services/branding";
 import { listManagerReports } from "@/services/manager-reports";
+import { printElement } from "@/utils/print";
 
 type Props = {
   report: OwnerReportRow | null;
@@ -30,6 +31,8 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
   const { role, user, profile } = useAuth();
   const agencyId = profile?.agency_id ?? null;
   const isAdmin = role === "agency_admin";
+
+  const printRef = React.useRef<HTMLDivElement | null>(null);
 
   const { data: agency } = useQuery({
     queryKey: ["owner-invoice-agency", agencyId],
@@ -228,149 +231,156 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
     return isFullMonth ? formatMonthLabel(report.month) : `${sStr} to ${eStr}`;
   }, [report]);
 
+  const handlePrint = () => {
+    if (!printRef.current) return;
+    printElement(printRef.current, { title: `Owner Statement • ${periodLabel || ""}`.trim() });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto invoice-print bg-white text-black p-6 rounded-md">
-        {!report ? (
-          <div className="text-sm text-muted-foreground">Loading report…</div>
-        ) : (
-          <>
-            <DialogHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-3">
-                  {logoUrl ? <img src={logoUrl} alt="Agency logo" className="h-12 w-auto rounded" /> : null}
-                  <div>
-                    <div className="font-semibold">{agency?.name ?? "Las Terrenas Properties"}</div>
-                    <div className="text-xs text-gray-600">{agency?.address ?? "278 calle Duarte, LTI building, Las Terrenas"}</div>
+        <div ref={printRef}>
+          {!report ? (
+            <div className="text-sm text-muted-foreground">Loading report…</div>
+          ) : (
+            <>
+              <DialogHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-3">
+                    {logoUrl ? <img src={logoUrl} alt="Agency logo" className="h-12 w-auto rounded" /> : null}
+                    <div>
+                      <div className="font-semibold">{agency?.name ?? "Las Terrenas Properties"}</div>
+                      <div className="text-xs text-gray-600">{agency?.address ?? "278 calle Duarte, LTI building, Las Terrenas"}</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <DialogTitle className="text-base font-semibold">Owner Statement • {periodLabel}</DialogTitle>
+                    <div className="text-xs text-gray-600">
+                      {String(report.start_date).slice(0, 10)} to {String(report.end_date).slice(0, 10)}
+                    </div>
+                    <div className="mt-1 font-semibold text-base">{ownerName}</div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <DialogTitle className="text-base font-semibold">Owner Statement • {periodLabel}</DialogTitle>
-                  <div className="text-xs text-gray-600">
-                    {String(report.start_date).slice(0, 10)} to {String(report.end_date).slice(0, 10)}
-                  </div>
-                  <div className="mt-1 font-semibold text-base">{ownerName}</div>
-                </div>
-              </div>
-            </DialogHeader>
+              </DialogHeader>
 
-            {/* Totals */}
-            <div className="border rounded-md divide-y mt-4">
-              <div className="p-3">
-                <div className="text-xs font-medium mb-1">Cash totals</div>
-                <div className="space-y-1 text-sm">
-                  <div>{fmt(totals.usdCash, "USD")} USD</div>
-                  <div>{fmt(totals.dopCash, "DOP")} DOP</div>
+              {/* Totals */}
+              <div className="border rounded-md divide-y mt-4">
+                <div className="p-3">
+                  <div className="text-xs font-medium mb-1">Cash totals</div>
+                  <div className="space-y-1 text-sm">
+                    <div>{fmt(totals.usdCash, "USD")} USD</div>
+                    <div>{fmt(totals.dopCash, "DOP")} DOP</div>
+                  </div>
                 </div>
-              </div>
-              <div className="p-3">
-                <div className="text-xs font-medium mb-1">Transfer totals</div>
-                <div className="space-y-1 text-sm">
-                  <div>{fmt(totals.usdTransfer, "USD")} USD</div>
-                  <div>{fmt(totals.dopTransfer, "DOP")} DOP</div>
+                <div className="p-3">
+                  <div className="text-xs font-medium mb-1">Transfer totals</div>
+                  <div className="space-y-1 text-sm">
+                    <div>{fmt(totals.usdTransfer, "USD")} USD</div>
+                    <div>{fmt(totals.dopTransfer, "DOP")} DOP</div>
+                  </div>
                 </div>
-              </div>
-              <div className="p-3">
-                <div className="text-xs font-medium mb-1">Average USD/DOP rate</div>
-                <div className="space-y-1 text-sm">
-                  <div>{avgRate && Number.isFinite(avgRate) ? avgRate.toFixed(6) : "—"}</div>
+                <div className="p-3">
+                  <div className="text-xs font-medium mb-1">Average USD/DOP rate</div>
+                  <div className="space-y-1 text-sm">
+                    <div>{avgRate && Number.isFinite(avgRate) ? avgRate.toFixed(6) : "—"}</div>
+                  </div>
                 </div>
-              </div>
-              <div className="p-3">
-                <div className="text-xs font-medium mb-1">Manager fee</div>
-                <div className="space-y-1 text-sm">
-                  <div className="font-semibold">
-                    {ownerUsdTotal > 0 ? (
-                      <>
-                        ({fmt(ownerDopTotal, "DOP")} + {ownerUsdTotal.toFixed(2)} USD × {Number.isFinite(avgRate) ? avgRate.toFixed(6) : "rate ?"}) × {feePercent.toFixed(2)}% = {fmt(ownerFeeShareDop, "DOP")}
-                      </>
-                    ) : (
-                      <>
-                        {fmt(ownerDopTotal, "DOP")} × {feePercent.toFixed(2)}% = {fmt(ownerFeeShareDop, "DOP")}
-                      </>
-                    )}
+                <div className="p-3">
+                  <div className="text-xs font-medium mb-1">Manager fee</div>
+                  <div className="space-y-1 text-sm">
+                    <div className="font-semibold">
+                      {ownerUsdTotal > 0 ? (
+                        <>
+                          ({fmt(ownerDopTotal, "DOP")} + {ownerUsdTotal.toFixed(2)} USD × {Number.isFinite(avgRate) ? avgRate.toFixed(6) : "rate ?"}) × {feePercent.toFixed(2)}% = {fmt(ownerFeeShareDop, "DOP")}
+                        </>
+                      ) : (
+                        <>
+                          {fmt(ownerDopTotal, "DOP")} × {feePercent.toFixed(2)}% = {fmt(ownerFeeShareDop, "DOP")}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Per-payment rows */}
-            <div className="border rounded-md mt-4">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Property</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Method</TableHead>
-                    <TableHead>USD</TableHead>
-                    <TableHead>DOP</TableHead>
-                    <TableHead>Rate</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {ownerRows.map((r, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell className="font-medium">{r.property}</TableCell>
-                      <TableCell>{r.date}</TableCell>
-                      <TableCell>{r.method}</TableCell>
-                      <TableCell>{fmt(r.usd, "USD")}</TableCell>
-                      <TableCell>{fmt(r.dop, "DOP")}</TableCell>
-                      <TableCell>{r.rate ? String(r.rate) : "—"}</TableCell>
+              {/* Per-payment rows */}
+              <div className="border rounded-md mt-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Property</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Method</TableHead>
+                      <TableHead>USD</TableHead>
+                      <TableHead>DOP</TableHead>
+                      <TableHead>Rate</TableHead>
                     </TableRow>
-                  ))}
-                  <TableRow>
-                    <TableCell className="font-semibold">Totals</TableCell>
-                    <TableCell />
-                    <TableCell />
-                    <TableCell className="font-semibold">{fmt(totals.usdCash + totals.usdTransfer, "USD")}</TableCell>
-                    <TableCell className="font-semibold">{fmt(totals.dopCash + totals.dopTransfer, "DOP")}</TableCell>
-                    <TableCell />
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
-
-            <div className="border rounded-md mt-4">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cash DOP (after manager fee)</TableHead>
-                    <TableHead>Cash USD</TableHead>
-                    <TableHead>Transfer DOP</TableHead>
-                    <TableHead>Transfer USD</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell className="font-semibold">{fmt(ownerDopAfterFee, "DOP")}</TableCell>
-                    <TableCell className="font-semibold">{fmt(totals.usdCash, "USD")}</TableCell>
-                    <TableCell className="font-semibold">{fmt(totals.dopTransfer, "DOP")}</TableCell>
-                    <TableCell className="font-semibold">{fmt(totals.usdTransfer, "USD")}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
-
-            <div className="mt-3 flex items-center justify-end print:hidden">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="default"
-                  className="bg-neutral-800 text-white hover:bg-neutral-900"
-                  onClick={() => window.print()}
-                >
-                  Download PDF
-                </Button>
-                <Button
-                  variant="outline"
-                  className="bg-white text-black border-gray-300 hover:bg-gray-100"
-                  onClick={() => window.print()}
-                >
-                  Print
-                </Button>
+                  </TableHeader>
+                  <TableBody>
+                    {ownerRows.map((r, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="font-medium">{r.property}</TableCell>
+                        <TableCell>{r.date}</TableCell>
+                        <TableCell>{r.method}</TableCell>
+                        <TableCell>{fmt(r.usd, "USD")}</TableCell>
+                        <TableCell>{fmt(r.dop, "DOP")}</TableCell>
+                        <TableCell>{r.rate ? String(r.rate) : "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow>
+                      <TableCell className="font-semibold">Totals</TableCell>
+                      <TableCell />
+                      <TableCell />
+                      <TableCell className="font-semibold">{fmt(totals.usdCash + totals.usdTransfer, "USD")}</TableCell>
+                      <TableCell className="font-semibold">{fmt(totals.dopCash + totals.dopTransfer, "DOP")}</TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </TableBody>
+                </Table>
               </div>
-            </div>
-          </>
-        )}
+
+              <div className="border rounded-md mt-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cash DOP (after manager fee)</TableHead>
+                      <TableHead>Cash USD</TableHead>
+                      <TableHead>Transfer DOP</TableHead>
+                      <TableHead>Transfer USD</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell className="font-semibold">{fmt(ownerDopAfterFee, "DOP")}</TableCell>
+                      <TableCell className="font-semibold">{fmt(totals.usdCash, "USD")}</TableCell>
+                      <TableCell className="font-semibold">{fmt(totals.dopTransfer, "DOP")}</TableCell>
+                      <TableCell className="font-semibold">{fmt(totals.usdTransfer, "USD")}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="mt-3 flex items-center justify-end print:hidden">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="default"
+              className="bg-neutral-800 text-white hover:bg-neutral-900"
+              onClick={handlePrint}
+            >
+              Download PDF
+            </Button>
+            <Button
+              variant="outline"
+              className="bg-white text-black border-gray-300 hover:bg-gray-100"
+              onClick={handlePrint}
+            >
+              Print
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -11,6 +11,7 @@ import { fetchAgencyOwnerships } from "@/services/property-owners";
 import type { ManagerReportRow } from "@/services/manager-reports";
 import { fetchAgencyById } from "@/services/agencies";
 import { getLogoPublicUrl } from "@/services/branding";
+import { printElement } from "@/utils/print";
 
 type Props = {
   report: ManagerReportRow;
@@ -37,6 +38,8 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
   const agencyId = profile?.agency_id ?? null;
   const isAdmin = role === "agency_admin";
 
+  const printRef = React.useRef<HTMLDivElement | null>(null);
+
   const { data: agency } = useQuery({
     queryKey: ["mgr-invoice-agency", agencyId],
     enabled: open && !!agencyId,
@@ -46,9 +49,11 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
   const [logoUrl, setLogoUrl] = React.useState<string>("");
   React.useEffect(() => {
     if (!open) return;
-    getLogoPublicUrl().then((url) => {
-      setLogoUrl(url || "/assets/invoice-layout-reference.png");
-    }).catch(() => setLogoUrl("/assets/invoice-layout-reference.png"));
+    getLogoPublicUrl()
+      .then((url) => {
+        setLogoUrl(url || "/assets/invoice-layout-reference.png");
+      })
+      .catch(() => setLogoUrl("/assets/invoice-layout-reference.png"));
   }, [open]);
 
   const { data: payments } = useQuery({
@@ -79,7 +84,9 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
       const propId = p.lease?.property?.id || p.lease?.property_id || null;
       const ownersForProp = (ownerships ?? []).filter((o) => o.property_id === propId);
       if (!ownersForProp || ownersForProp.length === 0) {
-        const row = map.get("__unassigned__") ?? { ownerId: "__unassigned__", name: "Unassigned", cashUsd: 0, cashDop: 0, transferUsd: 0, transferDop: 0 };
+        const row =
+          map.get("__unassigned__") ??
+          { ownerId: "__unassigned__", name: "Unassigned", cashUsd: 0, cashDop: 0, transferUsd: 0, transferDop: 0 };
         const method = String(p.method || "").toLowerCase();
         const isCash = method !== "bank_transfer";
         const isTransfer = method === "bank_transfer";
@@ -181,107 +188,103 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
     return isFullMonth ? formatMonthLabel(report.month) : `${sStr} to ${eStr}`;
   }, [report.month, report.start_date, report.end_date]);
 
+  const handlePrint = () => {
+    if (!printRef.current) return;
+    printElement(printRef.current, { title: `Manager Report • ${periodLabel || ""}`.trim() });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Allow vertical scroll and cap height */}
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto overflow-x-hidden invoice-print bg-white text-black p-6 rounded-md">
-        <DialogHeader>
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-3">
-              {logoUrl ? <img src={logoUrl} alt="Agency logo" className="h-12 w-auto rounded" /> : null}
-              <div>
-                <div className="font-semibold">{agency?.name ?? "Las Terrenas Properties"}</div>
-                <div className="text-xs text-gray-600">
-                  {agency?.address ?? "278 calle Duarte, LTI building, Las Terrenas"}
+        <div ref={printRef}>
+          <DialogHeader>
+            <div className="flex items-start justify-between">
+              <div className="flex items-start gap-3">
+                {logoUrl ? <img src={logoUrl} alt="Agency logo" className="h-12 w-auto rounded" /> : null}
+                <div>
+                  <div className="font-semibold">{agency?.name ?? "Las Terrenas Properties"}</div>
+                  <div className="text-xs text-gray-600">{agency?.address ?? "278 calle Duarte, LTI building, Las Terrenas"}</div>
                 </div>
               </div>
-            </div>
-            <div className="text-right">
-              <DialogTitle className="text-base font-semibold">Property Manager Report • {periodLabel}</DialogTitle>
-              <div className="text-xs text-gray-600">{String(report.start_date).slice(0,10)} to {String(report.end_date).slice(0,10)}</div>
-            </div>
-          </div>
-        </DialogHeader>
-
-        <div className="border rounded-md divide-y mt-4 bg-white">
-          <div className="p-3">
-            <div className="text-xs font-medium mb-1">Cash totals</div>
-            <div className="space-y-1 text-sm">
-              <div>{fmt(totals.usdCash, "USD")} USD</div>
-              <div>{fmt(totals.dopCash, "DOP")} DOP</div>
-            </div>
-          </div>
-          <div className="p-3">
-            <div className="text-xs font-medium mb-1">Transfer totals</div>
-            <div className="space-y-1 text-sm">
-              <div>{fmt(totals.usdTransfer, "USD")} USD</div>
-              <div>{fmt(totals.dopTransfer, "DOP")} DOP</div>
-            </div>
-          </div>
-          <div className="p-3">
-            <div className="text-xs font-medium mb-1">Manager fee</div>
-            <div className="space-y-1 text-sm">
-              <div>
-                Base: {fmt(dopTotal, "DOP")} + {usdTotal.toFixed(2)} USD × {Number.isNaN(rateNum) ? "rate ?" : rateNum} = {fmt(feeBaseDop, "DOP")}
+              <div className="text-right">
+                <DialogTitle className="text-base font-semibold">Property Manager Report • {periodLabel}</DialogTitle>
+                <div className="text-xs text-gray-600">{String(report.start_date).slice(0, 10)} to {String(report.end_date).slice(0, 10)}</div>
               </div>
-              <div className="font-semibold">
-                {fmt(managerFeeDop, "DOP")} ({feePct.toFixed(2)}%)
+            </div>
+          </DialogHeader>
+
+          <div className="border rounded-md divide-y mt-4 bg-white">
+            <div className="p-3">
+              <div className="text-xs font-medium mb-1">Cash totals</div>
+              <div className="space-y-1 text-sm">
+                <div>{fmt(totals.usdCash, "USD")} USD</div>
+                <div>{fmt(totals.dopCash, "DOP")} DOP</div>
+              </div>
+            </div>
+            <div className="p-3">
+              <div className="text-xs font-medium mb-1">Transfer totals</div>
+              <div className="space-y-1 text-sm">
+                <div>{fmt(totals.usdTransfer, "USD")} USD</div>
+                <div>{fmt(totals.dopTransfer, "DOP")} DOP</div>
+              </div>
+            </div>
+            <div className="p-3">
+              <div className="text-xs font-medium mb-1">Manager fee</div>
+              <div className="space-y-1 text-sm">
+                <div>
+                  Base: {fmt(dopTotal, "DOP")} + {usdTotal.toFixed(2)} USD × {Number.isNaN(rateNum) ? "rate ?" : rateNum} = {fmt(feeBaseDop, "DOP")}
+                </div>
+                <div className="font-semibold">{fmt(managerFeeDop, "DOP")} ({feePct.toFixed(2)}%)</div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="border rounded-md mt-4 bg-white">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Owner</TableHead>
-                <TableHead>Cash USD</TableHead>
-                <TableHead>Cash DOP</TableHead>
-                <TableHead>Fee share (DOP)</TableHead>
-                <TableHead>Cash DOP after fee</TableHead>
-                <TableHead>Transfer USD</TableHead>
-                <TableHead>Transfer DOP</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {ownerRowsWithFee.map((r) => {
-                const feeShare = r.feeShareDop ?? 0;
-                return (
-                  <TableRow key={r.ownerId}>
-                    <TableCell className="font-medium">{r.name}</TableCell>
-                    <TableCell>{fmt(r.cashUsd, "USD")}</TableCell>
-                    <TableCell>{fmt(r.cashDop, "DOP")}</TableCell>
-                    <TableCell>{fmt(feeShare, "DOP")}</TableCell>
-                    <TableCell>{fmt(r.cashDopAfterFee ?? r.cashDop, "DOP")}</TableCell>
-                    <TableCell>{fmt(r.transferUsd, "USD")}</TableCell>
-                    <TableCell>{fmt(r.transferDop, "DOP")}</TableCell>
-                  </TableRow>
-                );
-              })}
-              <TableRow>
-                <TableCell className="font-semibold">Totals</TableCell>
-                <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.cashUsd, 0), "USD")}</TableCell>
-                <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.cashDop, 0), "DOP")}</TableCell>
-                <TableCell className="font-semibold">
-                  {fmt(ownerRowsWithFee.reduce((s, r) => s + (r.feeShareDop ?? 0), 0), "DOP")}
-                </TableCell>
-                <TableCell className="font-semibold">{fmt(dopCashAfterFeeTotal, "DOP")}</TableCell>
-                <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.transferUsd, 0), "USD")}</TableCell>
-                <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.transferDop, 0), "DOP")}</TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+          <div className="border rounded-md mt-4 bg-white">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Owner</TableHead>
+                  <TableHead>Cash USD</TableHead>
+                  <TableHead>Cash DOP</TableHead>
+                  <TableHead>Fee share (DOP)</TableHead>
+                  <TableHead>Cash DOP after fee</TableHead>
+                  <TableHead>Transfer USD</TableHead>
+                  <TableHead>Transfer DOP</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {ownerRowsWithFee.map((r) => {
+                  const feeShare = r.feeShareDop ?? 0;
+                  return (
+                    <TableRow key={r.ownerId}>
+                      <TableCell className="font-medium">{r.name}</TableCell>
+                      <TableCell>{fmt(r.cashUsd, "USD")}</TableCell>
+                      <TableCell>{fmt(r.cashDop, "DOP")}</TableCell>
+                      <TableCell>{fmt(feeShare, "DOP")}</TableCell>
+                      <TableCell>{fmt(r.cashDopAfterFee ?? r.cashDop, "DOP")}</TableCell>
+                      <TableCell>{fmt(r.transferUsd, "USD")}</TableCell>
+                      <TableCell>{fmt(r.transferDop, "DOP")}</TableCell>
+                    </TableRow>
+                  );
+                })}
+                <TableRow>
+                  <TableCell className="font-semibold">Totals</TableCell>
+                  <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.cashUsd, 0), "USD")}</TableCell>
+                  <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.cashDop, 0), "DOP")}</TableCell>
+                  <TableCell className="font-semibold">{fmt(ownerRowsWithFee.reduce((s, r) => s + (r.feeShareDop ?? 0), 0), "DOP")}</TableCell>
+                  <TableCell className="font-semibold">{fmt(dopCashAfterFeeTotal, "DOP")}</TableCell>
+                  <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.transferUsd, 0), "USD")}</TableCell>
+                  <TableCell className="font-semibold">{fmt(ownerRows.reduce((s, r) => s + r.transferDop, 0), "DOP")}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
         </div>
 
         <div className="mt-3 flex items-center justify-end print:hidden">
-          <Button
-            // Use a solid dark button so it's readable on dark theme overlays
-            variant="default"
-            className="bg-neutral-800 text-white hover:bg-neutral-900"
-            onClick={() => window.print()}
-          >
-            Print
+          <Button variant="default" className="bg-neutral-800 text-white hover:bg-neutral-900" onClick={handlePrint}>
+            Download PDF
           </Button>
         </div>
       </DialogContent>
