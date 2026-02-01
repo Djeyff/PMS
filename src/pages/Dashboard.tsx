@@ -22,17 +22,22 @@ const Dashboard = () => {
   useEffect(() => {
     if (!loading && session) {
       const email = (user?.email ?? "").toLowerCase();
+      // Avoid redirecting while the session/user object is still stabilizing.
+      if (!email) return;
+
       if (!role && email !== MASTER_ADMIN_EMAIL) {
         navigate("/pending", { replace: true });
       }
     }
-  }, [loading, session, role, user, navigate]);
+  }, [loading, session, role, user?.email, navigate]);
 
   if (loading || !session) {
     return <Loader />;
   }
 
-  if (!role && (user?.email ?? "").toLowerCase() !== MASTER_ADMIN_EMAIL) {
+  const email = (user?.email ?? "").toLowerCase();
+
+  if (!role && email !== MASTER_ADMIN_EMAIL) {
     return null;
   }
 
@@ -42,7 +47,7 @@ const Dashboard = () => {
       {role === "owner" && <OwnerDashboard />}
       {role === "tenant" && <TenantDashboard />}
       {/* For the master admin fallback, show admin dashboard even if role hasn't persisted yet */}
-      {!role && (user?.email ?? "").toLowerCase() === MASTER_ADMIN_EMAIL && <AgencyDashboard />}
+      {!role && email === MASTER_ADMIN_EMAIL && <AgencyDashboard />}
     </AppShell>
   );
 };
