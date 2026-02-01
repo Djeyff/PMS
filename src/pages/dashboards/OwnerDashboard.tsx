@@ -107,22 +107,41 @@ const OwnerDashboard = () => {
 
   const normalizeMethod = (m: any) => String(m ?? "").trim().toLowerCase();
 
-  const monthPayments = React.useMemo(() => {
-    return (payments ?? []).filter((p: any) => String(p.received_date ?? "").startsWith(ym));
-  }, [payments, ym]);
-
-  const monthInvoices = React.useMemo(() => {
-    return (invoices ?? []).filter((inv: any) => String(inv.issue_date ?? "").startsWith(ym) && String(inv.status) !== "void");
-  }, [invoices, ym]);
-
-  const shareMap = myShares ?? new Map<string, number>();
-  const getPropId = (p: any) => p.lease?.property?.id ?? p.lease?.property_id ?? null;
-  const shareFactorForProp = (propId: string | null) => {
-    const percent = propId ? (shareMap.get(propId) ?? 100) : 100;
-    return Math.max(0, Math.min(100, Number(percent))) / 100;
+  // Define helpers and monthly slices
+  const getPropId = (obj: any): string | null => {
+    // Works for payments (obj.lease.property.id or lease.property_id) and invoices (obj.lease.property.id)
+    return obj?.lease?.property?.id ?? obj?.lease?.property_id ?? obj?.property_id ?? null;
   };
 
+  const shareFactorForProp = (propId: string | null | undefined): number => {
+    if (!propId) return 0;
+    const pct = myShares?.get(propId);
+    if (pct == null) return 0;
+    const clamped = Math.max(0, Math.min(100, Number(pct)));
+    return clamped / 100;
+  };
+
+  const monthPayments = React.useMemo(
+    () => (payments ?? []).filter((p: any) => String(p?.received_date ?? "").startsWith(ym)),
+    [payments, ym]
+  );
+
+  const monthInvoices = React.useMemo(
+    () => (invoices ?? []).filter((inv: any) => String(inv?.issue_date ?? "").startsWith(ym)),
+    [invoices, ym]
+  );
+
   const monthly = (() => {
+    const classifyMethod = (m: any): "cash" | "bank_transfer" | "other" => {
+      const s = String(m ?? "")
+        .toLowerCase()
+        .trim()
+        .replace(/[-\s]+/g, "_");
+      if (s.includes("cash")) return "cash";
+      if (s.includes("transfer") || s.includes("bank_transfer") || s.includes("bank")) return "bank_transfer";
+      return "other";
+    };
+
     const totalBy = (cur: "USD" | "DOP") =>
       monthPayments
         .filter((p: any) => p.currency === cur)
@@ -133,7 +152,7 @@ const OwnerDashboard = () => {
 
     const sumBy = (methodKey: "cash" | "bank_transfer", cur: "USD" | "DOP") =>
       monthPayments
-        .filter((p: any) => normalizeMethod(p.method) === methodKey && p.currency === cur)
+        .filter((p: any) => classifyMethod(p.method) === methodKey && p.currency === cur)
         .reduce((s: number, p: any) => {
           const propId = getPropId(p);
           return s + Number(p.amount || 0) * shareFactorForProp(propId);

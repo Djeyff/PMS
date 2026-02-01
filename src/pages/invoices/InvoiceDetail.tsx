@@ -111,7 +111,7 @@ const InvoiceDetail = () => {
   };
 
   const paymentLines = React.useMemo(() => {
-    if (!inv) return [] as Array<{ key: string; date: string; method: string; amountText: string; rateText: string; approxText: string }>;
+    if (!inv) return [] as Array<{ key: string; date: string; method: string; amountText: string; rateText: string }>;
 
     const invCur = inv.currency as "USD" | "DOP";
     const payments = inv.payments ?? [];
@@ -128,14 +128,14 @@ const InvoiceDetail = () => {
       const amt = Number(p.amount || 0);
       const cur = (p.currency as "USD" | "DOP") ?? invCur;
       const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : p.exchange_rate == null ? null : Number(p.exchange_rate);
-      const converted = convertToInvoiceCurrency(amt, cur, rate);
+      // Keep convert for paid calculation parity, but we won't display approx column now
+      void convertToInvoiceCurrency(amt, cur, rate);
       return {
         key: `${p.id ?? idx}`,
         date: String(p.received_date ?? "").slice(0, 10) || "—",
         method: methodLabel(p.method),
         amountText: fmtMoney(amt, cur),
         rateText: cur === invCur ? "—" : rate ? String(rate) : "—",
-        approxText: cur === invCur ? "—" : fmtMoney(converted, invCur),
       };
     });
 
@@ -424,30 +424,28 @@ const InvoiceDetail = () => {
 
           <div className="mt-3">
             <div className="font-medium">{t.paymentBreakdown}</div>
-            <div className="mt-2 overflow-x-auto">
-              <table className="w-full text-sm border rounded bg-white">
+            <div className="mt-2">
+              <table className="w-full text-[13px] border rounded bg-white">
                 <thead className="bg-gray-100">
                   <tr>
-                    <th className="text-left p-2 border-b">{t.payDate}</th>
-                    <th className="text-left p-2 border-b">{t.payMethod}</th>
-                    <th className="text-right p-2 border-b">{t.payAmount}</th>
-                    <th className="text-right p-2 border-b">{t.payRate} {exchangeRateHint}</th>
-                    <th className="text-right p-2 border-b">{t.payApprox}</th>
+                    <th className="text-left px-2 py-1 border-b">{t.payDate}</th>
+                    <th className="text-left px-2 py-1 border-b">{t.payMethod}</th>
+                    <th className="text-right px-2 py-1 border-b">{t.payAmount}</th>
+                    <th className="text-right px-2 py-1 border-b">{t.payRate} {exchangeRateHint}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paymentLines.length === 0 ? (
                     <tr>
-                      <td className="p-2 text-gray-600" colSpan={5}>—</td>
+                      <td className="px-2 py-1 text-gray-600" colSpan={4}>—</td>
                     </tr>
                   ) : (
                     paymentLines.map((p) => (
                       <tr key={p.key}>
-                        <td className="p-2 border-b whitespace-nowrap">{p.date}</td>
-                        <td className="p-2 border-b">{p.method}</td>
-                        <td className="p-2 border-b text-right whitespace-nowrap">{p.amountText}</td>
-                        <td className="p-2 border-b text-right whitespace-nowrap">{p.rateText}</td>
-                        <td className="p-2 border-b text-right whitespace-nowrap">{p.approxText}</td>
+                        <td className="px-2 py-1 border-b whitespace-nowrap">{p.date}</td>
+                        <td className="px-2 py-1 border-b">{p.method}</td>
+                        <td className="px-2 py-1 border-b text-right whitespace-nowrap">{p.amountText}</td>
+                        <td className="px-2 py-1 border-b text-right whitespace-nowrap">{p.rateText}</td>
                       </tr>
                     ))
                   )}
