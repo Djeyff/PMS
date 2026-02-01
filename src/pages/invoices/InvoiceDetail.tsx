@@ -68,6 +68,11 @@ const InvoiceDetail = () => {
     }
   }, [inv?.id, inv?.pdf_url]);
 
+  // Keep all hooks above early returns
+  const lang = inv?.pdf_lang === "es" ? "es" : "en";
+  const fmtLocale = lang === "es" ? "es-ES" : "en-US";
+  const fmtMoney = (amt: number, cur: string) => new Intl.NumberFormat(fmtLocale, { style: "currency", currency: cur }).format(amt);
+
   // Safe month text computation - moved above early returns to keep hook order consistent
   const monthText = React.useMemo(() => {
     const iso = inv?.issue_date;
@@ -82,6 +87,62 @@ const InvoiceDetail = () => {
     return localeLang === "es" ? `${m} ${y.slice(-2)}` : `${m} ${y}`;
   }, [inv?.issue_date, inv?.pdf_lang]);
 
+  const methodLabel = (m: string | null | undefined) => {
+    const key = String(m ?? "").toLowerCase();
+    const mapEn: Record<string, string> = {
+      bank_transfer: "Bank Transfer",
+      cash: "Cash",
+      card: "Card",
+      check: "Check",
+    };
+    const mapEs: Record<string, string> = {
+      bank_transfer: "Transferencia bancaria",
+      cash: "Efectivo",
+      card: "Tarjeta",
+      check: "Cheque",
+    };
+    const map = lang === "es" ? mapEs : mapEn;
+    if (map[key]) return map[key];
+    const cleaned = key.replace(/_/g, " ").trim();
+    return cleaned
+      .split(" ")
+      .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+      .join(" ") || "—";
+  };
+
+  const paymentLines = React.useMemo(() => {
+    if (!inv) return [] as Array<{ key: string; date: string; method: string; amountText: string; rateText: string; approxText: string }>;
+
+    const invCur = inv.currency as "USD" | "DOP";
+    const payments = inv.payments ?? [];
+
+    const convertToInvoiceCurrency = (amt: number, cur: "USD" | "DOP", rate: number | null) => {
+      if (cur === invCur) return amt;
+      if (!rate || rate <= 0) return 0;
+      if (invCur === "USD" && cur === "DOP") return amt / rate;
+      if (invCur === "DOP" && cur === "USD") return amt * rate;
+      return 0;
+    };
+
+    const list = payments.map((p: any, idx: number) => {
+      const amt = Number(p.amount || 0);
+      const cur = (p.currency as "USD" | "DOP") ?? invCur;
+      const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : p.exchange_rate == null ? null : Number(p.exchange_rate);
+      const converted = convertToInvoiceCurrency(amt, cur, rate);
+      return {
+        key: `${p.id ?? idx}`,
+        date: String(p.received_date ?? "").slice(0, 10) || "—",
+        method: methodLabel(p.method),
+        amountText: fmtMoney(amt, cur),
+        rateText: cur === invCur ? "—" : rate ? String(rate) : "—",
+        approxText: cur === invCur ? "—" : fmtMoney(converted, invCur),
+      };
+    });
+
+    list.sort((a, b) => a.date.localeCompare(b.date));
+    return list;
+  }, [inv?.id, inv?.currency, inv?.payments, lang]);
+
   if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>;
   if (isError) return <div className="p-6">Failed to load invoice. <Link to="/invoices" className="underline text-blue-600">Back</Link></div>;
   if (!inv) return <div className="p-6">Invoice not found. <Link to="/invoices" className="underline text-blue-600">Back</Link></div>;
@@ -90,7 +151,7 @@ const InvoiceDetail = () => {
   const tenantName = role === "owner"
     ? ((ownerNameMap ?? {})[inv.id] ?? ([inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || "—"))
     : ([inv.tenant?.first_name, inv.tenant?.last_name].filter(Boolean).join(" ") || inv.tenant_id?.slice(0, 6));
-  const lang = inv?.pdf_lang === "es" ? "es" : "en";
+
   const t = lang === "es"
     ? {
         title: "Factura",
@@ -149,9 +210,6 @@ const InvoiceDetail = () => {
         payApprox: "≈ in invoice currency",
       };
 
-  const fmtLocale = lang === "es" ? "es-ES" : "en-US";
-  const fmt = (amt: number, cur: string) => new Intl.NumberFormat(fmtLocale, { style: "currency", currency: cur }).format(amt);
-
   // Compute paid using currency conversion (exchange_rate), then balance
   const payments = (inv.payments ?? []);
   const paidConverted = payments.reduce((sum: number, p: any) => {
@@ -163,8 +221,6 @@ const InvoiceDetail = () => {
     if (inv.currency === "DOP" && p.currency === "USD") return sum + amt * rate; // USD → DOP
     return sum;
   }, 0);
-
-  const balance = Number(inv.total_amount) - paidConverted;
 
   // Helper to convert any payment to the invoice currency
   const convertToInvoiceCurrency = (amt: number, cur: "USD" | "DOP", rate: number | null, invCur: "USD" | "DOP") => {
@@ -226,51 +282,7 @@ const InvoiceDetail = () => {
   const agencyName = agency?.name ?? "Las Terrenas Properties";
   const agencyAddress = agency?.address ?? "278 calle Duarte, LTI building, Las Terrenas";
 
-  // Friendly payment method label (localized)
-  const methodLabel = (m: string | null | undefined) => {
-    const key = String(m ?? "").toLowerCase();
-    const mapEn: Record<string, string> = {
-      bank_transfer: "Bank Transfer",
-      cash: "Cash",
-      card: "Card",
-      check: "Check",
-    };
-    const mapEs: Record<string, string> = {
-      bank_transfer: "Transferencia bancaria",
-      cash: "Efectivo",
-      card: "Tarjeta",
-      check: "Cheque",
-    };
-    const map = lang === "es" ? mapEs : mapEn;
-    if (map[key]) return map[key];
-    const cleaned = key.replace(/_/g, " ").trim();
-    return cleaned
-      .split(" ")
-      .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
-      .join(" ") || "—";
-  };
-
-  const paymentLines = React.useMemo(() => {
-    const list = (payments ?? []).map((p: any, idx: number) => {
-      const amt = Number(p.amount || 0);
-      const cur = (p.currency as "USD" | "DOP") ?? inv.currency;
-      const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : p.exchange_rate == null ? null : Number(p.exchange_rate);
-      const converted = convertToInvoiceCurrency(amt, cur, rate, inv.currency);
-      return {
-        key: `${p.id ?? idx}`,
-        date: String(p.received_date ?? "").slice(0, 10) || "—",
-        method: methodLabel(p.method),
-        amountText: fmt(amt, cur),
-        rateText: cur === inv.currency ? "—" : rate ? String(rate) : "—",
-        approxText: cur === inv.currency ? "—" : fmt(converted, inv.currency),
-      };
-    });
-    // Sort by date asc for readability
-    list.sort((a, b) => a.date.localeCompare(b.date));
-    return list;
-  }, [payments, inv.currency, fmt, methodLabel]);
-
-  const exchangeRateHint = (paymentLines.some((p) => p.rateText !== "—"))
+  const exchangeRateHint = paymentLines.some((p) => p.rateText !== "—")
     ? (lang === "es" ? "(DOP por 1 USD)" : "(DOP per 1 USD)")
     : "";
 
@@ -374,16 +386,16 @@ const InvoiceDetail = () => {
         </div>
         <div className="grid grid-cols-5 gap-2 p-2 text-sm">
           <div className="truncate">
-            {inv.currency === "DOP" ? fmt(Number(inv.total_amount), "DOP") : "—"}
+            {inv.currency === "DOP" ? fmtMoney(Number(inv.total_amount), "DOP") : "—"}
           </div>
           <div className="truncate">
-            {inv.currency === "USD" ? fmt(Number(inv.total_amount), "USD") : "—"}
+            {inv.currency === "USD" ? fmtMoney(Number(inv.total_amount), "USD") : "—"}
           </div>
           <div className="truncate">
-            {inv.currency === "USD" ? fmt(Math.max(0, previousBalance), "USD") : "—"}
+            {inv.currency === "USD" ? fmtMoney(Math.max(0, previousBalance), "USD") : "—"}
           </div>
           <div className="truncate">
-            {inv.currency === "DOP" ? fmt(Math.max(0, previousBalance), "DOP") : "—"}
+            {inv.currency === "DOP" ? fmtMoney(Math.max(0, previousBalance), "DOP") : "—"}
           </div>
           <div className="truncate">{inv.lease?.end_date ?? "—"}</div>
         </div>
@@ -397,7 +409,7 @@ const InvoiceDetail = () => {
         </div>
         <div className="flex justify-between p-3">
           <div>{t.leaseInvoice}</div>
-          <div>{fmt(Number(inv.total_amount), inv.currency)}</div>
+          <div>{fmtMoney(Number(inv.total_amount), inv.currency)}</div>
         </div>
       </div>
 
@@ -405,10 +417,10 @@ const InvoiceDetail = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
         <div className="space-y-2 bg-gray-50 rounded p-3">
           <div className="font-medium">{lang === "es" ? "Total a pagar" : "Amount to be Paid"} :</div>
-          <div className="text-lg font-semibold">{fmt(Number(inv.total_amount), inv.currency)}</div>
+          <div className="text-lg font-semibold">{fmtMoney(Number(inv.total_amount), inv.currency)}</div>
 
           <div className="font-medium mt-2">{lang === "es" ? "Pagado" : "Paid"} :</div>
-          <div className="font-semibold">{fmt(paidConverted, inv.currency)}</div>
+          <div className="font-semibold">{fmtMoney(paidConverted, inv.currency)}</div>
 
           <div className="mt-3">
             <div className="font-medium">{t.paymentBreakdown}</div>
@@ -448,16 +460,16 @@ const InvoiceDetail = () => {
         <div className="space-y-2 bg-gray-50 rounded p-3">
           <div className="flex justify-between text-gray-600">
             <div>{t.prevBalance}</div>
-            <div>{fmt(previousBalance, inv.currency)}</div>
+            <div>{fmtMoney(previousBalance, inv.currency)}</div>
           </div>
           <div className="flex justify-between text-gray-600">
             <div>{t.currentInvoice}</div>
-            <div>{fmt(-Number(inv.total_amount || 0), inv.currency)}</div>
+            <div>{fmtMoney(-Number(inv.total_amount || 0), inv.currency)}</div>
           </div>
           <div className="mt-3 border-t" />
           <div className="grid grid-cols-[1fr,auto] items-start gap-4 pt-3">
             <div className="leading-snug font-medium">{t.overallBalance}</div>
-            <div className="font-semibold text-right min-w-[110px]">{fmt(overallBalance, inv.currency)}</div>
+            <div className="font-semibold text-right min-w-[110px]">{fmtMoney(overallBalance, inv.currency)}</div>
           </div>
         </div>
       </div>
