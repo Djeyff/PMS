@@ -110,7 +110,8 @@ const InvoiceDetail = () => {
         openPdf: "Abrir PDF",
         amount: "Importe",
         contractExpiry: "Vencimiento del contrato",
-        prevBalance: "Saldo previo (mismo inquilino)",
+        prevBalance: "Saldo previo",
+        currentInvoice: "Factura actual",
         overallBalance: "Saldo total (incluye esta factura)",
       }
     : {
@@ -131,7 +132,8 @@ const InvoiceDetail = () => {
         openPdf: "Open PDF",
         amount: "Amount",
         contractExpiry: "Contract Expiry",
-        prevBalance: "Previous balance (same tenant)",
+        prevBalance: "Previous balance",
+        currentInvoice: "Current invoice",
         overallBalance: "Overall balance (includes this invoice)",
       };
 
@@ -434,21 +436,18 @@ const InvoiceDetail = () => {
         </div>
 
         <div className="space-y-2 bg-gray-50 rounded p-3">
-          {/* Primero: Saldo previo y Saldo total */}
           <div className="flex justify-between text-gray-600">
             <div>{t.prevBalance}</div>
             <div>{fmt(previousBalance, inv.currency)}</div>
           </div>
-          <div className="grid grid-cols-[1fr,auto] items-start gap-4">
+          <div className="flex justify-between text-gray-600">
+            <div>{t.currentInvoice}</div>
+            <div>{fmt(-Number(inv.total_amount || 0), inv.currency)}</div>
+          </div>
+          <div className="mt-3 border-t" />
+          <div className="grid grid-cols-[1fr,auto] items-start gap-4 pt-3">
             <div className="leading-snug font-medium">{t.overallBalance}</div>
             <div className="font-semibold text-right min-w-[110px]">{fmt(overallBalance, inv.currency)}</div>
-          </div>
-          {/* Línea gris por encima de Saldo */}
-          <div className="mt-3 border-t" />
-          {/* Último: Saldo */}
-          <div className="flex justify-between items-baseline pt-3">
-            <div className="font-medium">{lang === "es" ? "Saldo Actual :" : "Current Balance :"}</div>
-            <div className="text-lg font-semibold">{fmt(balance, inv.currency)}</div>
           </div>
         </div>
       </div>
