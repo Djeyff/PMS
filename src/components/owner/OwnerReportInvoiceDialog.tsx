@@ -14,7 +14,6 @@ import { fetchOwnerProfilesInAgency } from "@/services/users";
 import { fetchAgencyById } from "@/services/agencies";
 import { getLogoPublicUrl } from "@/services/branding";
 import { listManagerReports } from "@/services/manager-reports";
-import { printElement } from "@/utils/print";
 
 type Props = {
   report: OwnerReportRow | null;
@@ -31,8 +30,6 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
   const { role, user, profile } = useAuth();
   const agencyId = profile?.agency_id ?? null;
   const isAdmin = role === "agency_admin";
-
-  const printRef = React.useRef<HTMLDivElement | null>(null);
 
   const { data: agency } = useQuery({
     queryKey: ["owner-invoice-agency", agencyId],
@@ -142,7 +139,7 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
       const dop = p.currency === "DOP" ? shareAmt : 0;
       const rate = typeof p.exchange_rate === "number" ? p.exchange_rate : p.exchange_rate == null ? null : Number(p.exchange_rate);
 
-      if (!assigned) return;
+      if (!assigned) return; // Only include assigned payments in owner statement
       map.set(key, {
         date: p.received_date,
         property: propName,
@@ -177,14 +174,9 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
     return m ?? null;
   }, [mgrReports, report]);
 
-  // Agency-level totals and fee percent
+  // Agency-level totals and fee percent (used for fee% and optional avg rate only)
   const feePercent = managerForPeriod ? Number(managerForPeriod.fee_percent || 5) : 5;
-  const avgRate =
-    managerForPeriod && managerForPeriod.avg_rate != null
-      ? Number(managerForPeriod.avg_rate)
-      : report?.avg_rate != null
-        ? Number(report.avg_rate)
-        : NaN;
+  const avgRate = managerForPeriod && managerForPeriod.avg_rate != null ? Number(managerForPeriod.avg_rate) : (report?.avg_rate != null ? Number(report.avg_rate) : NaN);
 
   // Owner-specific fee components
   const ownerUsdTotal = totals.usdCash + totals.usdTransfer;
@@ -194,7 +186,6 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
   const ownerFeeDeducted = Math.min(ownerFeeShareDop, ownerDopCash);
   const ownerDopAfterFee = Math.max(0, ownerDopCash - ownerFeeDeducted);
 
-  // Format "YYYY-MM" into "Month YYYY" label
   const formatMonthLabel = (ym?: string) => {
     const parts = String(ym ?? "").split("-");
     if (parts.length !== 2) return ym ?? "";
@@ -214,9 +205,8 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
 
   const daysInMonth = (y: number, m: number) => new Date(y, m, 0).getUTCDate();
 
-  const periodLabel = useMemo(() => {
+  const periodLabel = React.useMemo(() => {
     if (!report) return "";
-
     const sStr = String(report.start_date ?? "").slice(0, 10);
     const eStr = String(report.end_date ?? "").slice(0, 10);
     const s = parseYmd(sStr);
@@ -232,14 +222,21 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
   }, [report]);
 
   const handlePrint = () => {
-    if (!printRef.current) return;
-    printElement(printRef.current, { title: `Owner Statement • ${periodLabel || ""}`.trim() });
+    // Scope printing to the report content only (avoid Radix dialog/portal print issues)
+    document.body.classList.add("print-report");
+    window.requestAnimationFrame(() => window.print());
   };
+
+  React.useEffect(() => {
+    const onAfterPrint = () => document.body.classList.remove("print-report");
+    window.addEventListener("afterprint", onAfterPrint);
+    return () => window.removeEventListener("afterprint", onAfterPrint);
+  }, []);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto invoice-print bg-white text-black p-6 rounded-md">
-        <div ref={printRef}>
+        <div className="report-print-area">
           {!report ? (
             <div className="text-sm text-muted-foreground">Loading report…</div>
           ) : (
@@ -365,11 +362,7 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
 
         <div className="mt-3 flex items-center justify-end print:hidden">
           <div className="flex items-center gap-2">
-            <Button
-              variant="default"
-              className="bg-neutral-800 text-white hover:bg-neutral-900"
-              onClick={handlePrint}
-            >
+            <Button variant="default" className="bg-neutral-800 text-white hover:bg-neutral-900" onClick={handlePrint}>
               Download PDF
             </Button>
             <Button

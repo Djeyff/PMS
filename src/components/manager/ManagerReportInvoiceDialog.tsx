@@ -11,7 +11,6 @@ import { fetchAgencyOwnerships } from "@/services/property-owners";
 import type { ManagerReportRow } from "@/services/manager-reports";
 import { fetchAgencyById } from "@/services/agencies";
 import { getLogoPublicUrl } from "@/services/branding";
-import { printElement } from "@/utils/print";
 
 type Props = {
   report: ManagerReportRow;
@@ -37,8 +36,6 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
   const { role, user, profile } = useAuth();
   const agencyId = profile?.agency_id ?? null;
   const isAdmin = role === "agency_admin";
-
-  const printRef = React.useRef<HTMLDivElement | null>(null);
 
   const { data: agency } = useQuery({
     queryKey: ["mgr-invoice-agency", agencyId],
@@ -136,7 +133,7 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
   const feePct = Number(report.fee_percent ?? 5);
   const managerFeeDop = feeBaseDop * (feePct / 100);
 
-  // Per-owner fee computed on owner base = (owner USD × rate) + owner DOP; deduct from DOP cash, capped at available DOP cash
+  // Per-owner fee computed on owner base = (owner USD × rate) + owner DOP; deduct from DOP cash
   const ownerRowsWithFee = useMemo(() => {
     return ownerRows.map((r) => {
       const ownerUsdTotal = r.cashUsd + r.transferUsd;
@@ -189,15 +186,20 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
   }, [report.month, report.start_date, report.end_date]);
 
   const handlePrint = () => {
-    if (!printRef.current) return;
-    printElement(printRef.current, { title: `Manager Report • ${periodLabel || ""}`.trim() });
+    document.body.classList.add("print-report");
+    window.requestAnimationFrame(() => window.print());
   };
+
+  React.useEffect(() => {
+    const onAfterPrint = () => document.body.classList.remove("print-report");
+    window.addEventListener("afterprint", onAfterPrint);
+    return () => window.removeEventListener("afterprint", onAfterPrint);
+  }, []);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Allow vertical scroll and cap height */}
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto overflow-x-hidden invoice-print bg-white text-black p-6 rounded-md">
-        <div ref={printRef}>
+        <div className="report-print-area">
           <DialogHeader>
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3">

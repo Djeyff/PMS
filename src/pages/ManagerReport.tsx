@@ -21,7 +21,6 @@ import OwnerBreakdownItemMobile from "@/components/manager/OwnerBreakdownItemMob
 import SavedManagerReportItemMobile from "@/components/manager/SavedManagerReportItemMobile";
 import ManagerReportFilters from "@/components/manager/ManagerReportFilters";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { printElement } from "@/utils/print";
 
 type OwnerRow = {
   ownerId: string;
@@ -92,6 +91,17 @@ const ManagerReport = () => {
   const isAdmin = role === "agency_admin";
   const agencyId = profile?.agency_id ?? null;
   const reportPrintRef = React.useRef<HTMLDivElement | null>(null);
+
+  const handlePrint = () => {
+    document.body.classList.add("print-report");
+    window.requestAnimationFrame(() => window.print());
+  };
+
+  useEffect(() => {
+    const onAfterPrint = () => document.body.classList.remove("print-report");
+    window.addEventListener("afterprint", onAfterPrint);
+    return () => window.removeEventListener("afterprint", onAfterPrint);
+  }, []);
 
   const months = useMemo(() => monthList(12), []);
   const [monthValue, setMonthValue] = useState<string>(months[0]?.value ?? "");
@@ -368,229 +378,225 @@ const ManagerReport = () => {
     <AppShell>
       <div className="space-y-6">
         <div ref={reportPrintRef}>
-          <ManagerReportFilters
-            months={months}
-            monthValue={monthValue}
-            onMonthChange={setMonthValue}
-            startDate={startDate}
-            endDate={endDate}
-            onStartDateChange={setStartDate}
-            onEndDateChange={setEndDate}
-            avgRateInput={avgRateInput}
-            onAvgRateChange={setAvgRateInput}
-            suggestedRate={suggestedRate}
-            onApplySuggested={applySuggestedRate}
-            generated={generated}
-            onGenerate={handleGenerate}
-            onReset={() => setGenerated(false)}
-            onSave={handleSaveReport}
-          />
+          <div className="report-print-area">
+            <ManagerReportFilters
+              months={months}
+              monthValue={monthValue}
+              onMonthChange={setMonthValue}
+              startDate={startDate}
+              endDate={endDate}
+              onStartDateChange={setStartDate}
+              onEndDateChange={setEndDate}
+              avgRateInput={avgRateInput}
+              onAvgRateChange={setAvgRateInput}
+              suggestedRate={suggestedRate}
+              onApplySuggested={applySuggestedRate}
+              generated={generated}
+              onGenerate={handleGenerate}
+              onReset={() => setGenerated(false)}
+              onSave={handleSaveReport}
+            />
 
-          {/* Warning if rate missing but USD exists */}
-          {/* Show warnings only once generated */}
-          {generated && (usdTotal > 0 && Number.isNaN(rateNum)) && (
-            <div className="text-sm text-destructive">
-              Enter the average USD/DOP rate to include USD transactions in the 5% fee calculation.
-            </div>
-          )}
-          {generated && (managerFeeDop > totals.dopCash && managerFeeDop > 0) && (
-            <div className="text-sm text-muted-foreground">
-              Fee exceeds available DOP cash; only {fmt(actualFeeDeducted, "DOP")} will be deducted this month.
-            </div>
-          )}
-
-          {/* NEW: Gate report output behind 'generated' */}
-          {!generated ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Report not generated</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">
-                Select a month and click "Generate report" to compute totals and owner breakdown.
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
-                <Card>
-                  <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Cash totals</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="text-base font-medium flex flex-col">
-                      <span>{fmt(totals.usdCash, "USD")} USD</span>
-                      <span>{fmt(totals.dopCash, "DOP")} DOP</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Transfer totals</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="text-base font-medium flex flex-col">
-                      <span>{fmt(totals.usdTransfer, "USD")} USD</span>
-                      <span>{fmt(totals.dopTransfer, "DOP")} DOP</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Manager fee (5% of all transactions)</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="text-xs text-muted-foreground mb-1">
-                      Fee base: {fmt(dopTotal, "DOP")} DOP + {usdTotal.toFixed(2)} USD × {Number.isNaN(rateNum) ? "rate ?" : rateNum} = {fmt(feeBaseDop, "DOP")}
-                    </div>
-                    <div className="text-2xl font-bold">{fmt(managerFeeDop, "DOP")}</div>
-                  </CardContent>
-                </Card>
+            {/* Warning if rate missing but USD exists */}
+            {/* Show warnings only once generated */}
+            {generated && (usdTotal > 0 && Number.isNaN(rateNum)) && (
+              <div className="text-sm text-destructive">
+                Enter the average USD/DOP rate to include USD transactions in the 5% fee calculation.
               </div>
+            )}
+            {generated && (managerFeeDop > totals.dopCash && managerFeeDop > 0) && (
+              <div className="text-sm text-muted-foreground">
+                Fee exceeds available DOP cash; only {fmt(actualFeeDeducted, "DOP")} will be deducted this month.
+              </div>
+            )}
 
+            {/* NEW: Gate report output behind 'generated' */}
+            {!generated ? (
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>Owner Breakdown</CardTitle>
-                  <div className="flex items-center gap-2 print:hidden">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const rows = ownerRowsWithFee.map((r) => {
-                          const feeShare = (r.cashDop ?? 0) - (r.cashDopAfterFee ?? r.cashDop ?? 0);
-                          return [
-                            r.name,
-                            r.cashUsd.toFixed(2),
-                            r.cashDop.toFixed(2),
-                            feeShare.toFixed(2),
-                            (r.cashDopAfterFee ?? r.cashDop).toFixed(2),
-                            r.transferUsd.toFixed(2),
-                            r.transferDop.toFixed(2),
-                          ];
-                        });
-                        exportCSV("manager_owner_breakdown.csv",
-                          ["Owner", "Cash USD", "Cash DOP", "Fee share (DOP)", "Cash DOP after fee", "Transfer USD", "Transfer DOP"],
-                          rows
-                        );
-                      }}
-                    >
-                      Export CSV
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        if (!reportPrintRef.current) return;
-                        printElement(reportPrintRef.current, { title: "Manager Report" });
-                      }}
-                    >
-                      Download PDF
-                    </Button>
-                  </div>
+                <CardHeader>
+                  <CardTitle>Report not generated</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  {loadingPayments ? (
-                    <div className="text-sm text-muted-foreground">Loading...</div>
-                  ) : ownerRowsWithFee.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">No payments found for this month.</div>
-                  ) : isMobile ? (
-                    <div>
-                      {ownerRowsWithFee.map((r) => (
-                        <OwnerBreakdownItemMobile key={r.ownerId} row={r} />
-                      ))}
-                      <div className="mt-3 text-sm">
-                        <div className="font-semibold">Totals</div>
-                        <div>Cash USD: {fmt(totals.usdCash, "USD")}</div>
-                        <div>Cash DOP: {fmt(totals.dopCash, "DOP")}</div>
-                        <div>Fee share (DOP): {fmt(actualFeeDeducted, "DOP")}</div>
-                        <div>Cash DOP after fee: {fmt(dopCashAfterFeeTotal, "DOP")}</div>
-                        <div>Transfer USD: {fmt(totals.usdTransfer, "USD")}</div>
-                        <div>Transfer DOP: {fmt(totals.dopTransfer, "DOP")}</div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Owner</TableHead>
-                            <TableHead>Cash USD</TableHead>
-                            <TableHead>Cash DOP</TableHead>
-                            <TableHead>Fee share (DOP)</TableHead>
-                            <TableHead>Cash DOP (after fee)</TableHead>
-                            <TableHead>Transfer USD</TableHead>
-                            <TableHead>Transfer DOP</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {ownerRowsWithFee.map((r) => {
-                            const feeShare = (r.cashDop ?? 0) - (r.cashDopAfterFee ?? r.cashDop ?? 0);
-                            return (
-                              <TableRow key={r.ownerId}>
-                                <TableCell className="font-medium">{r.name}</TableCell>
-                                <TableCell>{fmt(r.cashUsd, "USD")}</TableCell>
-                                <TableCell>{fmt(r.cashDop, "DOP")}</TableCell>
-                                <TableCell>{fmt(r.feeShareDop ?? 0, "DOP")}</TableCell>
-                                <TableCell>{fmt(r.cashDopAfterFee ?? r.cashDop, "DOP")}</TableCell>
-                                <TableCell>{fmt(r.transferUsd, "USD")}</TableCell>
-                                <TableCell>{fmt(r.transferDop, "DOP")}</TableCell>
-                              </TableRow>
-                            );
-                          })}
-                          <TableRow>
-                            <TableCell className="font-semibold">Totals</TableCell>
-                            <TableCell className="font-semibold">{fmt(totals.usdCash, "USD")}</TableCell>
-                            <TableCell className="font-semibold">{fmt(totals.dopCash, "DOP")}</TableCell>
-                            <TableCell className="font-semibold">
-                              {fmt(ownerRowsWithFee.reduce((s, r) => s + (r.feeShareDop ?? 0), 0), "DOP")}
-                            </TableCell>
-                            <TableCell className="font-semibold">{fmt(dopCashAfterFeeTotal, "DOP")}</TableCell>
-                            <TableCell className="font-semibold">{fmt(totals.usdTransfer, "USD")}</TableCell>
-                            <TableCell className="font-semibold">{fmt(totals.dopTransfer, "DOP")}</TableCell>
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
+                <CardContent className="text-sm text-muted-foreground">
+                  Select a month and click "Generate report" to compute totals and owner breakdown.
                 </CardContent>
               </Card>
-            </>
-          )}
+            ) : (
+              <>
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Cash totals</CardTitle></CardHeader>
+                    <CardContent>
+                      <div className="text-base font-medium flex flex-col">
+                        <span>{fmt(totals.usdCash, "USD")} USD</span>
+                        <span>{fmt(totals.dopCash, "DOP")} DOP</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Transfer totals</CardTitle></CardHeader>
+                    <CardContent>
+                      <div className="text-base font-medium flex flex-col">
+                        <span>{fmt(totals.usdTransfer, "USD")} USD</span>
+                        <span>{fmt(totals.dopTransfer, "DOP")} DOP</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Manager fee (5% of all transactions)</CardTitle></CardHeader>
+                    <CardContent>
+                      <div className="text-xs text-muted-foreground mb-1">
+                        Fee base: {fmt(dopTotal, "DOP")} DOP + {usdTotal.toFixed(2)} USD × {Number.isNaN(rateNum) ? "rate ?" : rateNum} = {fmt(feeBaseDop, "DOP")}
+                      </div>
+                      <div className="text-2xl font-bold">{fmt(managerFeeDop, "DOP")}</div>
+                    </CardContent>
+                  </Card>
+                </div>
 
-          {/* Saved Reports list */}
-          <Card>
-            <CardHeader className="flex items-center justify-between">
-              <CardTitle>Saved Reports</CardTitle>
-              <div className="text-sm text-muted-foreground">Edit average rate or fee percent later and recalculate.</div>
-            </CardHeader>
-            <CardContent>
-              {!savedReports || savedReports.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No saved reports yet.</div>
-              ) : isMobile ? (
-                <div>
-                  {savedReports.map((r) => (
-                    <SavedManagerReportItemMobile key={r.id} report={r} onEdited={() => refetchSaved()} />
-                  ))}
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Month</TableHead>
-                        <TableHead>USD total</TableHead>
-                        <TableHead>DOP total</TableHead>
-                        <TableHead>Avg rate</TableHead>
-                        <TableHead>Fee %</TableHead>
-                        <TableHead>Fee base (DOP)</TableHead>
-                        <TableHead>Fee (DOP)</TableHead>
-                        <TableHead>Deducted (DOP)</TableHead>
-                        <TableHead>Owners leftover (DOP)</TableHead>
-                        <TableHead className="print:hidden">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {savedReports.map((r) => (
-                        <SavedReportRow key={r.id} report={r} onEdited={() => refetchSaved()} />
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle>Owner Breakdown</CardTitle>
+                    <div className="flex items-center gap-2 print:hidden">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const rows = ownerRowsWithFee.map((r) => {
+                            const feeShare = (r.cashDop ?? 0) - (r.cashDopAfterFee ?? r.cashDop ?? 0);
+                            return [
+                              r.name,
+                              r.cashUsd.toFixed(2),
+                              r.cashDop.toFixed(2),
+                              feeShare.toFixed(2),
+                              (r.cashDopAfterFee ?? r.cashDop).toFixed(2),
+                              r.transferUsd.toFixed(2),
+                              r.transferDop.toFixed(2),
+                            ];
+                          });
+                          exportCSV("manager_owner_breakdown.csv",
+                            ["Owner", "Cash USD", "Cash DOP", "Fee share (DOP)", "Cash DOP after fee", "Transfer USD", "Transfer DOP"],
+                            rows
+                          );
+                        }}
+                      >
+                        Export CSV
+                      </Button>
+                      <Button size="sm" onClick={handlePrint}>
+                        Download PDF
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingPayments ? (
+                      <div className="text-sm text-muted-foreground">Loading...</div>
+                    ) : ownerRowsWithFee.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">No payments found for this month.</div>
+                    ) : isMobile ? (
+                      <div>
+                        {ownerRowsWithFee.map((r) => (
+                          <OwnerBreakdownItemMobile key={r.ownerId} row={r} />
+                        ))}
+                        <div className="mt-3 text-sm">
+                          <div className="font-semibold">Totals</div>
+                          <div>Cash USD: {fmt(totals.usdCash, "USD")}</div>
+                          <div>Cash DOP: {fmt(totals.dopCash, "DOP")}</div>
+                          <div>Fee share (DOP): {fmt(actualFeeDeducted, "DOP")}</div>
+                          <div>Cash DOP after fee: {fmt(dopCashAfterFeeTotal, "DOP")}</div>
+                          <div>Transfer USD: {fmt(totals.usdTransfer, "USD")}</div>
+                          <div>Transfer DOP: {fmt(totals.dopTransfer, "DOP")}</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Owner</TableHead>
+                              <TableHead>Cash USD</TableHead>
+                              <TableHead>Cash DOP</TableHead>
+                              <TableHead>Fee share (DOP)</TableHead>
+                              <TableHead>Cash DOP (after fee)</TableHead>
+                              <TableHead>Transfer USD</TableHead>
+                              <TableHead>Transfer DOP</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {ownerRowsWithFee.map((r) => {
+                              const feeShare = (r.cashDop ?? 0) - (r.cashDopAfterFee ?? r.cashDop ?? 0);
+                              return (
+                                <TableRow key={r.ownerId}>
+                                  <TableCell className="font-medium">{r.name}</TableCell>
+                                  <TableCell>{fmt(r.cashUsd, "USD")}</TableCell>
+                                  <TableCell>{fmt(r.cashDop, "DOP")}</TableCell>
+                                  <TableCell>{fmt(r.feeShareDop ?? 0, "DOP")}</TableCell>
+                                  <TableCell>{fmt(r.cashDopAfterFee ?? r.cashDop, "DOP")}</TableCell>
+                                  <TableCell>{fmt(r.transferUsd, "USD")}</TableCell>
+                                  <TableCell>{fmt(r.transferDop, "DOP")}</TableCell>
+                                </TableRow>
+                              );
+                            })}
+                            <TableRow>
+                              <TableCell className="font-semibold">Totals</TableCell>
+                              <TableCell className="font-semibold">{fmt(totals.usdCash, "USD")}</TableCell>
+                              <TableCell className="font-semibold">{fmt(totals.dopCash, "DOP")}</TableCell>
+                              <TableCell className="font-semibold">
+                                {fmt(ownerRowsWithFee.reduce((s, r) => s + (r.feeShareDop ?? 0), 0), "DOP")}
+                              </TableCell>
+                              <TableCell className="font-semibold">{fmt(dopCashAfterFeeTotal, "DOP")}</TableCell>
+                              <TableCell className="font-semibold">{fmt(totals.usdTransfer, "USD")}</TableCell>
+                              <TableCell className="font-semibold">{fmt(totals.dopTransfer, "DOP")}</TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {/* Saved Reports list */}
+            <Card>
+              <CardHeader className="flex items-center justify-between">
+                <CardTitle>Saved Reports</CardTitle>
+                <div className="text-sm text-muted-foreground">Edit average rate or fee percent later and recalculate.</div>
+              </CardHeader>
+              <CardContent>
+                {!savedReports || savedReports.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No saved reports yet.</div>
+                ) : isMobile ? (
+                  <div>
+                    {savedReports.map((r) => (
+                      <SavedManagerReportItemMobile key={r.id} report={r} onEdited={() => refetchSaved()} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Month</TableHead>
+                          <TableHead>USD total</TableHead>
+                          <TableHead>DOP total</TableHead>
+                          <TableHead>Avg rate</TableHead>
+                          <TableHead>Fee %</TableHead>
+                          <TableHead>Fee base (DOP)</TableHead>
+                          <TableHead>Fee (DOP)</TableHead>
+                          <TableHead>Deducted (DOP)</TableHead>
+                          <TableHead>Owners leftover (DOP)</TableHead>
+                          <TableHead className="print:hidden">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {savedReports.map((r) => (
+                          <SavedReportRow key={r.id} report={r} onEdited={() => refetchSaved()} />
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </AppShell>

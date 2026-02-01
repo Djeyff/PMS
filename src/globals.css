@@ -104,7 +104,7 @@
 
 /* Print rules */
 @media print {
-  /* Ensure dialog/content flows and matches the view layout when printing */
+  /* Default printable blocks (invoices and reports) */
   .invoice-print {
     position: static !important;
     max-height: none !important;
@@ -114,34 +114,46 @@
     color: black !important;
   }
 
-  /* Repeat table headers and footers across pages */
+  /* Scoped report printing: hide everything except the report area */
+  body.print-report * {
+    visibility: hidden !important;
+  }
+  body.print-report .report-print-area,
+  body.print-report .report-print-area * {
+    visibility: visible !important;
+  }
+  body.print-report .report-print-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+    transform: none !important;
+  }
+
+  /* Multi-page tables: repeat headers; allow page breaks */
+  .report-print-area table thead,
   .invoice-print table thead {
     display: table-header-group;
   }
+  .report-print-area table tfoot,
   .invoice-print table tfoot {
     display: table-footer-group;
   }
 
-  /* Let big containers break naturally; only opt-in to avoid breaking */
-  .invoice-print .print-avoid-break {
-    break-inside: avoid-page;
-    page-break-inside: avoid;
-  }
-
+  .report-print-area table,
   .invoice-print table {
     page-break-inside: auto;
     width: 100%;
   }
+  .report-print-area tr,
   .invoice-print tr {
     page-break-inside: avoid;
     page-break-after: auto;
   }
-  .invoice-print td,
-  .invoice-print th {
-    break-inside: avoid-page;
-  }
 
-  /* Hide interactive-only UI when printing (redundant with Tailwind print:hidden but safe) */
+  /* Hide interactive-only UI */
   .print\\:hidden {
     display: none !important;
   }
