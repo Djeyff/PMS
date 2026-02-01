@@ -146,12 +146,14 @@ const OwnerDashboard = () => {
     return rates.reduce((s, r) => s + r, 0) / rates.length;
   })();
 
-  // NEW: Net after fee (DOP) — fee applied to USD (converted) + DOP totals, deducted from DOP cash portion
+  // Management fee should be understandable even if it can't be deducted from DOP cash.
+  // Fee is calculated on total income (USD converted + DOP), but deductions only apply against DOP CASH.
   const feePercent = 5;
-  const dopTotal = monthly.dop + monthly.usd * avgRate;
-  const feeDop = dopTotal * (feePercent / 100);
-  const feeDeducted = Math.min(feeDop, monthly.dop);
-  const dopAfterFee = Math.max(0, monthly.dop - feeDeducted);
+  const baseDop = monthly.dop + monthly.usd * avgRate;
+  const feeTotalDop = baseDop * (feePercent / 100);
+  const feeDeductedDop = Math.min(feeTotalDop, monthly.cashDop);
+  const feeBalanceDueDop = Math.max(0, feeTotalDop - feeDeductedDop);
+  const cashDopAfterFee = Math.max(0, monthly.cashDop - feeDeductedDop);
 
   // NEW: Partial invoices list and helper to compute remaining and last partial date
   const partialInvoices = (invoices ?? []).filter((inv: any) => String(inv.status) === "partial");
@@ -208,12 +210,23 @@ const OwnerDashboard = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Owner Cash After Fee</CardTitle>
+          <CardTitle>Cash after management fee</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-semibold">
-            {new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(dopAfterFee)}
+            {new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(cashDopAfterFee)}
           </div>
+          <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+            <div className="text-muted-foreground">Fee total (owed)</div>
+            <div className="text-right font-medium">{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(feeTotalDop)}</div>
+            <div className="text-muted-foreground">Balance due to agency</div>
+            <div className={`text-right font-semibold ${feeBalanceDueDop > 0 ? "text-red-600" : ""}`}>{new Intl.NumberFormat(undefined, { style: "currency", currency: "DOP" }).format(feeBalanceDueDop)}</div>
+          </div>
+          {feeBalanceDueDop > 0 ? (
+            <div className="mt-2 text-xs text-muted-foreground">
+              If there is not enough DOP cash this month, the remaining fee can be paid by transfer or will be deducted from the next cash payout.
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -277,8 +290,9 @@ const OwnerDashboard = () => {
                     const dopTransfer = Number(r.dop_transfer_total || 0);
                     const dopTotal = Number(r.dop_total || dopCash + dopTransfer);
                     const avgR = r.avg_rate != null ? Number(r.avg_rate) : 0;
-                    const feeShareDop = ((usdTotal * avgR) + dopTotal) * (feePercentSaved / 100);
-                    const feeDeductedSaved = Math.min(feeShareDop, dopCash);
+
+                    const feeTotal = ((usdTotal * avgR) + dopTotal) * (feePercentSaved / 100);
+                    const feeDeductedSaved = Math.min(feeTotal, dopCash);
                     const dopAfterFeeSaved = Math.max(0, dopCash - feeDeductedSaved);
                     return (
                       <TableRow key={r.id} className="border-t">

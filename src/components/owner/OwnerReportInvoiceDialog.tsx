@@ -190,9 +190,13 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
   const ownerUsdTotal = totals.usdCash + totals.usdTransfer;
   const ownerDopTotal = totals.dopCash + totals.dopTransfer;
   const ownerDopCash = totals.dopCash;
-  const ownerFeeShareDop = ((Number.isNaN(avgRate) ? 0 : ownerUsdTotal * avgRate) + ownerDopTotal) * (feePercent / 100);
-  const ownerFeeDeducted = Math.min(ownerFeeShareDop, ownerDopCash);
-  const ownerDopAfterFee = Math.max(0, ownerDopCash - ownerFeeDeducted);
+
+  // Fee is always calculated on the full owner share (USD converted + DOP), regardless of payment method.
+  // Deduction is only applied against DOP CASH. If there is no DOP cash, the remaining fee is still owed.
+  const ownerFeeTotalDop = ((Number.isNaN(avgRate) ? 0 : ownerUsdTotal * avgRate) + ownerDopTotal) * (feePercent / 100);
+  const ownerFeeDeductedDop = Math.min(ownerFeeTotalDop, ownerDopCash);
+  const ownerFeeBalanceDueDop = Math.max(0, ownerFeeTotalDop - ownerFeeDeductedDop);
+  const ownerDopAfterFee = Math.max(0, ownerDopCash - ownerFeeDeductedDop);
 
   const formatMonthLabel = (ym?: string) => {
     const parts = String(ym ?? "").split("-");
@@ -338,19 +342,23 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
                   </div>
                 </div>
                 <div className="p-3">
-                  <div className="text-xs font-medium mb-1">Manager fee</div>
-                  <div className="space-y-1 text-sm">
-                    <div className="font-semibold">
-                      {ownerUsdTotal > 0 ? (
-                        <>
-                          ({fmt(ownerDopTotal, "DOP")} + {ownerUsdTotal.toFixed(2)} USD × {Number.isFinite(avgRate) ? avgRate.toFixed(6) : "rate ?"}) × {feePercent.toFixed(2)}% = {fmt(ownerFeeShareDop, "DOP")}
-                        </>
-                      ) : (
-                        <>
-                          {fmt(ownerDopTotal, "DOP")} × {feePercent.toFixed(2)}% = {fmt(ownerFeeShareDop, "DOP")}
-                        </>
-                      )}
+                  <div className="text-xs font-medium mb-1">Management fee</div>
+                  <div className="space-y-2 text-sm">
+                    <div className="font-semibold">Fee total (owed): {fmt(ownerFeeTotalDop, "DOP")} ({feePercent.toFixed(2)}%)</div>
+                    <div className="text-xs text-muted-foreground">
+                      The fee is calculated on the full income (cash + transfers). Deductions are applied only against DOP cash.
                     </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="text-muted-foreground">Deducted from DOP cash</div>
+                      <div className="text-right font-medium">{fmt(ownerFeeDeductedDop, "DOP")}</div>
+                      <div className="text-muted-foreground">Balance due to agency</div>
+                      <div className={`text-right font-semibold ${ownerFeeBalanceDueDop > 0 ? "text-red-600" : ""}`}>{fmt(ownerFeeBalanceDueDop, "DOP")}</div>
+                    </div>
+                    {ownerFeeBalanceDueDop > 0 ? (
+                      <div className="text-xs text-muted-foreground">
+                        This balance can be paid by transfer or will be deducted from the next available DOP cash payout.
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -402,6 +410,8 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="text-muted-foreground">Cash DOP (after fee)</div>
                       <div className="text-right font-semibold">{fmt(ownerDopAfterFee, "DOP")}</div>
+                      <div className="text-muted-foreground">Fee balance due</div>
+                      <div className={`text-right font-semibold ${ownerFeeBalanceDueDop > 0 ? "text-red-600" : ""}`}>{fmt(ownerFeeBalanceDueDop, "DOP")}</div>
                       <div className="text-muted-foreground">Cash USD</div>
                       <div className="text-right font-semibold">{fmt(totals.usdCash, "USD")}</div>
                       <div className="text-muted-foreground">Transfer DOP</div>
@@ -415,6 +425,7 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
                     <TableHeader>
                       <TableRow>
                         <TableHead>Cash DOP (after manager fee)</TableHead>
+                        <TableHead>Fee balance due (DOP)</TableHead>
                         <TableHead>Cash USD</TableHead>
                         <TableHead>Transfer DOP</TableHead>
                         <TableHead>Transfer USD</TableHead>
@@ -423,6 +434,7 @@ const OwnerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChange 
                     <TableBody>
                       <TableRow>
                         <TableCell className="font-semibold">{fmt(ownerDopAfterFee, "DOP")}</TableCell>
+                        <TableCell className={`font-semibold ${ownerFeeBalanceDueDop > 0 ? "text-red-600" : ""}`}>{fmt(ownerFeeBalanceDueDop, "DOP")}</TableCell>
                         <TableCell className="font-semibold">{fmt(totals.usdCash, "USD")}</TableCell>
                         <TableCell className="font-semibold">{fmt(totals.dopTransfer, "DOP")}</TableCell>
                         <TableCell className="font-semibold">{fmt(totals.usdTransfer, "USD")}</TableCell>
