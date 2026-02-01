@@ -12,6 +12,7 @@ import type { ManagerReportRow } from "@/services/manager-reports";
 import { fetchAgencyById } from "@/services/agencies";
 import { getLogoPublicUrl } from "@/services/branding";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { printElement } from "@/lib/print";
 
 type Props = {
   report: ManagerReportRow;
@@ -191,26 +192,10 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
   }, [report.month, report.start_date, report.end_date]);
 
   const handlePrint = () => {
-    // Ensure we only print THIS dialog (avoid overlap with the ManagerReport page below)
-    document.querySelectorAll('.report-print-area[data-print-scope="active"]').forEach((el) => {
-      el.removeAttribute("data-print-scope");
-    });
-    printAreaRef.current?.setAttribute("data-print-scope", "active");
-
-    document.body.classList.add("print-report");
-    window.requestAnimationFrame(() => window.print());
+    const el = printAreaRef.current;
+    if (!el) return;
+    printElement(el);
   };
-
-  React.useEffect(() => {
-    const onAfterPrint = () => {
-      document.body.classList.remove("print-report");
-      document.querySelectorAll('.report-print-area[data-print-scope="active"]').forEach((el) => {
-        el.removeAttribute("data-print-scope");
-      });
-    };
-    window.addEventListener("afterprint", onAfterPrint);
-    return () => window.removeEventListener("afterprint", onAfterPrint);
-  }, []);
 
   const breakdownTable = (
     <div className="overflow-x-auto">

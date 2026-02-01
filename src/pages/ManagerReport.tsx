@@ -23,6 +23,7 @@ import ManagerReportFilters from "@/components/manager/ManagerReportFilters";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { fetchInvoices } from "@/services/invoices";
 import { fetchLeases, type LeaseWithMeta } from "@/services/leases";
+import { printElement } from "@/lib/print";
 
 type OwnerRow = {
   ownerId: string;
@@ -96,26 +97,10 @@ const ManagerReport = () => {
   const printAreaRef = React.useRef<HTMLDivElement | null>(null);
 
   const handlePrint = () => {
-    // Ensure we only print this page's report area (avoid overlaps with any open dialogs)
-    document.querySelectorAll('.report-print-area[data-print-scope="active"]').forEach((el) => {
-      el.removeAttribute("data-print-scope");
-    });
-    printAreaRef.current?.setAttribute("data-print-scope", "active");
-
-    document.body.classList.add("print-report");
-    window.requestAnimationFrame(() => window.print());
+    const el = printAreaRef.current;
+    if (!el) return;
+    printElement(el);
   };
-
-  useEffect(() => {
-    const onAfterPrint = () => {
-      document.body.classList.remove("print-report");
-      document.querySelectorAll('.report-print-area[data-print-scope="active"]').forEach((el) => {
-        el.removeAttribute("data-print-scope");
-      });
-    };
-    window.addEventListener("afterprint", onAfterPrint);
-    return () => window.removeEventListener("afterprint", onAfterPrint);
-  }, []);
 
   const months = useMemo(() => monthList(12), []);
   const [monthValue, setMonthValue] = useState<string>(months[0]?.value ?? "");

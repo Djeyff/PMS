@@ -119,14 +119,26 @@
     color: black !important;
   }
 
-  /* Scoped report printing: hide everything except the ACTIVE report area */
-  body.print-report * {
-    visibility: hidden !important;
+  /*
+    Reliable report printing (especially on mobile):
+    We clone the report into #__print_root__ and hide everything else.
+  */
+  body.print-report > :not(#__print_root__) {
+    display: none !important;
   }
 
-  body.print-report .report-print-area[data-print-scope="active"],
-  body.print-report .report-print-area[data-print-scope="active"] * {
-    visibility: visible !important;
+  body.print-report #__print_root__ {
+    display: block !important;
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    background: white !important;
+    color: black !important;
+    z-index: 2147483647 !important;
+    padding: 12mm !important;
+    box-sizing: border-box !important;
   }
 
   /* IMPORTANT: printing from inside a Radix Dialog can otherwise inherit the dialog's
@@ -148,24 +160,8 @@
     box-shadow: none !important;
   }
 
-  body.print-report .report-print-area[data-print-scope="active"] {
-    /* Use fixed to ensure the active print area is positioned at the page origin on mobile */
-    position: fixed !important;
-    left: 0 !important;
-    top: 0 !important;
-    right: 0 !important;
-    width: 100% !important;
-    max-height: none !important;
-    overflow: visible !important;
-    transform: none !important;
-    box-sizing: border-box !important;
-    padding: 12mm !important;
-    background: white !important;
-    z-index: 2147483647 !important;
-  }
-
   /* If a report used horizontal scroll on-screen, remove it for printing */
-  body.print-report .report-print-area[data-print-scope="active"] .overflow-x-auto {
+  body.print-report #__print_root__ .overflow-x-auto {
     overflow: visible !important;
   }
 
