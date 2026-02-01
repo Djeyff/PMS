@@ -496,7 +496,12 @@ const ManagerReport = () => {
                       >
                         Export CSV
                       </Button>
-                      <Button variant="outline" size="sm" onClick={handlePrint}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="bg-white text-black border-gray-300 hover:bg-gray-100"
+                        onClick={handlePrint}
+                      >
                         Print
                       </Button>
                       <Button size="sm" onClick={handlePrint}>
