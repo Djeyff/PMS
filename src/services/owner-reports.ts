@@ -18,6 +18,12 @@ export type OwnerReportRow = {
   updated_at: string | null;
 };
 
+function nextDay(dateYmd: string) {
+  const d = new Date(`${dateYmd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export async function listOwnerReports(agencyId: string, ownerId?: string) {
   let query = supabase
     .from("owner_reports")
@@ -63,14 +69,40 @@ export async function deleteOwnerReport(id: string) {
   return true;
 }
 
+export async function countOwnerReportsForPeriod(agencyId: string, month: string, startDate: string, endDate: string) {
+  const startNext = nextDay(startDate);
+  const endNext = nextDay(endDate);
+
+  const { count, error } = await supabase
+    .from("owner_reports")
+    .select("id", { count: "exact", head: true })
+    .eq("agency_id", agencyId)
+    .eq("month", month)
+    // robust for DATE or TIMESTAMP columns
+    .gte("start_date", startDate)
+    .lt("start_date", startNext)
+    .gte("end_date", endDate)
+    .lt("end_date", endNext);
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export async function deleteOwnerReportsForPeriod(agencyId: string, month: string, startDate: string, endDate: string) {
+  const startNext = nextDay(startDate);
+  const endNext = nextDay(endDate);
+
   const { error } = await supabase
     .from("owner_reports")
     .delete()
     .eq("agency_id", agencyId)
     .eq("month", month)
-    .eq("start_date", startDate)
-    .eq("end_date", endDate);
+    // robust for DATE or TIMESTAMP columns
+    .gte("start_date", startDate)
+    .lt("start_date", startNext)
+    .gte("end_date", endDate)
+    .lt("end_date", endNext);
+
   if (error) throw error;
   return true;
 }

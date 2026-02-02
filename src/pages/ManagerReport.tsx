@@ -15,7 +15,7 @@ import { listManagerReports, createManagerReport, deleteManagerReport } from "@/
 import { logManagerReport } from "@/services/activity-logs";
 import EditManagerReportDialog from "@/components/manager/EditManagerReportDialog";
 import ManagerReportInvoiceDialog from "@/components/manager/ManagerReportInvoiceDialog";
-import { createOwnerReport, deleteOwnerReportsForPeriod } from "@/services/owner-reports";
+import { createOwnerReport, deleteOwnerReportsForPeriod, countOwnerReportsForPeriod } from "@/services/owner-reports";
 import { useIsMobile } from "@/hooks/use-mobile";
 import OwnerBreakdownItemMobile from "@/components/manager/OwnerBreakdownItemMobile";
 import SavedManagerReportItemMobile from "@/components/manager/SavedManagerReportItemMobile";
@@ -360,15 +360,17 @@ const ManagerReport = () => {
     toast({ title: "Report generated", description: `Generated for ${label} (${startDate} to ${endDate}).` });
   };
 
-  // NEW: Save current generated report
-  const handleSaveReport = async () => {
+  const [confirmReplaceOwnerReportsOpen, setConfirmReplaceOwnerReportsOpen] = useState(false);
+  const [existingOwnerReportsCount, setExistingOwnerReportsCount] = useState<number>(0);
+
+  const doSaveReport = async () => {
     if (!generated || !currentMonth || !agencyId) return;
     if (usdTotal > 0 && Number.isNaN(rateNum)) {
       toast({ title: "Average rate required", description: "Enter a valid USD/DOP average rate to save.", variant: "destructive" });
       return;
     }
 
-    // NEW: Clear any existing owner reports for this agency and period before regenerating
+    // Clear any existing owner reports for this agency and period before regenerating
     await deleteOwnerReportsForPeriod(agencyId!, currentMonth.value, startDate, endDate);
 
     const fee_base_dop = (Number.isNaN(rateNum) ? 0 : usdTotal * rateNum) + dopTotal;
@@ -405,7 +407,7 @@ const ManagerReport = () => {
       });
     }
 
-    // NEW: Auto-generate Owner Reports for each owner found in the breakdown
+    // Auto-generate Owner Reports for each owner found in the breakdown
     const createdCount = await (async () => {
       let count = 0;
       for (const r of ownerRows) {
@@ -431,6 +433,23 @@ const ManagerReport = () => {
 
     toast({ title: "Report saved", description: `Saved ${currentMonth.label}. Generated ${createdCount} owner reports.` });
     refetchSaved();
+  };
+
+  // UPDATED: Save current generated report (ask before replacing existing owner reports for same period)
+  const handleSaveReport = async () => {
+    if (!generated || !currentMonth || !agencyId) return;
+
+    try {
+      const existing = await countOwnerReportsForPeriod(agencyId!, currentMonth.value, startDate, endDate);
+      if (existing > 0) {
+        setExistingOwnerReportsCount(existing);
+        setConfirmReplaceOwnerReportsOpen(true);
+        return;
+      }
+      await doSaveReport();
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e?.message ?? "Could not check existing reports.", variant: "destructive" });
+    }
   };
 
   const isMobile = useIsMobile();
@@ -675,6 +694,29 @@ const ManagerReport = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* NEW: replace confirmation */}
+          <AlertDialog open={confirmReplaceOwnerReportsOpen} onOpenChange={setConfirmReplaceOwnerReportsOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Replace existing owner reports?</AlertDialogTitle>
+              </AlertDialogHeader>
+              <div className="text-sm text-muted-foreground">
+                There are already {existingOwnerReportsCount} owner report(s) for this period. Do you want to replace them with the newly generated ones?
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={async () => {
+                    setConfirmReplaceOwnerReportsOpen(false);
+                    await doSaveReport();
+                  }}
+                >
+                  Replace
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
     </AppShell>
