@@ -144,21 +144,21 @@ const Invoices = () => {
                 ))}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
+              <div className="w-full">
+                <Table className="w-full table-fixed">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>No.</TableHead>
-                      <TableHead>Property</TableHead>
-                      <TableHead>Tenant</TableHead>
-                      <TableHead>Issue</TableHead>
-                      <TableHead>Due</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead>Paid</TableHead>
-                      <TableHead>Payment date</TableHead>
-                      <TableHead>Balance</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead className="px-2 py-2 w-[12rem]">No.</TableHead>
+                      <TableHead className="px-2 py-2 w-[16rem]">Property</TableHead>
+                      <TableHead className="px-2 py-2 w-[16rem]">Tenant</TableHead>
+                      <TableHead className="px-2 py-2 w-[9rem]">Issue</TableHead>
+                      <TableHead className="px-2 py-2 w-[9rem]">Due</TableHead>
+                      <TableHead className="px-2 py-2 w-[9rem]">Total</TableHead>
+                      <TableHead className="px-2 py-2 w-[9rem]">Paid</TableHead>
+                      <TableHead className="px-2 py-2 w-[16rem]">Payment date</TableHead>
+                      <TableHead className="px-2 py-2 w-[9rem]">Balance</TableHead>
+                      <TableHead className="px-2 py-2 w-[8rem]">Status</TableHead>
+                      <TableHead className="px-2 py-2 w-[18rem]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -170,31 +170,31 @@ const Invoices = () => {
                       const fmt = (amt: number, cur: string) =>
                         new Intl.NumberFormat(undefined, { style: "currency", currency: cur }).format(amt);
                       return (
-                        <TableRow key={inv.id}>
-                          <TableCell className="font-mono text-xs">{inv.number ?? "—"}</TableCell>
-                          <TableCell className="font-medium">{propName}</TableCell>
-                          <TableCell>{tenantName}</TableCell>
-                          <TableCell>{inv.issue_date}</TableCell>
-                          <TableCell>{inv.due_date}</TableCell>
-                          <TableCell>{fmt(Number(inv.total_amount), inv.currency)}</TableCell>
-                          <TableCell>{fmt(inv.paid, inv.currency)}</TableCell>
-                          <TableCell className="whitespace-nowrap">{inv.paymentDatesText ?? "—"}</TableCell>
-                          <TableCell>{fmt(inv.balance, inv.currency)}</TableCell>
-                          <TableCell>
+                        <TableRow key={inv.id} className="[&>td]:px-2 [&>td]:py-2 align-middle">
+                          <TableCell className="font-mono text-xs truncate">{inv.number ?? "—"}</TableCell>
+                          <TableCell className="font-medium truncate">{propName}</TableCell>
+                          <TableCell className="truncate">{tenantName}</TableCell>
+                          <TableCell className="truncate">{inv.issue_date}</TableCell>
+                          <TableCell className="truncate">{inv.due_date}</TableCell>
+                          <TableCell className="truncate">{fmt(Number(inv.total_amount), inv.currency)}</TableCell>
+                          <TableCell className="truncate">{fmt(inv.paid, inv.currency)}</TableCell>
+                          <TableCell className="truncate">{inv.paymentDatesText ?? "—"}</TableCell>
+                          <TableCell className="truncate">{fmt(inv.balance, inv.currency)}</TableCell>
+                          <TableCell className="truncate">
                             {(() => {
                               const s = getStatusStyle(inv.displayStatus);
                               return <span className={`${s.cls} font-medium`}>{s.label}</span>;
                             })()}
                           </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
+                          <TableCell className="truncate">
+                            <div className="flex flex-wrap gap-2">
                               <Button asChild size="sm" variant="outline"><Link to={`/invoices/${inv.id}`}>View</Link></Button>
 
                               {isAdmin ? (
                                 <>
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                      <Button size="sm" variant="outline">Generate in</Button>
+                                      <Button size="sm" variant="outline" className="whitespace-nowrap">Generate in</Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent>
                                       <DropdownMenuItem
@@ -228,6 +228,7 @@ const Invoices = () => {
                                   <Button
                                     size="sm"
                                     variant="secondary"
+                                    className="whitespace-nowrap"
                                     onClick={async () => {
                                       try {
                                         // Default to Spanish for WhatsApp
@@ -252,6 +253,7 @@ const Invoices = () => {
                                   <Button
                                     size="sm"
                                     variant="outline"
+                                    className="whitespace-nowrap"
                                     onClick={async () => {
                                       try {
                                         const out = await generateInvoicePDF(inv.id, "es", { sendEmail: false, sendWhatsApp: false });
