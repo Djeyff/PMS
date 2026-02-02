@@ -162,6 +162,10 @@ const OwnerReports = () => {
     return match ?? null;
   }, [savedReports, currentMonth, startDate, endDate]);
 
+  // NEW: replace confirmation for duplicate period
+  const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
+  const [replaceTargets, setReplaceTargets] = useState<OwnerReportRow[] | null>(null);
+
   useEffect(() => {
     const loadRate = async () => {
       if (!startDate || !endDate) return;
@@ -334,6 +338,23 @@ const OwnerReports = () => {
       toast({ title: "Missing selection", description: "Choose an owner and a month.", variant: "destructive" });
       return;
     }
+
+    // Check if a report for the same period already exists for this owner
+    const sStr = String(startDate).slice(0, 10);
+    const eStr = String(endDate).slice(0, 10);
+    const dups = (savedReports ?? []).filter((r: any) =>
+      String(r.month) === String(currentMonth.value) &&
+      String(r.start_date).slice(0, 10) === sStr &&
+      String(r.end_date).slice(0, 10) === eStr
+    ) as OwnerReportRow[];
+
+    if (dups.length > 0) {
+      setReplaceTargets(dups);
+      setReplaceDialogOpen(true);
+      return;
+    }
+
+    // No duplicates → proceed to save
     await createOwnerReport({
       agency_id: agencyId!,
       owner_id: ownerId!,
@@ -602,6 +623,55 @@ const OwnerReports = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* NEW: Replace existing report confirmation */}
+        <AlertDialog open={replaceDialogOpen} onOpenChange={setReplaceDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Replace existing report?</AlertDialogTitle>
+            </AlertDialogHeader>
+            <div className="text-sm text-muted-foreground">
+              A report already exists for this period. Do you want to replace it with the new data?
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => { setReplaceDialogOpen(false); setReplaceTargets(null); }}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={async () => {
+                  // Delete duplicates first, then save the new report
+                  try {
+                    for (const r of replaceTargets ?? []) {
+                      await deleteOwnerReport(r.id);
+                    }
+                    setReplaceDialogOpen(false);
+                    setReplaceTargets(null);
+
+                    await createOwnerReport({
+                      agency_id: agencyId!,
+                      owner_id: ownerId!,
+                      month: currentMonth!.value,
+                      start_date: startDate,
+                      end_date: endDate,
+                      avg_rate: avgRateInput && Number(avgRateInput) > 0 ? Number(avgRateInput) : null,
+                      usd_cash_total: totals.usdCash,
+                      dop_cash_total: totals.dopCash,
+                      usd_transfer_total: totals.usdTransfer,
+                      dop_transfer_total: totals.dopTransfer,
+                      usd_total: totals.usdCash + totals.usdTransfer,
+                      dop_total: totals.dopCash + totals.dopTransfer,
+                    });
+
+                    toast({ title: "Report updated", description: `Replaced ${currentMonth!.label} for owner with new data.` });
+                    refetchSaved();
+                  } catch (e: any) {
+                    toast({ title: "Update failed", description: e?.message ?? "Could not replace report.", variant: "destructive" });
+                  }
+                }}
+              >
+                Replace
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AppShell>
   );
