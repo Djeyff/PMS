@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { clearSession, readSession, saveSession, verifyCode, type SelectedUser } from '../../lib/auth-session';
+import { clearSession, missingCodesMessage, readSession, saveSession, verifyCode, type SelectedUser } from '../../lib/auth-session';
 
 const USERS: Array<{ id: SelectedUser; label: string; subtitle: string; tone: string }> = [
   { id: 'jeff', label: 'Jeff', subtitle: 'Administrator', tone: 'from-emerald-700/70 to-emerald-600/50' },
@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const session = useMemo(() => readSession(), []);
+  const missing = useMemo(() => missingCodesMessage(), []);
 
   useEffect(() => { if (session) router.replace('/dashboard'); }, [session, router]);
 
@@ -54,6 +55,7 @@ export default function LoginPage() {
           />
         </div>
         {error ? <p className="mt-2 text-center text-xs text-red-300">{error}</p> : null}
+        {missing ? <p className="mt-2 text-center text-[11px] text-amber-200/80">Set Vercel env vars: {missing}</p> : null}
         <button onClick={submit} className="mt-3 w-full rounded-lg bg-[#27445e] py-2 text-sm font-medium text-white hover:bg-[#31506b]">Login</button>
         <button onClick={() => { clearSession(); setSelected(null); setCode(''); setError(''); }} className="mt-2 w-full rounded-lg border border-white/10 bg-white/5 py-2 text-sm text-white/75 hover:bg-white/8">Reset</button>
       </div>
