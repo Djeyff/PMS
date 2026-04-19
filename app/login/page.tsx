@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { clearSession, missingCodesMessage, readSession, saveSession, verifyCode, type SelectedUser } from '../../lib/auth-session';
 
@@ -13,10 +13,18 @@ export default function LoginPage() {
   const [selected, setSelected] = useState<SelectedUser | null>(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const session = useMemo(() => readSession(), []);
   const missing = useMemo(() => missingCodesMessage(), []);
 
   useEffect(() => { if (session) router.replace('/dashboard'); }, [session, router]);
+  useEffect(() => { if (selected) inputRef.current?.focus(); }, [selected]);
+
+  const chooseUser = (user: SelectedUser) => {
+    setSelected(user);
+    setError('');
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
 
   const submit = () => {
     if (!selected) return setError('Select an account first.');
@@ -37,7 +45,7 @@ export default function LoginPage() {
           {USERS.map((u) => (
             <button
               key={u.id}
-              onClick={() => { setSelected(u.id); setError(''); }}
+              onClick={() => chooseUser(u.id)}
               className={`w-full rounded-lg border px-4 py-3 text-left transition ${selected === u.id ? `border-white/20 bg-gradient-to-r ${u.tone}` : 'border-white/10 bg-white/5 hover:bg-white/8'}`}
             >
               <div className="text-sm font-semibold">{u.label}</div>
@@ -47,6 +55,7 @@ export default function LoginPage() {
         </div>
         <div className="mt-3">
           <input
+            ref={inputRef}
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
             inputMode="numeric"
