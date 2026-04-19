@@ -75,17 +75,17 @@ const InvoiceDetail = () => {
 
   // Safe month text computation - moved above early returns to keep hook order consistent
   const monthText = React.useMemo(() => {
-    const iso = inv?.issue_date;
+    const iso = inv?.due_date ?? inv?.issue_date;
     const localeLang = inv?.pdf_lang === "es" ? "es" : "en";
     if (!iso) return "—";
-    const d = new Date(iso);
+    const d = new Date(iso + "T00:00:00");
     let m = d.toLocaleString(localeLang === "es" ? "es-ES" : "en-US", { month: "long" });
     if (localeLang === "es") {
       m = m.charAt(0).toUpperCase() + m.slice(1);
     }
     const y = String(d.getFullYear());
     return localeLang === "es" ? `${m} ${y.slice(-2)}` : `${m} ${y}`;
-  }, [inv?.issue_date, inv?.pdf_lang]);
+  }, [inv?.due_date, inv?.issue_date, inv?.pdf_lang]);
 
   const methodLabel = (m: string | null | undefined) => {
     const key = String(m ?? "").toLowerCase();

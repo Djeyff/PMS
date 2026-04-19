@@ -454,11 +454,11 @@ serve(async (req) => {
     const rightLabelX = W / 2 + 24;
     const rightValueX = rightLabelX + 120;
 
-    // Month text (capitalize first letter in ES to match UI)
+    // Month text – derive from due_date (billing period) instead of issue_date
     const monthText = (() => {
-      const iso = issueDate;
+      const iso = dueDate || issueDate;
       if (!iso) return "—";
-      const d = new Date(iso);
+      const d = new Date(iso + "T00:00:00");
       let m = d.toLocaleString(lang === "es" ? "es-ES" : "en-US", { month: "long" });
       if (lang === "es" && m) m = m.charAt(0).toUpperCase() + m.slice(1);
       const y = String(d.getFullYear());
