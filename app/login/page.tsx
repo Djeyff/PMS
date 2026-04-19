@@ -3,9 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { clearSession, readSession, saveSession, verifyCode, type SelectedUser } from '../../lib/auth-session';
 
-const USERS: Array<{ id: SelectedUser; label: string; subtitle: string }> = [
-  { id: 'gael', label: 'Gael', subtitle: 'Manager / owner access' },
-  { id: 'jeff', label: 'Jeff', subtitle: 'Admin access' },
+const USERS: Array<{ id: SelectedUser; label: string; subtitle: string; tone: string }> = [
+  { id: 'jeff', label: 'Jeff', subtitle: 'Administrator', tone: 'from-emerald-700/70 to-emerald-600/50' },
+  { id: 'gael', label: 'Gael', subtitle: 'Owner', tone: 'from-slate-700/80 to-indigo-700/50' },
 ];
 
 export default function LoginPage() {
@@ -18,31 +18,44 @@ export default function LoginPage() {
   useEffect(() => { if (session) router.replace('/dashboard'); }, [session, router]);
 
   const submit = () => {
-    if (!selected) return setError('Select Gael or Jeff first.');
+    if (!selected) return setError('Select an account first.');
     if (!verifyCode(selected, code)) return setError('Invalid 6-digit code.');
     saveSession({ user: selected, code, at: Date.now() });
     router.replace('/dashboard');
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md rounded-xl border bg-card p-6 shadow-sm space-y-4">
-        <div>
-          <h1 className="text-2xl font-semibold">PMS Web</h1>
-          <p className="text-sm text-muted-foreground">Select the account and enter the 6-digit code.</p>
+    <main className="min-h-screen flex items-center justify-center p-6">
+      <div className="w-full max-w-[300px] rounded-2xl border border-white/8 bg-[rgba(18,27,44,0.72)] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+        <div className="text-center mb-4">
+          <div className="text-xl font-semibold tracking-wide">🏢 PMS OS</div>
+          <div className="text-xs text-white/55">Property Management System</div>
+          <div className="mt-4 text-xs text-white/45">Select account</div>
         </div>
-        <div className="grid gap-3">
+        <div className="space-y-2">
           {USERS.map((u) => (
-            <button key={u.id} onClick={() => { setSelected(u.id); setError(''); }} className={`rounded-lg border p-4 text-left ${selected===u.id ? 'border-primary bg-primary/5' : ''}`}>
-              <div className="font-medium">{u.label}</div>
-              <div className="text-sm text-muted-foreground">{u.subtitle}</div>
+            <button
+              key={u.id}
+              onClick={() => { setSelected(u.id); setError(''); }}
+              className={`w-full rounded-lg border px-4 py-3 text-left transition ${selected === u.id ? `border-white/20 bg-gradient-to-r ${u.tone}` : 'border-white/10 bg-white/5 hover:bg-white/8'}`}
+            >
+              <div className="text-sm font-semibold">{u.label}</div>
+              <div className="text-[11px] text-white/60">{u.subtitle}</div>
             </button>
           ))}
         </div>
-        <input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0,6))} inputMode="numeric" placeholder="6-digit code" className="w-full rounded-md border px-3 py-2" />
-        {error ? <p className="text-sm text-red-500">{error}</p> : null}
-        <button onClick={submit} className="w-full rounded-md bg-primary px-4 py-2 text-primary-foreground">Enter PMS</button>
-        <button onClick={() => { clearSession(); setCode(''); setSelected(null); }} className="w-full rounded-md border px-4 py-2">Clear session</button>
+        <div className="mt-3">
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            inputMode="numeric"
+            placeholder="000000"
+            className="w-full rounded-lg border border-white/10 bg-[#0f1626] px-3 py-2 text-center text-sm tracking-[0.35em] text-white outline-none placeholder:text-white/20"
+          />
+        </div>
+        {error ? <p className="mt-2 text-center text-xs text-red-300">{error}</p> : null}
+        <button onClick={submit} className="mt-3 w-full rounded-lg bg-[#27445e] py-2 text-sm font-medium text-white hover:bg-[#31506b]">Login</button>
+        <button onClick={() => { clearSession(); setSelected(null); setCode(''); setError(''); }} className="mt-2 w-full rounded-lg border border-white/10 bg-white/5 py-2 text-sm text-white/75 hover:bg-white/8">Reset</button>
       </div>
     </main>
   );

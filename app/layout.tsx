@@ -1,7 +1,7 @@
 import './globals.css';
 import type { ReactNode } from 'react';
 
-export const metadata = { title: 'PMS Web', description: 'PMS web app' };
+export const metadata = { title: 'PMS OS', description: 'Property Management System' };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
