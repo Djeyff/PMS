@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseFunctionUrl } from "@/integrations/supabase/client";
 
 // Helper: file to base64 (no data URL prefix)
 async function fileToBase64(file: File): Promise<string> {
@@ -18,7 +18,7 @@ export async function uploadLogo(file: File) {
   if (!token) throw new Error("Not authenticated")
 
   const base64 = await fileToBase64(file)
-  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/branding-upload"
+  const url = supabaseFunctionUrl("branding-upload")
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -43,7 +43,7 @@ export async function uploadFavicon(file: File) {
   if (!token) throw new Error("Not authenticated")
 
   const base64 = await fileToBase64(file)
-  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/branding-upload"
+  const url = supabaseFunctionUrl("branding-upload")
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

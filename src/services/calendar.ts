@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseFunctionUrl } from "@/integrations/supabase/client";
 import { fetchLeases } from "@/services/leases";
 import type { Role } from "@/contexts/AuthProvider";
 
@@ -73,7 +73,7 @@ export async function syncEventsToGoogle(
   const { data: sess } = await supabase.auth.getSession();
   const token = sess.session?.access_token;
   if (!token) throw new Error("Not authenticated");
-  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/calendar-sync";
+  const url = supabaseFunctionUrl("calendar-sync");
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

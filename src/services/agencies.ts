@@ -1,6 +1,6 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseFunctionUrl } from "@/integrations/supabase/client";
 
-const FUNCTIONS_URL = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/create-agency";
+const FUNCTIONS_URL = supabaseFunctionUrl("create-agency");
 
 export async function createAgency(input: { name: string; default_currency: "USD" | "DOP"; address?: string; timezone?: string }) {
   const { data: sess } = await supabase.auth.getSession();

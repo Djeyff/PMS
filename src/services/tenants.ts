@@ -1,7 +1,7 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseFunctionUrl } from "@/integrations/supabase/client";
 
-const INVITE_FN_URL = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/invite-tenant";
-const DELETE_FN_URL = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/delete-tenant";
+const INVITE_FN_URL = supabaseFunctionUrl("invite-tenant");
+const DELETE_FN_URL = supabaseFunctionUrl("delete-tenant");
 
 export async function inviteTenant(input: { email?: string; first_name?: string; last_name?: string; phone?: string }) {
   const { data: sess } = await supabase.auth.getSession();

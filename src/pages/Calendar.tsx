@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthProvider";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listEvents, createEvent, updateEvent, deleteEvent, type CalendarEvent, syncEventsToGoogle, upsertLeaseExpiryEvents } from "@/services/calendar";
 import { getMyCalendarSettings, saveMyCalendarSettings } from "@/services/calendar-settings";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseFunctionUrl } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -198,7 +198,7 @@ const CalendarPage: React.FC = () => {
       const { data: sess } = await supabase.auth.getSession();
       const token = sess.session?.access_token;
       if (!token) throw new Error("Not authenticated");
-      const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/calendar-list";
+      const url = supabaseFunctionUrl("calendar-list");
       const res = await fetch(url, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

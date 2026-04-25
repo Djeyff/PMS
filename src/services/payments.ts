@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseFunctionUrl } from "@/integrations/supabase/client";
 import type { Role } from "@/contexts/AuthProvider";
 
 export type PaymentRow = {
@@ -127,7 +127,7 @@ export async function createPayment(input: {
     const { data: sess } = await supabase.auth.getSession();
     const token = sess.session?.access_token;
     if (token) {
-      const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/notify-payment";
+      const url = supabaseFunctionUrl("notify-payment");
       await fetch(url, {
         method: "POST",
         headers: {
@@ -189,7 +189,7 @@ export async function deletePayment(id: string) {
   const token = sess.session?.access_token;
   if (!token) throw new Error("Not authenticated");
 
-  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/delete-payment";
+  const url = supabaseFunctionUrl("delete-payment");
   const res = await fetch(url, {
     method: "POST",
     headers: {

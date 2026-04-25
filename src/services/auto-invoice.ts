@@ -1,6 +1,6 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseFunctionUrl } from "@/integrations/supabase/client";
 
-const AUTO_INVOICE_URL = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/auto-invoice";
+const AUTO_INVOICE_URL = supabaseFunctionUrl("auto-invoice");
 
 export async function runAutoInvoice(force: boolean = true): Promise<{ ok: boolean; sent: number; errors: string[] }> {
   const { data: sess } = await supabase.auth.getSession();

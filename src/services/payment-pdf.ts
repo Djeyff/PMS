@@ -1,13 +1,13 @@
 "use client";
 
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseFunctionUrl } from "@/integrations/supabase/client";
 
 export async function generatePaymentReceiptPDF(paymentId: string, lang: "en" | "es" = "en") {
   const { data: sess } = await supabase.auth.getSession();
   const token = sess.session?.access_token;
   if (!token) throw new Error("Not authenticated");
 
-  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/payment-receipt";
+  const url = supabaseFunctionUrl("payment-receipt");
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

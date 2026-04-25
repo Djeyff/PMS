@@ -1,9 +1,9 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseFunctionUrl } from "@/integrations/supabase/client";
 
-const KDRIVE_UPLOAD_URL = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/kdrive-upload";
-const KDRIVE_LIST_URL = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/kdrive-list";
-const KDRIVE_DOWNLOAD_URL = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/kdrive-download";
-const KDRIVE_UPLOAD_GENERIC_URL = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/kdrive-upload-generic";
+const KDRIVE_UPLOAD_URL = supabaseFunctionUrl("kdrive-upload");
+const KDRIVE_LIST_URL = supabaseFunctionUrl("kdrive-list");
+const KDRIVE_DOWNLOAD_URL = supabaseFunctionUrl("kdrive-download");
+const KDRIVE_UPLOAD_GENERIC_URL = supabaseFunctionUrl("kdrive-upload-generic");
 
 function toBase64(bytes: Uint8Array) {
   let binary = "";

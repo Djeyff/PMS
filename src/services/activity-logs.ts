@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseFunctionUrl } from "@/integrations/supabase/client";
 
 export type ActivityLog = {
   id: string;
@@ -255,7 +255,7 @@ export async function reinstateTenantFromLog(logId: string) {
   const token = sess.session?.access_token;
   if (!token) throw new Error("Not authenticated");
 
-  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/reinstate-tenant";
+  const url = supabaseFunctionUrl("reinstate-tenant");
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

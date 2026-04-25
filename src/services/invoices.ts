@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseFunctionUrl } from "@/integrations/supabase/client";
 
 export type InvoiceRow = {
   id: string;
@@ -242,7 +242,7 @@ export async function getInvoiceSignedUrlByInvoiceId(invoiceId: string) {
   const token = sess.session?.access_token;
   if (!token) throw new Error("Not authenticated");
 
-  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/invoices-sign-url";
+  const url = supabaseFunctionUrl("invoices-sign-url");
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -289,7 +289,7 @@ export async function generateInvoicePDF(invoiceId: string, lang: "en" | "es", o
   const token = sess.session?.access_token;
   if (!token) throw new Error("Not authenticated");
 
-  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/invoice-pdf";
+  const url = supabaseFunctionUrl("invoice-pdf");
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -309,7 +309,7 @@ export async function generateSpanishInvoicePDF(invoiceId: string, opts: { sendE
   const token = sess.session?.access_token;
   if (!token) throw new Error("Not authenticated");
 
-  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/invoice-pdf";
+  const url = supabaseFunctionUrl("invoice-pdf");
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

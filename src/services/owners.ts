@@ -1,7 +1,7 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseFunctionUrl } from "@/integrations/supabase/client";
 
-const INVITE_OWNER_URL = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/invite-owner";
-const DELETE_OWNER_URL = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/delete-owner";
+const INVITE_OWNER_URL = supabaseFunctionUrl("invite-owner");
+const DELETE_OWNER_URL = supabaseFunctionUrl("delete-owner");
 
 export async function inviteOwner(input: { email?: string; first_name?: string; last_name?: string }) {
   const { data: sess } = await supabase.auth.getSession();

@@ -1,6 +1,6 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseFunctionUrl } from "@/integrations/supabase/client";
 
-const SEND_OWNER_REPORT_URL = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/send-owner-report";
+const SEND_OWNER_REPORT_URL = supabaseFunctionUrl("send-owner-report");
 
 export async function sendOwnerReport(input: {
   ownerId: string;

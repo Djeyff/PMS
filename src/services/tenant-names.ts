@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseFunctionUrl } from "@/integrations/supabase/client";
 
 export async function getTenantNamesForInvoices(invoiceIds: string[]) {
   if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) return {};
@@ -6,7 +6,7 @@ export async function getTenantNamesForInvoices(invoiceIds: string[]) {
   const token = sess.session?.access_token;
   if (!token) return {};
 
-  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/owner-tenant-names";
+  const url = supabaseFunctionUrl("owner-tenant-names");
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

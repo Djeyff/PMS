@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseFunctionUrl } from "@/integrations/supabase/client";
 
 export type UserRow = {
   id: string;
@@ -138,7 +138,7 @@ export async function assignUserByEmail(params: { email: string; role: "owner" |
   const { data: sess } = await supabase.auth.getSession();
   const token = sess.session?.access_token;
   if (!token) throw new Error("Not authenticated");
-  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/assign-user";
+  const url = supabaseFunctionUrl("assign-user");
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -159,7 +159,7 @@ export async function setUserRoleServer(params: {
   const token = sess.session?.access_token;
   if (!token) throw new Error("Not authenticated");
 
-  const url = "https://tsfswvmwkfairaoccfqa.supabase.co/functions/v1/set-user-role";
+  const url = supabaseFunctionUrl("set-user-role");
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
