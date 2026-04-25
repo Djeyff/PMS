@@ -9,6 +9,12 @@ import EditPaymentDialog from "@/components/payments/EditPaymentDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import PaymentListItemMobile from "@/components/payments/PaymentListItemMobile";
 import { fetchMyOwnerships } from "@/services/property-owners";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { generatePaymentReceiptPDF } from "@/services/payment-pdf";
+import { toast } from "sonner";
+import { sharePdfToWhatsApp } from "@/utils/whatsapp";
+import { buildPdfFileName, downloadFileFromUrl } from "@/utils/download";
 
 const currencyOrder = ["USD", "DOP"] as const;
 
@@ -108,6 +114,50 @@ const Payments = () => {
     return totals;
   };
 
+  const openReceipt = async (payment: PaymentWithMeta, language: "en" | "es") => {
+    try {
+      const out = await generatePaymentReceiptPDF(payment.id, language);
+      if (out.url) {
+        window.open(out.url, "_blank");
+        toast.success(language === "en" ? "Payment receipt generated in English" : "Recibo generado en Español");
+      } else {
+        toast.info(language === "en" ? "Receipt generated but no URL returned" : "Recibo generado pero sin URL");
+      }
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to open receipt");
+    }
+  };
+
+  const downloadReceipt = async (payment: PaymentWithMeta, tenantName: string, propertyName: string) => {
+    try {
+      const out = await generatePaymentReceiptPDF(payment.id, "es");
+      if (!out.url) {
+        toast.info("Recibo generado pero sin URL");
+        return;
+      }
+      await downloadFileFromUrl(out.url, buildPdfFileName(tenantName, propertyName, payment.received_date));
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "No se pudo descargar el PDF");
+    }
+  };
+
+  const shareReceipt = async (payment: PaymentWithMeta, tenantName: string, propertyName: string) => {
+    try {
+      const out = await generatePaymentReceiptPDF(payment.id, "es");
+      if (!out.url) {
+        toast.info("Recibo generado pero sin URL");
+        return;
+      }
+      const text = `Hola ${tenantName}, aquí está su recibo de pago por ${formatCurrency(
+        Number(payment.amount),
+        payment.currency
+      )} del ${payment.received_date}.`;
+      await sharePdfToWhatsApp(out.url, buildPdfFileName(tenantName, propertyName, payment.received_date), text);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Error al compartir por WhatsApp");
+    }
+  };
+
   const renderTotals = (values: Record<Currency, number>) => (
     <div className="flex flex-wrap justify-end gap-2 font-mono text-sm">
       {currencyOrder.map((currency) =>
@@ -182,7 +232,7 @@ const Payments = () => {
                           <th className="px-4 py-3 font-semibold">Method</th>
                           <th className="px-4 py-3 text-right font-semibold">Amount</th>
                           <th className="px-4 py-3 font-semibold">Reference</th>
-                          {canCreate ? <th className="px-4 py-3 text-right font-semibold">Actions</th> : null}
+                          <th className="px-4 py-3 text-right font-semibold">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -209,9 +259,27 @@ const Payments = () => {
                               <td className="max-w-[320px] px-4 py-3 text-xs text-white/45">
                                 <span className="line-clamp-2">{payment.reference || "—"}</span>
                               </td>
-                              {canCreate ? (
-                                <td className="px-4 py-3">
-                                  <div className="flex justify-end gap-2">
+                              <td className="px-4 py-3">
+                                <div className="flex justify-end gap-2">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button size="sm" variant="outline" className="border-white/10 bg-white/5 text-white hover:bg-white/10">
+                                        View
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem onClick={() => openReceipt(payment, "en")}>English receipt</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => openReceipt(payment, "es")}>Spanish receipt</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => shareReceipt(payment, tenantName, propertyName)}>
+                                        QuickShare
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => downloadReceipt(payment, tenantName, propertyName)}>
+                                        Download PDF
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                  {canCreate ? (
+                                    <>
                                     <EditPaymentDialog payment={payment} onUpdated={() => refetch()} />
                                     <DeletePaymentDialog
                                       id={payment.id}
@@ -234,9 +302,10 @@ const Payments = () => {
                                       }}
                                       onDeleted={() => refetch()}
                                     />
-                                  </div>
-                                </td>
-                              ) : null}
+                                    </>
+                                  ) : null}
+                                </div>
+                              </td>
                             </tr>
                           );
                         })}
