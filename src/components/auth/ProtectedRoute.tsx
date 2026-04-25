@@ -4,14 +4,14 @@ import { useAuth } from "@/contexts/AuthProvider";
 import Loader from "@/components/loader";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { loading, session } = useAuth();
+  const { loading, isAuthenticated } = useAuth();
   const location = useLocation();
 
   if (loading) {
     return <Loader />;
   }
 
-  if (!session) {
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 

@@ -1,197 +1,180 @@
-import React, { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthProvider";
-import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Building2, KeyRound, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  clearPmsSession,
+  getPmsAuthEmail,
+  getPmsCodeLength,
+  missingPmsCodeConfig,
+  normalizePmsCode,
+  PMS_ACCOUNTS,
+  savePmsSession,
+  verifyPmsCode,
+  type PmsAccountId,
+} from "@/lib/pms-access";
 
-type Mode = "signin" | "signup";
+const accountOrder: PmsAccountId[] = ["jeff", "gael"];
 
 const Login = () => {
-  const { session } = useAuth();
+  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [selected, setSelected] = useState<PmsAccountId | null>(null);
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const [mode, setMode] = useState<Mode>("signin");
-
-  // Shared fields
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  // Sign up only fields
-  const [first, setFirst] = useState("");
-  const [last, setLast] = useState("");
-  const [phone, setPhone] = useState("");
-
-  const [signingIn, setSigningIn] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const codeLength = getPmsCodeLength();
+  const missingConfig = useMemo(() => missingPmsCodeConfig(), []);
+  const redirectTo = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? "/dashboard";
 
   useEffect(() => {
-    if (session) {
-      navigate("/dashboard", { replace: true });
+    if (isAuthenticated) {
+      navigate(redirectTo, { replace: true });
     }
-  }, [session, navigate]);
+  }, [isAuthenticated, navigate, redirectTo]);
 
-  const handleSignIn = async () => {
-    if (!email || !password) {
-      toast.error("Please enter email and password");
+  useEffect(() => {
+    if (selected) inputRef.current?.focus();
+  }, [selected]);
+
+  const chooseAccount = (account: PmsAccountId) => {
+    setSelected(account);
+    setError("");
+    setCode("");
+  };
+
+  const handleSubmit = async () => {
+    if (!selected) {
+      setError("Select Gael or Jeff first.");
       return;
     }
-    setSigningIn(true);
+
+    if (!verifyPmsCode(selected, code)) {
+      setError(`Invalid ${codeLength}-digit code.`);
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        toast.error(error.message);
-        return;
+      const normalizedCode = normalizePmsCode(code);
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: getPmsAuthEmail(selected),
+        password: normalizedCode,
+      });
+
+      if (signInError) {
+        savePmsSession({ account: selected, at: Date.now() });
+      } else {
+        clearPmsSession();
       }
-      toast.success("Signed in");
-      navigate("/dashboard", { replace: true });
+
+      toast.success(`Signed in as ${PMS_ACCOUNTS[selected].label}`);
+      navigate(redirectTo, { replace: true });
     } finally {
-      setSigningIn(false);
+      setSubmitting(false);
     }
   };
 
-  const handleSignUp = async () => {
-    if (!first || !last || !email || !password) {
-      toast.error("Please complete all required fields");
-      return;
-    }
-    setCreating(true);
-    try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { first_name: first, last_name: last, phone },
-        },
-      });
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
-      toast.success("Account created. Check your email to confirm.");
-      setMode("signin");
-      setPassword("");
-    } finally {
-      setCreating(false);
-    }
+  const handleReset = () => {
+    clearPmsSession();
+    setSelected(null);
+    setCode("");
+    setError("");
+    inputRef.current?.focus();
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>{mode === "signin" ? "Sign in" : "Create account"}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {mode === "signin" ? (
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <label className="text-sm">Email address</label>
-                <Input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={signingIn}
-                />
+    <div className="min-h-screen bg-[#0d1624] text-white">
+      <main className="flex min-h-screen items-center justify-center px-4 py-8">
+        <Card className="w-full max-w-[340px] border-white/10 bg-[#121d2f]/90 text-white shadow-2xl shadow-black/30">
+          <CardContent className="p-5">
+            <div className="mb-5 text-center">
+              <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-md bg-white/10">
+                <Building2 className="h-5 w-5" />
               </div>
-              <div className="space-y-2">
-                <label className="text-sm">Password</label>
-                <Input
-                  type="password"
-                  placeholder="Your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={signingIn}
-                />
-              </div>
-              <Button className="w-full" onClick={handleSignIn} disabled={signingIn}>
-                {signingIn ? "Signing in..." : "Sign in"}
-              </Button>
-              <div className="text-center text-sm text-muted-foreground">
-                Don’t have an account?{" "}
-                <button
-                  type="button"
-                  className="underline underline-offset-4"
-                  onClick={() => setMode("signup")}
-                >
-                  Create one
-                </button>
-              </div>
+              <h1 className="text-xl font-semibold">PMS Web</h1>
+              <p className="text-xs text-white/55">Property Management System</p>
             </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 gap-3">
-                <div className="space-y-2">
-                  <label className="text-sm">First name</label>
-                  <Input
-                    type="text"
-                    placeholder="First name"
-                    value={first}
-                    onChange={(e) => setFirst(e.target.value)}
-                    disabled={creating}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm">Last name</label>
-                  <Input
-                    type="text"
-                    placeholder="Last name"
-                    value={last}
-                    onChange={(e) => setLast(e.target.value)}
-                    disabled={creating}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm">Phone (optional)</label>
-                  <Input
-                    type="tel"
-                    placeholder="+1 555 123 4567"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    disabled={creating}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm">Email</label>
-                  <Input
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={creating}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm">Password</label>
-                  <Input
-                    type="password"
-                    placeholder="Create a password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={creating}
-                  />
-                </div>
-              </div>
-              <Button className="w-full" onClick={handleSignUp} disabled={creating}>
-                {creating ? "Creating..." : "Create account"}
-              </Button>
-              <div className="text-center text-sm text-muted-foreground">
-                Already have an account?{" "}
-                <button
-                  type="button"
-                  className="underline underline-offset-4"
-                  onClick={() => setMode("signin")}
-                >
-                  Sign in
-                </button>
-              </div>
+
+            <div className="space-y-2">
+              {accountOrder.map((accountId) => {
+                const account = PMS_ACCOUNTS[accountId];
+                const active = selected === accountId;
+                return (
+                  <button
+                    key={account.id}
+                    type="button"
+                    onClick={() => chooseAccount(account.id)}
+                    className={`w-full rounded-md border px-4 py-3 text-left transition ${
+                      active
+                        ? "border-emerald-300/50 bg-emerald-500/20 text-white"
+                        : "border-white/10 bg-white/5 text-white/85 hover:bg-white/10"
+                    }`}
+                  >
+                    <div className="text-sm font-semibold">{account.label}</div>
+                    <div className="text-xs text-white/55">{account.subtitle}</div>
+                  </button>
+                );
+              })}
             </div>
-          )}
-        </CardContent>
-      </Card>
+
+            <div className="mt-4">
+              <Input
+                ref={inputRef}
+                value={code}
+                onChange={(event) => {
+                  setCode(event.target.value.replace(/\D/g, "").slice(0, codeLength));
+                  setError("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") handleSubmit();
+                }}
+                disabled={submitting}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="0000"
+                className="h-11 border-white/10 bg-[#0b1220] text-center font-mono text-base tracking-[0.55em] text-white placeholder:text-white/20"
+              />
+            </div>
+
+            {error ? <p className="mt-2 text-center text-xs text-red-300">{error}</p> : null}
+            {missingConfig.length > 0 ? (
+              <p className="mt-2 text-center text-[11px] text-amber-200/80">
+                Missing: {missingConfig.join(", ")}
+              </p>
+            ) : null}
+
+            <div className="mt-4 space-y-2">
+              <Button
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="w-full bg-[#27445e] text-white hover:bg-[#31506b]"
+              >
+                <KeyRound className="h-4 w-4" />
+                {submitting ? "Logging in..." : "Login"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleReset}
+                className="w-full border-white/10 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Reset
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </main>
     </div>
   );
 };

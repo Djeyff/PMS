@@ -8,15 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
 const Index = () => {
-  const { loading, session } = useAuth();
+  const { loading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!loading) {
-      if (session) navigate("/dashboard", { replace: true });
+      if (isAuthenticated) navigate("/dashboard", { replace: true });
       else navigate("/login", { replace: true });
     }
-  }, [loading, session, navigate]);
+  }, [loading, isAuthenticated, navigate]);
 
   return (
     <div className="container mx-auto p-4 space-y-6">

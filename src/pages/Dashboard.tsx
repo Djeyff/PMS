@@ -10,14 +10,14 @@ import TenantDashboard from "./dashboards/TenantDashboard";
 const MASTER_ADMIN_EMAILS = new Set(["djeyff06@gmail.com", "jeffrey.hubert.01@gmail.com"]);
 
 const Dashboard = () => {
-  const { loading, session, role, user } = useAuth();
+  const { loading, session, isAuthenticated, role, user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!loading && !session) {
+    if (!loading && !isAuthenticated) {
       navigate("/login", { replace: true });
     }
-  }, [loading, session, navigate]);
+  }, [loading, isAuthenticated, navigate]);
 
   useEffect(() => {
     if (!loading && session) {
@@ -28,7 +28,7 @@ const Dashboard = () => {
     }
   }, [loading, session, role, user, navigate]);
 
-  if (loading || !session) {
+  if (loading || !isAuthenticated) {
     return <Loader />;
   }
 

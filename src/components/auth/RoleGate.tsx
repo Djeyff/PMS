@@ -11,7 +11,7 @@ type Props = {
 const MASTER_ADMIN_EMAILS = new Set(["djeyff06@gmail.com", "jeffrey.hubert.01@gmail.com"]);
 
 const RoleGate = ({ allow, children }: Props) => {
-  const { loading, role, session, user } = useAuth();
+  const { loading, role, isAuthenticated, user } = useAuth();
 
   const email = (user?.email ?? "").toLowerCase();
   const isMasterAdmin = MASTER_ADMIN_EMAILS.has(email);
@@ -19,8 +19,8 @@ const RoleGate = ({ allow, children }: Props) => {
   // Show loader only while auth is initializing
   if (loading) return <Loader />;
 
-  // If no session, block
-  if (!session) {
+  // If no authenticated access, block
+  if (!isAuthenticated) {
     return (
       <div className="mx-auto max-w-2xl">
         <Card>

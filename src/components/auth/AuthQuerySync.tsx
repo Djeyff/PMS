@@ -5,13 +5,13 @@ import { runAutoInvoiceNoForce } from "@/services/auto-invoice";
 
 const AuthQuerySync = () => {
   const qc = useQueryClient();
-  const { loading, session, profile } = useAuth();
+  const { loading, session, isAuthenticated, profile } = useAuth();
 
   useEffect(() => {
     const role = profile?.role;
     const agencyReady = role !== "agency_admin" || !!profile?.agency_id;
-    const ready = !loading && !!session && !!role && agencyReady;
-    console.log("[AuthQuerySync] check:", { loading, session: !!session, role, agencyReady, ready });
+    const ready = !loading && isAuthenticated && !!role && agencyReady;
+    console.log("[AuthQuerySync] check:", { loading, authenticated: isAuthenticated, role, agencyReady, ready });
     if (!ready) {
       console.log("[AuthQuerySync] not ready, skipping invalidate");
       return;
@@ -27,7 +27,7 @@ const AuthQuerySync = () => {
     // Auto-invoice scheduler for admins: run immediately and then every minute
     let timer: any = null;
     const startAuto = async () => {
-      if (profile?.role === "agency_admin" && profile?.agency_id) {
+      if (session && profile?.role === "agency_admin" && profile?.agency_id) {
         try {
           await runAutoInvoiceNoForce();
           console.log("[AuthQuerySync] auto-invoice executed (no force)");
@@ -50,7 +50,7 @@ const AuthQuerySync = () => {
       clearTimeout(t);
       if (timer) clearInterval(timer);
     };
-  }, [loading, session, profile?.role, profile?.agency_id, qc]);
+  }, [loading, session, isAuthenticated, profile?.role, profile?.agency_id, qc]);
 
   return null;
 };

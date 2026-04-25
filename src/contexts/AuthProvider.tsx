@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { getAuthedClient } from "@/integrations/supabase/client";
+import { clearPmsSession, PMS_ACCOUNTS, readPmsSession, type PmsSession } from "@/lib/pms-access";
 
 export type Role = "agency_admin" | "owner" | "tenant";
 export type Profile = {
@@ -19,6 +20,8 @@ type AuthContextValue = {
   user: User | null;
   profile: Profile | null;
   role: Role | null;
+  pmsSession: PmsSession | null;
+  isAuthenticated: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -46,12 +49,48 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [pmsSession, setPmsSession] = useState<PmsSession | null>(() => readPmsSession());
   const [loading, setLoading] = useState(true);
   const [providerToken, setProviderToken] = useState<string | null>(null);
 
+  const pmsAccount = pmsSession ? PMS_ACCOUNTS[pmsSession.account] : null;
+
+  const pmsUser = useMemo(() => {
+    if (!pmsAccount) return null;
+    return {
+      id: pmsAccount.profileId,
+      email: pmsAccount.email,
+      aud: "authenticated",
+      role: "authenticated",
+      app_metadata: {},
+      user_metadata: {
+        first_name: pmsAccount.firstName,
+        last_name: pmsAccount.lastName,
+        pms_account: pmsAccount.id,
+      },
+      created_at: new Date(pmsSession?.at ?? Date.now()).toISOString(),
+    } as User;
+  }, [pmsAccount, pmsSession?.at]);
+
+  const pmsProfile = useMemo<Profile | null>(() => {
+    if (!pmsAccount) return null;
+    return {
+      id: pmsAccount.profileId,
+      role: pmsAccount.role,
+      agency_id: pmsAccount.agencyId,
+      first_name: pmsAccount.firstName,
+      last_name: pmsAccount.lastName,
+      avatar_url: null,
+      email: pmsAccount.email,
+    };
+  }, [pmsAccount]);
+
+  const effectiveUser = user ?? pmsUser;
+  const effectiveProfile = profile ?? pmsProfile;
+
   const role: Role | null = useMemo(() => {
-    return profile?.role ?? null;
-  }, [profile?.role]);
+    return effectiveProfile?.role ?? null;
+  }, [effectiveProfile?.role]);
 
   useEffect(() => {
     let mounted = true;
@@ -75,6 +114,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setProviderToken((sess as any)?.provider_token ?? null);
     });
 
+    const onPmsSessionChange = () => setPmsSession(readPmsSession());
+    window.addEventListener("pms-session-change", onPmsSessionChange);
+
     const loadingFallback = setTimeout(() => {
       if (mounted) setLoading(false);
     }, 4000);
@@ -82,6 +124,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => {
       mounted = false;
       clearTimeout(loadingFallback);
+      window.removeEventListener("pms-session-change", onPmsSessionChange);
       sub?.subscription?.unsubscribe();
     };
   }, []);
@@ -100,7 +143,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    clearPmsSession();
     setProfile(null);
+    setPmsSession(null);
     setProviderToken(null);
   };
 
@@ -112,9 +157,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const value: AuthContextValue = {
     session,
-    user,
-    profile,
+    user: effectiveUser,
+    profile: effectiveProfile,
     role,
+    pmsSession,
+    isAuthenticated: !!session || !!pmsSession,
     loading,
     signOut,
     refreshProfile,
