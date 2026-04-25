@@ -1,104 +1,155 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider } from "@/components/ui/sidebar";
-import { Home, Building2, Users, FileText, Wrench, Receipt, CreditCard, Settings, LogOut, BarChart3, UserCog, History, Calendar as CalendarIcon, Shield } from "lucide-react";
 import { useAuth } from "@/contexts/AuthProvider";
 import type { Role } from "@/contexts/AuthProvider";
-import CurrencySelector from "@/components/CurrencySelector";
-import MobileNav from "@/components/layout/mobile-nav";
-import { useQuery } from "@tanstack/react-query";
-import { fetchAgencyById } from "@/services/agencies";
 
 const AppShell = ({ children }: { children: React.ReactNode }) => {
   const { role, signOut, profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { data: agency } = useQuery({
-    queryKey: ["appshell-agency", profile?.agency_id],
-    enabled: !!profile?.agency_id,
-    queryFn: () => fetchAgencyById(profile!.agency_id!),
-  });
-  const brandName = agency?.name ?? "PMS";
+  const [mobileOpen, setMobileOpen] = React.useState(false);
 
-  const navItems: { to: string; label: string; icon: any; roles: Role[] }[] = [
-    { to: "/dashboard", label: "Dashboard", icon: Home, roles: ["agency_admin", "owner", "tenant"] as Role[] },
-    { to: "/properties", label: "Properties", icon: Building2, roles: ["agency_admin", "owner"] as Role[] },
-    { to: "/owners", label: "Owners", icon: Users, roles: ["agency_admin"] as Role[] },
-    { to: "/tenants", label: "Tenants", icon: Users, roles: ["agency_admin"] as Role[] },
-    { to: "/leases", label: "Leases", icon: FileText, roles: ["agency_admin"] as Role[] },
-    { to: "/invoices", label: "Invoices", icon: Receipt, roles: ["agency_admin", "owner", "tenant"] as Role[] },
-    { to: "/payments", label: "Payments", icon: CreditCard, roles: ["agency_admin", "owner", "tenant"] as Role[] },
-    { to: "/maintenance", label: "Maintenance", icon: Wrench, roles: ["agency_admin", "owner", "tenant"] as Role[] },
-    { to: "/reports", label: "Reports", icon: BarChart3, roles: ["agency_admin", "owner"] as Role[] },
-    { to: "/manager-report", label: "Manager Report", icon: UserCog, roles: ["agency_admin"] as Role[] },
-    { to: "/owner-reports", label: "Owner Reports", icon: UserCog, roles: ["agency_admin", "owner"] as Role[] },
-    { to: "/calendar", label: "Calendar", icon: CalendarIcon, roles: ["agency_admin", "owner", "tenant"] as Role[] },
-    { to: "/outstanding", label: "Outstanding", icon: History, roles: ["agency_admin"] as Role[] },
-    { to: "/logs", label: "Activity Log", icon: History, roles: ["agency_admin"] as Role[] },
-    { to: "/users", label: "Users", icon: Users, roles: ["agency_admin"] as Role[] },
-    { to: "/security", label: "Security", icon: Shield, roles: ["agency_admin", "owner", "tenant"] as Role[] },
-    { to: "/settings", label: "Settings", icon: Settings, roles: ["agency_admin", "owner", "tenant"] as Role[] },
+  const displayName =
+    profile?.first_name?.trim() ||
+    (role === "agency_admin" ? "Admin" : role === "owner" ? "Owner" : role === "tenant" ? "Tenant" : "—");
+
+  const navItems: { to: string; label: string; icon: string; roles: Role[] }[] = [
+    { to: "/dashboard", label: "Dashboard", icon: "📊", roles: ["agency_admin", "owner", "tenant"] as Role[] },
+    { to: "/properties", label: "Properties", icon: "🏠", roles: ["agency_admin", "owner"] as Role[] },
+    { to: "/tenants", label: "Tenants", icon: "👥", roles: ["agency_admin"] as Role[] },
+    { to: "/leases", label: "Leases", icon: "📋", roles: ["agency_admin"] as Role[] },
+    { to: "/invoices", label: "Invoices", icon: "📄", roles: ["agency_admin", "owner", "tenant"] as Role[] },
+    { to: "/outstanding", label: "Outstanding", icon: "💹", roles: ["agency_admin"] as Role[] },
+    { to: "/payments", label: "Payments", icon: "💰", roles: ["agency_admin", "owner", "tenant"] as Role[] },
+    { to: "/calendar", label: "Calendar", icon: "📅", roles: ["agency_admin", "owner", "tenant"] as Role[] },
+    { to: "/reports", label: "Reports", icon: "📈", roles: ["agency_admin", "owner"] as Role[] },
+    { to: "/manager-report", label: "Manager Report", icon: "💼", roles: ["agency_admin"] as Role[] },
+    { to: "/owner-reports", label: "Owner Reports", icon: "👤", roles: ["agency_admin", "owner"] as Role[] },
+    { to: "/activity", label: "Activity Log", icon: "🔍", roles: ["agency_admin"] as Role[] },
   ];
 
+  const visibleItems = navItems.filter((item) => !role || item.roles.includes(role as Role));
+  const isActive = (to: string) => {
+    if (to === "/dashboard") return location.pathname === "/" || location.pathname === "/dashboard";
+    return location.pathname === to || location.pathname.startsWith(`${to}/`);
+  };
+
+  const logout = async () => {
+    await signOut();
+    navigate("/login");
+  };
+
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen bg-background text-foreground">
-        <Sidebar className="hidden md:flex">
-          <SidebarHeader>
-            <Link to="/dashboard" className="font-semibold text-lg">{brandName}</Link>
-          </SidebarHeader>
-          <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {navItems
-                    .filter((n) => !role || n.roles.includes(role as Role))
-                    .map((item) => (
-                      <SidebarMenuItem key={item.to}>
-                        <SidebarMenuButton asChild isActive={location.pathname.startsWith(item.to)}>
-                          <Link to={item.to} className="flex items-center gap-2">
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.label}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </SidebarContent>
-          <SidebarFooter>
-            <Button variant="ghost" className="w-full justify-start gap-2" onClick={async () => { await signOut(); navigate("/login"); }}>
-              <LogOut className="h-4 w-4" /> Sign out
-            </Button>
-          </SidebarFooter>
-        </Sidebar>
-        <div className="flex-1 flex flex-col">
-          <header
-            className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center justify-between px-3 md:px-6"
-            style={{ paddingTop: "env(safe-area-inset-top)" }}
+    <div className="min-h-screen bg-[#0f1a2e] text-white">
+      <aside
+        className="fixed bottom-0 left-0 top-0 z-40 hidden w-56 flex-col border-r border-white/10 lg:flex"
+        style={{ background: "linear-gradient(180deg, #0c1525, #0f1a2e)" }}
+      >
+        <Link to="/dashboard" className="flex items-center gap-3 border-b border-white/10 px-4 py-5">
+          <div
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base font-bold"
+            style={{ background: "linear-gradient(135deg, #63b3ed, #4299e1)", color: "#0f1a2e" }}
           >
-            <div className="md:hidden">
-              <Link to="/dashboard" className="font-semibold text-lg">{brandName}</Link>
-            </div>
-            <div className="flex-1" />
-            <div className="flex items-center gap-3">
-              <CurrencySelector />
-            </div>
-          </header>
-          <main
-            className="flex-1 p-3 md:p-6 pb-20 md:pb-6"
-            style={{ paddingBottom: "calc(72px + env(safe-area-inset-bottom))" }}
-          >
-            {children}
-          </main>
+            🏢
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-sm font-bold leading-tight text-white">PMS OS</h1>
+            <p className="text-[10px] leading-tight text-[#63b3ed]">Property Management</p>
+          </div>
+        </Link>
+
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
+          {visibleItems.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all ${
+                isActive(item.to)
+                  ? "bg-blue-500/20 font-medium text-white"
+                  : "text-white/50 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              <span className="w-5 text-center text-sm">{item.icon}</span>
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+
+        <div className="border-t border-white/10 px-3 py-3">
+          <div className="flex items-center justify-between">
+            <span
+              className={`rounded-full px-2 py-1 text-xs font-medium ${
+                role === "agency_admin" ? "bg-emerald-500/20 text-emerald-400" : "bg-blue-500/20 text-blue-400"
+              }`}
+            >
+              {displayName}
+            </span>
+            <button onClick={logout} className="text-xs text-white/30 transition-colors hover:text-red-400">
+              Logout
+            </button>
+          </div>
         </div>
-        <MobileNav />
-      </div>
-    </SidebarProvider>
+      </aside>
+
+      <header
+        className="sticky top-0 z-50 border-b border-white/10 lg:hidden"
+        style={{ background: "linear-gradient(135deg, #0f1a2e, #1a2744)", paddingTop: "env(safe-area-inset-top)" }}
+      >
+        <div className="flex items-center justify-between px-3 py-3">
+          <Link to="/dashboard" className="flex items-center gap-2">
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
+              style={{ background: "linear-gradient(135deg, #63b3ed, #4299e1)", color: "#0f1a2e" }}
+            >
+              🏢
+            </div>
+            <span className="text-sm font-bold text-white">PMS OS</span>
+          </Link>
+          <div className="flex items-center gap-2">
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                role === "agency_admin" ? "bg-emerald-500/20 text-emerald-400" : "bg-blue-500/20 text-blue-400"
+              }`}
+            >
+              {displayName}
+            </span>
+            <button
+              onClick={() => setMobileOpen((open) => !open)}
+              className="rounded-lg p-2 text-lg text-white/70 hover:bg-white/10"
+            >
+              {mobileOpen ? "✕" : "☰"}
+            </button>
+          </div>
+        </div>
+        {mobileOpen ? (
+          <nav className="max-h-[70vh] space-y-0.5 overflow-y-auto border-t border-white/10 px-3 pb-3 pt-1">
+            {visibleItems.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                onClick={() => setMobileOpen(false)}
+                className={`flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm ${
+                  isActive(item.to) ? "bg-blue-500/20 font-medium text-white" : "text-white/50"
+                }`}
+              >
+                <span className="w-5 text-center text-sm">{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            ))}
+            <button
+              onClick={logout}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10"
+            >
+              <span className="w-5 text-center">🚪</span>
+              Logout
+            </button>
+          </nav>
+        ) : null}
+      </header>
+
+      <main className="mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-6 lg:ml-56">{children}</main>
+    </div>
   );
 };
 

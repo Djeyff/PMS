@@ -188,6 +188,16 @@ const App = () => (
                   }
                 />
                 <Route
+                  path="/activity"
+                  element={
+                    <ProtectedRoute>
+                      <RoleGate allow={["agency_admin"]}>
+                        <ActivityLog />
+                      </RoleGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/settings"
                   element={
                     <ProtectedRoute>

@@ -10,12 +10,7 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window === "undefined") return "light";
-    const saved = window.localStorage.getItem("app_theme");
-    if (saved === "dark" || saved === "light") return saved as Theme;
-    // Default to dark on the login page if no preference is saved
-    const path = window.location.pathname;
-    return path.startsWith("/login") ? "dark" : "light";
+    return "dark";
   });
 
   const setTheme = (t: Theme) => {

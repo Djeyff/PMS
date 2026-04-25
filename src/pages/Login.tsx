@@ -1,10 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthProvider";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Building2, KeyRound, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -92,88 +90,84 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d1624] text-white">
+    <div className="min-h-screen bg-[#0f1a2e] text-white">
       <main className="flex min-h-screen items-center justify-center px-4 py-8">
-        <Card className="w-full max-w-[340px] border-white/10 bg-[#121d2f]/90 text-white shadow-2xl shadow-black/30">
-          <CardContent className="p-5">
-            <div className="mb-5 text-center">
-              <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-md bg-white/10">
-                <Building2 className="h-5 w-5" />
-              </div>
-              <h1 className="text-xl font-semibold">PMS Web</h1>
-              <p className="text-xs text-white/55">Property Management System</p>
-            </div>
+        <div className="w-full max-w-[300px] rounded-2xl border border-white/10 bg-[#121b2c]/75 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+          <div className="mb-4 text-center">
+            <div className="text-xl font-semibold tracking-wide">🏢 PMS OS</div>
+            <div className="text-xs text-white/55">Property Management System</div>
+            <div className="mt-4 text-xs text-white/45">Select account</div>
+          </div>
 
-            <div className="space-y-2">
-              {accountOrder.map((accountId) => {
-                const account = PMS_ACCOUNTS[accountId];
-                const active = selected === accountId;
-                return (
-                  <button
-                    key={account.id}
-                    type="button"
-                    onClick={() => chooseAccount(account.id)}
-                    className={`w-full rounded-md border px-4 py-3 text-left transition ${
-                      active
-                        ? "border-emerald-300/50 bg-emerald-500/20 text-white"
-                        : "border-white/10 bg-white/5 text-white/85 hover:bg-white/10"
-                    }`}
-                  >
-                    <div className="text-sm font-semibold">{account.label}</div>
-                    <div className="text-xs text-white/55">{account.subtitle}</div>
-                  </button>
-                );
-              })}
-            </div>
+          <div className="space-y-2">
+            {accountOrder.map((accountId) => {
+              const account = PMS_ACCOUNTS[accountId];
+              const active = selected === accountId;
+              return (
+                <button
+                  key={account.id}
+                  type="button"
+                  onClick={() => chooseAccount(account.id)}
+                  className={`w-full rounded-lg border px-4 py-3 text-left transition ${
+                    active
+                      ? account.id === "jeff"
+                        ? "border-white/20 bg-gradient-to-r from-emerald-700/70 to-emerald-600/50 text-white"
+                        : "border-white/20 bg-gradient-to-r from-slate-700/80 to-indigo-700/50 text-white"
+                      : "border-white/10 bg-white/5 text-white/85 hover:bg-white/10"
+                  }`}
+                >
+                  <div className="text-sm font-semibold">{account.label}</div>
+                  <div className="text-[11px] text-white/60">{account.subtitle}</div>
+                </button>
+              );
+            })}
+          </div>
 
-            <div className="mt-4">
-              <Input
-                ref={inputRef}
-                value={code}
-                onChange={(event) => {
-                  setCode(event.target.value.replace(/\D/g, "").slice(0, codeLength));
-                  setError("");
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") handleSubmit();
-                }}
-                disabled={submitting}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                placeholder="0000"
-                className="h-11 border-white/10 bg-[#0b1220] text-center font-mono text-base tracking-[0.55em] text-white placeholder:text-white/20"
-              />
-            </div>
+          <div className="mt-3">
+            <Input
+              ref={inputRef}
+              value={code}
+              onChange={(event) => {
+                setCode(event.target.value.replace(/\D/g, "").slice(0, codeLength));
+                setError("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") handleSubmit();
+              }}
+              disabled={submitting}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="0000"
+              className="h-10 border-white/10 bg-[#0f1626] text-center font-mono text-sm tracking-[0.35em] text-white outline-none placeholder:text-white/20"
+            />
+          </div>
 
-            {error ? <p className="mt-2 text-center text-xs text-red-300">{error}</p> : null}
-            {missingConfig.length > 0 ? (
-              <p className="mt-2 text-center text-[11px] text-amber-200/80">
-                Missing: {missingConfig.join(", ")}
-              </p>
-            ) : null}
+          {error ? <p className="mt-2 text-center text-xs text-red-300">{error}</p> : null}
+          {missingConfig.length > 0 ? (
+            <p className="mt-2 text-center text-[11px] text-amber-200/80">
+              Missing: {missingConfig.join(", ")}
+            </p>
+          ) : null}
 
-            <div className="mt-4 space-y-2">
-              <Button
-                type="button"
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="w-full bg-[#27445e] text-white hover:bg-[#31506b]"
-              >
-                <KeyRound className="h-4 w-4" />
-                {submitting ? "Logging in..." : "Login"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleReset}
-                className="w-full border-white/10 bg-white/5 text-white hover:bg-white/10 hover:text-white"
-              >
-                <RotateCcw className="h-4 w-4" />
-                Reset
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          <div className="mt-3 space-y-2">
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="w-full rounded-lg bg-[#27445e] py-2 text-sm font-medium text-white hover:bg-[#31506b]"
+            >
+              {submitting ? "Logging in..." : "Login"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleReset}
+              className="w-full rounded-lg border-white/10 bg-white/5 py-2 text-sm text-white/75 hover:bg-white/10 hover:text-white"
+            >
+              Reset
+            </Button>
+          </div>
+        </div>
       </main>
     </div>
   );
