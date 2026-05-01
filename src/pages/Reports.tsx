@@ -58,6 +58,7 @@ const Reports = () => {
   const [endDate, setEndDate] = useState<string>(today);
   const [quickMonth, setQuickMonth] = useState<string>("custom");
   const [tenantFilter, setTenantFilter] = useState<string>("all");
+  const [propertyFilter, setPropertyFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
 
   // Build last 12 months list (closest first)
@@ -111,6 +112,21 @@ const Reports = () => {
     queryFn: () => fetchPayments({ role, userId: user?.id ?? null, agencyId }),
   });
 
+  const getPaymentPropertyId = React.useCallback((p: any) => p.lease?.property?.id ?? p.lease?.property_id ?? null, []);
+  const getInvoicePropertyId = React.useCallback((inv: any) => inv.lease?.property?.id ?? inv.lease?.property_id ?? null, []);
+
+  const paymentMatchesClientProject = React.useCallback((p: any) => {
+    if (tenantFilter !== "all" && p.tenant_id !== tenantFilter) return false;
+    if (propertyFilter !== "all" && getPaymentPropertyId(p) !== propertyFilter) return false;
+    return true;
+  }, [tenantFilter, propertyFilter, getPaymentPropertyId]);
+
+  const invoiceMatchesClientProject = React.useCallback((inv: any) => {
+    if (tenantFilter !== "all" && inv.tenant_id !== tenantFilter) return false;
+    if (propertyFilter !== "all" && getInvoicePropertyId(inv) !== propertyFilter) return false;
+    return true;
+  }, [tenantFilter, propertyFilter, getInvoicePropertyId]);
+
   // ADD: derive average USD/DOP rate for the selected range (from payments; fallback to exchange_rates)
   const [avgRate, setAvgRate] = useState<number | null>(null);
 
@@ -122,7 +138,7 @@ const Reports = () => {
       }
       const inRange = (payments ?? []).filter((p: any) => {
         const d = String(p.received_date ?? "").slice(0, 10);
-        return d >= startDate && d <= endDate;
+        return d >= startDate && d <= endDate && paymentMatchesClientProject(p);
       });
       const paymentRates = inRange
         .map((p: any) => (typeof p.exchange_rate === "number" ? Number(p.exchange_rate) : null))
@@ -155,7 +171,7 @@ const Reports = () => {
       }
     };
     loadRate();
-  }, [payments, startDate, endDate]);
+  }, [payments, startDate, endDate, paymentMatchesClientProject]);
 
   // Owner share map (for owner role)
   const { data: myShares } = useQuery({
@@ -206,8 +222,10 @@ const Reports = () => {
 
   // Revenue (by currency)
   const revenue = useMemo(() => {
-    const inRange = (payments ?? []).filter((p: any) => p.received_date >= startDate && p.received_date <= endDate);
-    const byTenant = tenantFilter === "all" ? inRange : inRange.filter((p: any) => p.tenant_id === tenantFilter);
+    const byTenant = (payments ?? []).filter((p: any) => {
+      const d = String(p.received_date ?? "").slice(0, 10);
+      return d >= startDate && d <= endDate && paymentMatchesClientProject(p);
+    });
     
     const ownerShareOf = (p: any) => {
       if (role !== "owner") return Number(p.amount || 0);
@@ -229,12 +247,12 @@ const Reports = () => {
       cashDop: sum("cash", "DOP"),
       rows: byTenant,
     };
-  }, [payments, startDate, endDate, tenantFilter, role, myShares]);
+  }, [payments, startDate, endDate, paymentMatchesClientProject, role, myShares]);
 
   // Invoice aging
   const aging = useMemo(() => {
     const todayStr = endDate; // consider endDate as "today" for report view
-    const pendings = (invoices ?? []).filter((inv: any) => inv.status !== "paid" && inv.status !== "void");
+    const pendings = (invoices ?? []).filter((inv: any) => inv.status !== "paid" && inv.status !== "void" && invoiceMatchesClientProject(inv));
     const inRange = pendings.filter((inv: any) => inv.due_date <= todayStr);
     const bucket = { current: 0, "1-30": 0, "31-60": 0, "61+": 0 };
     const totalsByBucket: Record<"current" | "1-30" | "31-60" | "61+", { USD: number; DOP: number }> = {
@@ -252,13 +270,16 @@ const Reports = () => {
       totalsByBucket[key][cur] += Number(inv.total_amount || 0);
     });
     return { bucket, totalsByBucket };
-  }, [invoices, endDate]);
+  }, [invoices, endDate, invoiceMatchesClientProject]);
 
   // Owner payouts (weighted by ownership)
   const ownerPayoutRows = useMemo(() => {
     if (!isAdmin) return [];
     const ow = ownerships ?? [];
-    const inRange = (payments ?? []).filter((p: any) => p.received_date >= startDate && p.received_date <= endDate);
+    const inRange = (payments ?? []).filter((p: any) => {
+      const d = String(p.received_date ?? "").slice(0, 10);
+      return d >= startDate && d <= endDate && paymentMatchesClientProject(p);
+    });
     const result = new Map<string, { name: string; usd: number; dop: number }>();
     inRange.forEach((p: any) => {
       const propId = p.lease?.property?.id || p.lease?.property_id || null;
@@ -276,7 +297,7 @@ const Reports = () => {
       });
     });
     return Array.from(result.entries()).map(([ownerId, val]) => ({ ownerId, ...val }));
-  }, [ownerships, payments, startDate, endDate, isAdmin]);
+  }, [ownerships, payments, startDate, endDate, isAdmin, paymentMatchesClientProject]);
 
   // Enrich owner payout rows with fee and payoutAfterFee using avgRate and 5%
   const ownerPayoutRowsWithFee = useMemo(() => {
@@ -374,16 +395,32 @@ const Reports = () => {
             <div className="text-sm text-muted-foreground">End</div>
             <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-[180px]" />
           </div>
+          <div>
+            <div className="text-sm text-muted-foreground">Project</div>
+            <Select value={propertyFilter} onValueChange={setPropertyFilter}>
+              <SelectTrigger className="w-[240px]">
+                <SelectValue placeholder="All projects" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All projects</SelectItem>
+                {(properties ?? []).map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name || "—"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {isAdmin && (
             <>
               <div>
-                <div className="text-sm text-muted-foreground">Tenant</div>
+                <div className="text-sm text-muted-foreground">Client</div>
                 <Select value={tenantFilter} onValueChange={setTenantFilter}>
                   <SelectTrigger className="w-[220px]">
-                    <SelectValue placeholder="All tenants" />
+                    <SelectValue placeholder="All clients" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All tenants</SelectItem>
+                    <SelectItem value="all">All clients</SelectItem>
                     {(tenants ?? []).map((t) => (
                       <SelectItem key={t.id} value={t.id}>
                         {[t.first_name, t.last_name].filter(Boolean).join(" ") || "—"}

@@ -29,6 +29,13 @@ export function buildInvoicePdfFileName(invoiceNumber: string, tenantName: strin
   return `${n}-${t}-${my}.pdf`;
 }
 
+export function buildReportPdfFileName(clientName: string, projectName: string, generatedDate: string, prefix = "Reporte") {
+  const c = sanitizeName(clientName || "Todos-los-clientes");
+  const p = sanitizeName(projectName || "Todos-los-proyectos");
+  const d = sanitizeName(String(generatedDate || new Date().toISOString().slice(0, 10)).slice(0, 10));
+  return `${sanitizeName(prefix)}-${c}-${p}-${d}.pdf`;
+}
+
 export async function downloadFileFromUrl(url: string, filename: string) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to download file (${res.status})`);

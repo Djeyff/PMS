@@ -13,6 +13,7 @@ import { fetchAgencyById } from "@/services/agencies";
 import { getLogoPublicUrl } from "@/services/branding";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { printElement } from "@/lib/print";
+import { buildReportPdfFileName } from "@/utils/download";
 
 type Props = {
   report: ManagerReportRow;
@@ -191,10 +192,18 @@ const ManagerReportInvoiceDialog: React.FC<Props> = ({ report, open, onOpenChang
     return isFullMonth ? formatMonthLabel(report.month) : `${sStr} to ${eStr}`;
   }, [report.month, report.start_date, report.end_date]);
 
+  const pdfFileName = React.useMemo(() => {
+    const r: any = report;
+    const client = r.client_name || r.client || "Todos los clientes";
+    const project = r.project_name || r.project || "Todos los proyectos";
+    const generated = String(report.created_at ?? report.start_date ?? new Date().toISOString()).slice(0, 10);
+    return r.pdf_filename || buildReportPdfFileName(client, project, generated, "Reporte-Manager");
+  }, [report]);
+
   const handlePrint = () => {
     const el = printAreaRef.current;
     if (!el) return;
-    printElement(el);
+    printElement(el, { title: pdfFileName });
   };
 
   const breakdownTable = (

@@ -1,7 +1,9 @@
-export function printElement(el: HTMLElement) {
+export function printElement(el: HTMLElement, options: { title?: string } = {}) {
   // Remove any previous print root
   const prev = document.getElementById("__print_root__");
   if (prev) prev.remove();
+  const previousTitle = document.title;
+  if (options.title) document.title = options.title;
 
   const root = document.createElement("div");
   root.id = "__print_root__";
@@ -13,10 +15,14 @@ export function printElement(el: HTMLElement) {
   document.body.appendChild(root);
   document.body.classList.add("print-report");
 
+  let cleaned = false;
   const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
     document.body.classList.remove("print-report");
     const n = document.getElementById("__print_root__");
     if (n) n.remove();
+    document.title = previousTitle;
   };
 
   // Some mobile browsers are flaky with afterprint; still try.

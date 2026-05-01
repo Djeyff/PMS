@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 type MonthOption = { value: string; label: string; start: string; end: string };
+type FilterOption = { value: string; label: string };
 
 type Props = {
   months: MonthOption[];
@@ -15,6 +16,12 @@ type Props = {
   endDate: string;
   onStartDateChange: (v: string) => void;
   onEndDateChange: (v: string) => void;
+  clientOptions?: FilterOption[];
+  clientValue: string;
+  onClientChange: (v: string) => void;
+  projectOptions?: FilterOption[];
+  projectValue: string;
+  onProjectChange: (v: string) => void;
   avgRateInput: string;
   onAvgRateChange: (v: string) => void;
   suggestedRate: number | null;
@@ -33,6 +40,12 @@ const ManagerReportFilters: React.FC<Props> = ({
   endDate,
   onStartDateChange,
   onEndDateChange,
+  clientOptions = [],
+  clientValue,
+  onClientChange,
+  projectOptions = [],
+  projectValue,
+  onProjectChange,
   avgRateInput,
   onAvgRateChange,
   suggestedRate,
@@ -67,6 +80,40 @@ const ManagerReportFilters: React.FC<Props> = ({
             <Input type="date" value={endDate} onChange={(e) => onEndDateChange(e.target.value)} />
           </div>
         </div>
+      </div>
+
+      <div>
+        <div className="text-sm text-muted-foreground">Client</div>
+        <Select value={clientValue} onValueChange={onClientChange}>
+          <SelectTrigger className="w-[220px]">
+            <SelectValue placeholder="All clients" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All clients</SelectItem>
+            {clientOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <div className="text-sm text-muted-foreground">Project</div>
+        <Select value={projectValue} onValueChange={onProjectChange}>
+          <SelectTrigger className="w-[240px]">
+            <SelectValue placeholder="All projects" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All projects</SelectItem>
+            {projectOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div>

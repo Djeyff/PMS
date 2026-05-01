@@ -24,6 +24,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { fetchInvoices } from "@/services/invoices";
 import { fetchLeases, type LeaseWithMeta } from "@/services/leases";
 import { printElement } from "@/lib/print";
+import { fetchProperties } from "@/services/properties";
+import { fetchTenantProfilesInAgency } from "@/services/users";
+import { buildReportPdfFileName } from "@/utils/download";
 
 type OwnerRow = {
   ownerId: string;
@@ -72,6 +75,14 @@ function monthList(limit = 12) {
   return opts;
 }
 
+function todayYmd() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function profileName(row: any) {
+  return [row?.first_name, row?.last_name].filter(Boolean).join(" ") || row?.email || "—";
+}
+
 // Suggested monthly average USD/DOP rate from Supabase exchange_rates table
 async function fetchMonthlyAvgRate(startDate: string, endDate: string) {
   const { data, error } = await supabase
@@ -99,7 +110,7 @@ const ManagerReport = () => {
   const handlePrint = () => {
     const el = printAreaRef.current;
     if (!el) return;
-    printElement(el);
+    printElement(el, { title: currentReportPdfFileName });
   };
 
   const months = useMemo(() => monthList(12), []);
@@ -107,6 +118,9 @@ const ManagerReport = () => {
   const currentMonth = useMemo(() => months.find((m) => m.value === monthValue), [months, monthValue]);
   const [startDate, setStartDate] = useState<string>(months[0]?.start ?? "");
   const [endDate, setEndDate] = useState<string>(months[0]?.end ?? "");
+  const [tenantFilter, setTenantFilter] = useState<string>("all");
+  const [propertyFilter, setPropertyFilter] = useState<string>("all");
+  const [generatedDate, setGeneratedDate] = useState<string>(todayYmd());
 
   // NEW: manual generate state
   const [generated, setGenerated] = useState<boolean>(false);
@@ -122,6 +136,10 @@ const ManagerReport = () => {
     }
   }, [monthValue, months]);
 
+  useEffect(() => {
+    setGenerated(false);
+  }, [startDate, endDate, tenantFilter, propertyFilter]);
+
   const [avgRateInput, setAvgRateInput] = useState<string>(""); // user-editable average USD/DOP for the month
   const [suggestedRate, setSuggestedRate] = useState<number | null>(null);
 
@@ -129,6 +147,18 @@ const ManagerReport = () => {
     queryKey: ["mgr-payments", role, user?.id, agencyId],
     enabled: !!role && !!agencyId,
     queryFn: () => fetchPayments({ role, userId: user?.id ?? null, agencyId }),
+  });
+
+  const { data: tenants } = useQuery({
+    queryKey: ["mgr-tenants", agencyId],
+    enabled: !!agencyId && isAdmin,
+    queryFn: () => fetchTenantProfilesInAgency(agencyId!),
+  });
+
+  const { data: properties } = useQuery({
+    queryKey: ["mgr-properties", role, user?.id, agencyId],
+    enabled: !!role && !!agencyId,
+    queryFn: () => fetchProperties({ role, userId: user?.id ?? null, agencyId }),
   });
 
   // NEW: invoices and leases for fee basis
@@ -157,15 +187,55 @@ const ManagerReport = () => {
     queryFn: () => fetchAgencyOwnerships(agencyId!),
   });
 
+  const clientOptions = useMemo(
+    () => (tenants ?? []).map((t) => ({ value: t.id, label: profileName(t) })),
+    [tenants]
+  );
+
+  const projectOptions = useMemo(
+    () => (properties ?? []).map((p) => ({ value: p.id, label: p.name || "—" })),
+    [properties]
+  );
+
+  const selectedClientLabel = useMemo(
+    () => clientOptions.find((option) => option.value === tenantFilter)?.label || "Todos los clientes",
+    [clientOptions, tenantFilter]
+  );
+
+  const selectedProjectLabel = useMemo(
+    () => projectOptions.find((option) => option.value === propertyFilter)?.label || "Todos los proyectos",
+    [projectOptions, propertyFilter]
+  );
+
+  const currentReportPdfFileName = useMemo(
+    () => buildReportPdfFileName(selectedClientLabel, selectedProjectLabel, generatedDate, "Reporte-Manager"),
+    [selectedClientLabel, selectedProjectLabel, generatedDate]
+  );
+
+  const getPaymentPropertyId = React.useCallback((p: any) => p.lease?.property?.id ?? p.lease?.property_id ?? null, []);
+  const getInvoicePropertyId = React.useCallback((inv: any) => inv.lease?.property?.id ?? inv.lease?.property_id ?? null, []);
+
+  const paymentMatchesClientProject = React.useCallback((p: any) => {
+    if (tenantFilter !== "all" && p.tenant_id !== tenantFilter) return false;
+    if (propertyFilter !== "all" && getPaymentPropertyId(p) !== propertyFilter) return false;
+    return true;
+  }, [tenantFilter, propertyFilter, getPaymentPropertyId]);
+
+  const invoiceMatchesClientProject = React.useCallback((inv: any) => {
+    if (tenantFilter !== "all" && inv.tenant_id !== tenantFilter) return false;
+    if (propertyFilter !== "all" && getInvoicePropertyId(inv) !== propertyFilter) return false;
+    return true;
+  }, [tenantFilter, propertyFilter, getInvoicePropertyId]);
+
   // Declare filteredPayments BEFORE useEffect(loadRate) to avoid TS2448
   const filteredPayments = useMemo(() => {
     const rows = payments ?? [];
     if (!startDate || !endDate) return rows;
     return rows.filter((p: any) => {
       const d = String(p.received_date ?? "").slice(0, 10);
-      return d >= startDate && d <= endDate;
+      return d >= startDate && d <= endDate && paymentMatchesClientProject(p);
     });
-  }, [payments, startDate, endDate]);
+  }, [payments, startDate, endDate, paymentMatchesClientProject]);
 
   // NEW: filter invoices in period (exclude void)
   const filteredInvoices = useMemo(() => {
@@ -173,9 +243,9 @@ const ManagerReport = () => {
     if (!startDate || !endDate) return rows.filter((inv: any) => String(inv.status) !== "void");
     return rows.filter((inv: any) => {
       const d = String(inv.issue_date ?? "").slice(0, 10);
-      return d >= startDate && d <= endDate && String(inv.status) !== "void";
+      return d >= startDate && d <= endDate && String(inv.status) !== "void" && invoiceMatchesClientProject(inv);
     });
-  }, [invoices, startDate, endDate]);
+  }, [invoices, startDate, endDate, invoiceMatchesClientProject]);
 
   // NEW: map lease id -> fee basis
   const leaseFeeBasisById = useMemo(() => {
@@ -356,6 +426,7 @@ const ManagerReport = () => {
   // NEW: handler to generate report manually
   const handleGenerate = () => {
     const label = currentMonth?.label ?? "Custom range";
+    setGeneratedDate(todayYmd());
     setGenerated(true);
     toast({ title: "Report generated", description: `Generated for ${label} (${startDate} to ${endDate}).` });
   };
@@ -431,7 +502,7 @@ const ManagerReport = () => {
       return count;
     })();
 
-    toast({ title: "Report saved", description: `Saved ${currentMonth.label}. Generated ${createdCount} owner reports.` });
+    toast({ title: "Report saved", description: `Saved ${currentMonth.label}. PDF name: ${currentReportPdfFileName}. Generated ${createdCount} owner reports.` });
     refetchSaved();
   };
 
@@ -468,6 +539,12 @@ const ManagerReport = () => {
                 endDate={endDate}
                 onStartDateChange={setStartDate}
                 onEndDateChange={setEndDate}
+                clientOptions={clientOptions}
+                clientValue={tenantFilter}
+                onClientChange={setTenantFilter}
+                projectOptions={projectOptions}
+                projectValue={propertyFilter}
+                onProjectChange={setPropertyFilter}
                 avgRateInput={avgRateInput}
                 onAvgRateChange={setAvgRateInput}
                 suggestedRate={suggestedRate}
@@ -481,6 +558,11 @@ const ManagerReport = () => {
           </div>
 
           <div ref={printAreaRef} className="report-print-area">
+            {generated && (
+              <div className="mb-3 text-sm text-muted-foreground">
+                Client: {selectedClientLabel} · Project: {selectedProjectLabel} · Generated: {generatedDate}
+              </div>
+            )}
             {/* Warning if rate missing but USD exists */}
             {/* Show warnings only once generated */}
             {generated && (usdTotal > 0 && Number.isNaN(rateNum)) && (
