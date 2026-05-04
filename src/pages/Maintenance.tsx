@@ -10,6 +10,7 @@ import NewRequestDialog from "@/components/maintenance/NewRequestDialog";
 import LogsDialog from "@/components/maintenance/LogsDialog";
 import EditMaintenanceDialog from "@/components/maintenance/EditMaintenanceDialog";
 import ViewMaintenanceDialog from "@/components/maintenance/ViewMaintenanceDialog";
+import MaintenanceArchivesDialog from "@/components/maintenance/MaintenanceArchivesDialog";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fetchAgencyById } from "@/services/agencies";
@@ -122,14 +123,15 @@ const Maintenance = () => {
                       <div className="text-right">
                         <div className="text-xs capitalize">{m.priority}</div>
                         <div className="text-xs capitalize">{m.status.replace("_", " ")}</div>
-                        <div className="text-xs">
+                        <div className="mt-1 flex items-center justify-end gap-1 text-xs">
                           {isOverdue(m) ? (
                             <span className="inline-block rounded px-2 py-0.5 bg-red-500/10 text-red-700 dark:bg-red-400/10 dark:text-red-300 font-semibold">
                               {m.due_date ?? "—"}
                             </span>
                           ) : (
-                            m.due_date ?? "—"
+                            <span>{m.due_date ?? "—"}</span>
                           )}
+                          {isAdmin ? <MaintenanceArchivesDialog request={m} size="sm" variant="outline" compact /> : null}
                         </div>
                       </div>
                     </div>
@@ -180,13 +182,16 @@ const Maintenance = () => {
                       <TableCell className="capitalize">{m.priority}</TableCell>
                       <TableCell className="capitalize">{m.status.replace("_", " ")}</TableCell>
                       <TableCell>
-                        {isOverdue(m) ? (
-                          <span className="inline-block rounded px-2 py-0.5 bg-red-500/10 text-red-700 dark:bg-red-400/10 dark:text-red-300 font-semibold">
-                            {m.due_date ?? "—"}
-                          </span>
-                        ) : (
-                          <span>{m.due_date ?? "—"}</span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {isOverdue(m) ? (
+                            <span className="inline-block rounded px-2 py-0.5 bg-red-500/10 text-red-700 dark:bg-red-400/10 dark:text-red-300 font-semibold">
+                              {m.due_date ?? "—"}
+                            </span>
+                          ) : (
+                            <span>{m.due_date ?? "—"}</span>
+                          )}
+                          {isAdmin ? <MaintenanceArchivesDialog request={m} size="sm" variant="outline" compact /> : null}
+                        </div>
                       </TableCell>
                       <TableCell className="space-x-2">
                         {isAdmin ? (
